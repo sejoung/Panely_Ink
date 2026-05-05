@@ -1,0 +1,50 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Panely Ink - e-ink optimized icon -->
+
+  <rect x="96" y="96" width="832" height="832" rx="188" fill="#FFFFFF"/>
+  <rect x="96" y="96" width="832" height="832" rx="188" stroke="#111111" stroke-width="36"/>
+
+  <!-- Back panel -->
+  <rect
+    x="217"
+    y="250"
+    width="380"
+    height="500"
+    rx="46"
+    transform="rotate(-7 217 250)"
+    fill="#111111"
+  />
+
+  <!-- Middle panel -->
+  <rect
+    x="286"
+    y="226"
+    width="390"
+    height="520"
+    rx="50"
+    transform="rotate(4 286 226)"
+    fill="#FFFFFF"
+    stroke="#111111"
+    stroke-width="30"
+  />
+
+  <!-- Front panel -->
+  <rect
+    x="316"
+    y="262"
+    width="418"
+    height="500"
+    rx="54"
+    fill="#FFFFFF"
+    stroke="#111111"
+    stroke-width="34"
+  />
+
+  <!-- Comic panels -->
+  <rect x="374" y="326" width="132" height="170" rx="24" fill="#111111"/>
+  <rect x="536" y="326" width="146" height="82" rx="22" fill="#111111"/>
+  <rect x="536" y="438" width="146" height="154" rx="24" fill="#111111"/>
+  <rect x="374" y="530" width="132" height="170" rx="24" fill="#111111"/>
+  <rect x="536" y="622" width="146" height="78" rx="22" fill="#111111"/>
+
+</svg>
