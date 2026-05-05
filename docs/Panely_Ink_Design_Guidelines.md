@@ -1,127 +1,271 @@
-# Panely Ink Design Guidelines
+# Panely Ink 디자인 가이드라인
 
-> Designed for e-ink, not LCD.
+> e-ink를 위해, LCD를 위해서가 아니라.
 
-This document defines a minimal design system for Panely Ink, focused on readability, performance, and simplicity on e-ink devices.
+| 항목 | 내용 |
+|---|---|
+| 버전 | v0.2 |
+| 기준 디바이스 | **Meebook M7** (Carta 1200 / 1648×1236 / 7" / ~300ppi / Android 11) |
+| 작성일 | 2026-05-05 |
+| 관련 문서 | `panely_ink_prd.md` |
 
----
-
-## 🎯 Design Principles
-
-- High contrast over aesthetics
-- Instant response over animation
-- Clarity over decoration
-- Page-based interaction over scrolling
-
----
-
-## 🎨 Color System
-
-Primary (Black):   #111111  
-Background (White): #FFFFFF  
-Secondary (Gray):  #777777  
-
-Rules:
-- Always prefer black on white
-- Avoid low-contrast combinations
-- Use gray only for secondary information
+본 문서는 Panely Ink의 최소한의 디자인 시스템을 정의한다.
+가독성, 성능, 단순성 — 그리고 e-ink 물리에 대한 양보를 핵심 가치로 한다.
 
 ---
 
-## 📐 Spacing System
+## 1. 디자인 원칙
 
-8dp grid:
-
-- 8dp   minimal spacing  
-- 16dp  standard spacing  
-- 24dp  section spacing  
-- 32dp+ large layout gaps  
-
----
-
-## 👆 Touch Targets
-
-Minimum: 48dp x 48dp  
-
-Guidelines:
-- Avoid small buttons
-- Prefer large tap areas
-- Account for e-ink touch inaccuracy
+1. **미학보다 대비.** 회색 톤 그라디언트 대신 검정/흰색의 단호한 분리.
+2. **애니메이션보다 즉시성.** 모든 상태 전이는 0ms.
+3. **장식보다 명료함.** 그림자·블러·라운드 큰 곡선·색 의존 UI 금지.
+4. **본문이 주인공.** 크롬은 명시 호출 시에만 등장, 기본은 화면에서 사라진다.
+5. **물리 키와 탭 영역이 1급 시민.** 터치 정확도가 LCD보다 낮음을 가정.
+6. **상태는 영속이다.** 책별 설정(refresh·트리밍·contrast·fit)은 모두 저장되고
+   같은 시리즈 다음 권에 propagate.
 
 ---
 
-## 🔤 Typography
+## 2. 컬러 시스템
 
-- Use system fonts
-- Prefer medium to large sizes
-- Avoid thin weights
+Carta 1200은 16-level grayscale을 표시할 수 있지만, **UI에서는 4단계만 사용한다.**
+중간 회색을 많이 쓸수록 잔상과 풀리프레시 빈도가 늘어난다.
 
----
+| 토큰 | HEX | 용도 |
+|---|---|---|
+| `Ink` | `#111111` | 본문 텍스트, 1차 보더, 아이콘 |
+| `Paper` | `#FFFFFF` | 배경 (본문·크롬 공통) |
+| `Mute` | `#6B6B6B` | 보조 텍스트 (캡션, 비활성 메타) |
+| `Hairline` | `#C8C8C8` | 1dp 디바이더 전용. **텍스트·아이콘 사용 금지** |
 
-## 🧩 Components
-
-Buttons:
-- Rectangular
-- High contrast borders
-- No shadows or gradients
-
-Lists:
-- Text-based
-- Minimal layout
-
-Panels:
-- Flat only
-- No elevation
+### 규칙
+- `Ink`/`Paper` 외의 **두 가지 회색 이상을 한 화면에 두지 않는다**
+- `#777777` 같은 모호한 톤은 Carta에서 옅게 보여 못 씀
+- 색상 테마, 다크 모드는 **없음.** 야간 사용은 PRD §6.1의 Invert 모드로 대체
+- selected/pressed 상태는 색이 아니라 **fill 반전**(아래 §6 참조)으로만 표시
 
 ---
 
-## ⚡ Interaction & Animation
+## 3. 간격 시스템
 
-- No animations
-- No scrolling interactions
-- Instant transitions only
-- Page-based navigation
+8dp 그리드를 따른다.
 
----
+| 토큰 | 값 | 용도 |
+|---|---|---|
+| `space-1` | 8dp | 인라인 요소 간격, 아이콘-텍스트 갭 |
+| `space-2` | 16dp | 컴포넌트 내부 패딩 표준 |
+| `space-3` | 24dp | 섹션 분리 |
+| `space-4` | 32dp | 큰 레이아웃 갭 |
+| `space-5` | 48dp | 화면 외곽 여백 (라이브러리 헤더 좌우) |
 
-## 📄 Navigation Model
-
-- Left tap → previous page  
-- Right tap → next page  
-
----
-
-## 🖼️ Image Rendering
-
-- Grayscale conversion  
-- Contrast enhancement  
-- Optional dithering  
+본문 리더 모드에서는 이 시스템을 따르지 않는다 — 본문은 **자동 트리밍 후 fit
+계산 결과로 직접 렌더**되며, 좌우 패딩 0dp가 기본이다.
 
 ---
 
-## 🧠 E-Ink Considerations
+## 4. 타이포그래피
 
-- Reduce ghosting
-- Minimize refresh
-- Optional full refresh mode
+시스템 폰트(Roboto / 네이티브 fallback)만 사용한다. 커스텀 폰트는 디코드 비용 +
+잔상 위험으로 금지.
+
+| 토큰 | sp | 굵기 | 용도 |
+|---|---|---|---|
+| `text-display` | 28sp | Medium 500 | 라이브러리 빈 상태, 환영 화면 |
+| `text-title` | 22sp | Medium 500 | 화면 헤더, 다이얼로그 제목 |
+| `text-body` | 16sp | Regular 400 | 일반 본문, 메뉴 항목 |
+| `text-list` | 18sp | Regular 400 | 라이브러리 시리즈/책 항목 (큰 터치 타깃과 짝) |
+| `text-caption` | 14sp | Regular 400 | 메타데이터, 보조 정보 (Mute 색 사용) |
+| `text-mono` | 14sp | Regular 400 | 페이지 번호 표시 (`monospace`) |
+
+### 규칙
+- **Light/Thin 굵기 금지.** Carta에서 끊어 보임
+- 줄 간격 1.4em 고정
+- 영어와 한글이 섞일 때 lineHeight 동일 적용 (Compose `LineHeightStyle.Trim.None`)
+- 화면당 폰트 크기 종류는 **3개 이하**
 
 ---
 
-## 🚫 Avoid
+## 5. 터치 타깃과 안전 영역
 
-- Gradients
-- Shadows
-- Blur
-- Complex layouts
-- Small UI
-- Color-dependent UI
+### 최소 크기
+- 모든 인터랙티브 요소: **48×48dp 이상**
+- 리스트 행: 64dp 이상 권장
+- 아이콘 단독 버튼: 48×48dp 박스에 24dp 아이콘 중앙
+
+### 하드웨어 키 보호 영역
+Meebook M7은 좌/우 베젤 안쪽에 페이지 버튼이 있다. 손가락이 베젤을 가로지를 때
+화면 가장자리를 잘못 터치하기 쉽다.
+
+> **화면 좌·우 가장자리 24dp 안쪽에 인터랙티브 컨트롤을 두지 말 것.**
+> 본문 모드의 좌/우 탭 영역(이전/다음)은 예외 — 의도된 큰 영역이므로 OK.
+
+### 탭 영역 (본문 리더)
+화면을 3분할:
+
+```
+┌────────────┬──────────────┬────────────┐
+│            │              │            │
+│   이전     │     메뉴     │    다음    │
+│   30%      │     40%      │    30%     │
+│            │              │            │
+└────────────┴──────────────┴────────────┘
+```
+
+- LTR: 좌=이전, 우=다음 / RTL: 좌=다음, 우=이전 (자동 반전)
+- 세로 스크롤 모드: 좌/우 탭 = 반 화면 점프, 중앙 = 메뉴
 
 ---
 
-## 🚀 Summary
+## 6. 컴포넌트
 
-Panely Ink is an e-ink-first reading tool.
+### 버튼
+- 사각형 (radius 0 또는 2dp 이하)
+- 1차 버튼: `Ink` 배경 + `Paper` 텍스트 (filled, fill 반전이 강조 수단)
+- 2차 버튼: `Paper` 배경 + 2dp `Ink` 보더 + `Ink` 텍스트
+- **그림자·elevation·ripple 전부 off.** Compose `RippleConfiguration` 비활성화
+- 최소 높이 48dp, 좌우 패딩 16dp
 
-Simplicity > complexity  
-Contrast > color  
-Speed > animation
+### 리스트
+- 텍스트 중심. 썸네일은 표지에만 허용.
+- 행 높이 64dp 이상
+- 행 사이 1dp `Hairline` 디바이더 (옵션, 빽빽한 라이브러리에서만)
+- 선택 상태: **행 전체 fill 반전** (`Ink` 배경 + `Paper` 텍스트)
+
+### 카드 / 패널
+- elevation 0, flat
+- 배경은 `Paper`, 외곽선은 2dp `Ink` 또는 1dp `Hairline`
+- 라운드 코너 ≤ 4dp
+- 음영·블러 일체 금지
+
+### 다이얼로그
+- 화면 중앙, 좌우 마진 32dp
+- 2dp `Ink` 외곽선
+- 백드롭은 어둡게 처리하지 않는다 (반투명 = 회색톤 = 잔상). 단순히 다이얼로그
+  외부 탭 = 닫기로 처리
+
+### 슬라이더 (contrast/gamma 등)
+- 트랙 4dp `Hairline`, 채워진 부분 4dp `Ink`
+- 핸들 24dp 정사각형 `Ink` (둥근 핸들 X)
+- **드래그 중 라이브 프리뷰 금지** — 손을 떼면 1회 풀리프레시 후 적용
+
+---
+
+## 7. 상태 표현
+
+색·그림자·애니메이션이 막혀 있으므로 상태는 **fill 반전**과 **외곽선 두께**로만
+표현한다.
+
+| 상태 | 표현 |
+|---|---|
+| Default | `Paper` 배경 + 2dp `Ink` 보더 |
+| Pressed | 즉시 `Ink` 배경 + `Paper` 텍스트로 fill 반전, 손 떼면 복귀 |
+| Selected | fill 반전 유지 (Pressed와 시각적으로 동일, 의미만 다름) |
+| Disabled | 보더와 텍스트를 `Mute`로 다운그레이드. 절대 배경 회색화 X |
+| Focused (하드웨어 키 포커스) | 외곽선 2dp → 4dp `Ink`로 두꺼워짐 |
+
+---
+
+## 8. 아이콘
+
+- **Outline 스타일 통일.** stroke 2dp, 채움 없음
+- 사이즈: 24dp (표준), 20dp (인라인), 32dp (큰 액션)
+- 색은 항상 `Ink` 또는 `Mute` (비활성)
+- selected 상태일 때만 filled 변형 허용
+
+---
+
+## 9. 로딩 / 빈 / 에러 상태
+
+애니메이션 금지이므로 spinner를 쓸 수 없다.
+
+### 로딩
+- 정적 텍스트: `로딩 중…` (또는 `스캔 중 124 / 380`)
+- 진행 가능한 경우 텍스트로 카운트 갱신 (1초 이상 간격, 풀리프레시 1회 동반)
+- 페이지 디코드 중 본문 영역은 `Paper` 빈 화면 유지
+
+### 빈 상태
+- 화면 중앙, `text-display`로 한 줄 + `text-body`로 보조 한 줄
+- 아이콘은 선택. 두면 64dp outline 한 개
+
+### 에러
+- 다이얼로그 또는 화면 중앙 inline 메시지
+- `Ink` 텍스트, 보더는 `Ink` 4dp (시각적으로 강조)
+- 색·이모지로 에러를 표시하지 않는다
+
+---
+
+## 10. 리프레시 / 리페인트 정책
+
+UI 컴포넌트가 자신의 영역을 갱신할 때의 규칙. PRD §8의 시스템 정책과 한 짝.
+
+| 상황 | 갱신 방식 |
+|---|---|
+| 페이지 전환 (본문) | 부분 갱신. 단, **N페이지마다 풀리프레시 1회** (기본 N=5) |
+| 메뉴 열림/닫힘 | 풀리프레시 1회 |
+| 토글·체크박스 상태 변경 | 해당 영역만 invalidate |
+| 슬라이더 드래그 종료 | 드래그 중 갱신 X. 손을 떼는 순간 풀리프레시 |
+| 모달/다이얼로그 dismiss | 풀리프레시 1회 |
+| 라이브러리 스크롤 (페이지 단위) | 풀리프레시 1회 (스크롤 자체는 페이지 점프로 처리) |
+| 본문 세로 스크롤 (웹툰) | 부분 갱신, 멈춤 감지 후 풀리프레시 1회 |
+
+> 일반 LCD 가이드와 가장 다른 부분이다. **무엇을 다시 그리느냐** 가
+> **무엇처럼 보이느냐** 만큼 중요하다.
+
+---
+
+## 11. RTL 미러링
+
+PRD §6.1의 LTR/RTL 토글에 대응한다.
+
+| 요소 | LTR | RTL |
+|---|---|---|
+| 본문 좌/우 탭 | 좌=이전, 우=다음 | 좌=다음, 우=이전 |
+| 페이지 진행 인디케이터 | 좌→우 진행 | 우→좌 진행 |
+| 시리즈 카드 (Up next/Previous) | 다음 = 우측 | 다음 = 좌측 |
+| 하드웨어 키 매핑 | 우측 키 = 다음 | 우측 키 = 다음 (불변, 사용자 기대값 유지) |
+| 라이브러리·메뉴 등 비-본문 | LTR 유지 | LTR 유지 (시스템 locale와 무관) |
+
+> RTL은 본문 콘텐츠 방향에만 적용된다. 크롬 UI는 OS locale를 따른다.
+
+---
+
+## 12. 본문 영역 (Reading Mat)
+
+본문 모드는 다른 모든 규칙보다 **자동 트리밍 → fit 계산** 결과가 우선한다.
+
+- 크롬 0dp (메뉴 호출 전까지 보이는 UI 없음)
+- 자동 트리밍 OFF 상태: 좌우 패딩 8dp 기본 (사용자 설정 가능)
+- 페이지 번호 / 진행률은 **숨김 기본.** 메뉴 호출 시 하단에 1줄
+- 세로 스크롤(웹툰) 모드: 페이지 사이 8dp `Paper` 간격
+
+---
+
+## 13. 회피 항목 (다시 한 번)
+
+| 금지 | 이유 |
+|---|---|
+| 그라디언트 / 음영 / 블러 | 회색 누적 = 잔상 |
+| Material elevation / shadow | 동일 |
+| Ripple 효과 | 페이드 = 잔상 |
+| 색 의존 UI (빨강=에러 등) | 흑백 패널에서 의미 손실 |
+| 1dp 미만 라인 | Carta에서 사라짐 |
+| Light/Thin 폰트 | 끊어 보임 |
+| Spinner / progress bar 애니메이션 | 부분 갱신 폭증 |
+| 호버 / 핫엣지 | 터치엔 호버 없음 |
+| 다크 테마 | Invert 모드로 대체 |
+
+---
+
+## 14. 요약
+
+```
+Simplicity   >   Complexity
+Contrast     >   Color
+Speed        >   Animation
+Static       >   Motion
+Page-based   >   Free-scrolling (단, 웹툰 모드는 예외)
+Inversion    >   Tint
+```
+
+Panely Ink는 LCD 위에서 흉내내는 e-ink 앱이 아니라, **e-ink가 잘하는 것만
+하는 앱**이다.
