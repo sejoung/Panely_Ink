@@ -59,9 +59,11 @@
 - [x] **ReaderViewModel 라이프사이클 수정**
   - `androidx.lifecycle.ViewModel` 상속 제거 → 자체 `CoroutineScope`
   - ViewModelStore 캐시로 인한 stale ZipFile 참조 / 두 번째 진입 크래시 해결
-- [x] **어댑티브 런처 아이콘** (PRD §13, Design Guidelines §14)
-  - `docs/icon/*.svg` → Vector Drawable 변환
-  - background / foreground / monochrome 3레이어 + `mipmap-anydpi-v26`
+- [x] **런처 아이콘 — 단일 vector drawable**
+  - 마스터 SVG (`docs/icon/panely-ink-icon.svg`) v0.4: outline-only, 콘텐츠 1.3× scale, 중심 (512, 490)으로 위쪽 편향 (아래 여백 확보)
+  - 어댑티브 분리본(background/foreground/monochrome + `mipmap-anydpi-v26`)은 **삭제**, 단일 `drawable/ic_launcher.xml`로 통일
+  - 외곽 카드가 이미 둥근 사각형이라 OS 마스크 없이도 자연스러움
+  - Material You 테마 아이콘은 e-ink 디바이스에서 무의미하므로 비포기
 
 ### 남음
 - [ ] **M1.3** — Fit modes 적용 + 최소 메뉴
@@ -119,11 +121,10 @@
 ## M5 — 베타
 
 - [ ] Meebook M7 실기 테스트 (refresh, 잔상, 키 응답)
-- [ ] 어댑티브 아이콘 검증 체크리스트 (Design Guidelines §14)
-  - [ ] M7 런처에서 잔상·외곽선 끊김 없는지
+- [ ] 런처 아이콘 검증 (단일 vector drawable 기준)
+  - [ ] M7 런처에서 stroke 끊김·잔상 없는지 (특히 컷 stroke 14)
   - [ ] Recents 카드에서 식별 가능한지
-  - [ ] Material You 테마 아이콘 라이트/다크 양쪽 OK인지
-  - [ ] OEM 둥근 마스크에서 콘텐츠 잘리지 않는지
+  - [ ] OEM 자체 마스킹이 들어와도 외곽 카드가 자연스러운지
 - [ ] 스플래시 화면 (Paper 바탕 + 마스터 아이콘, 애니메이션 없음)
 - [ ] 첫 릴리스 (GitHub Releases APK)
 
@@ -167,6 +168,8 @@
 | ZipFile API | Java 표준만 사용 | Need-based: NDK libjpeg-turbo / libwebp는 디코드 측에서 (PRD §8) |
 | 키 코드 매핑 | 표준 KeyCode만 매핑됨 | M5 — 사용자 리바인드 화면 |
 | 색 변환 | ARGB8888 고정 | RGB565는 PRD §11 Q5에 명시, 측정 후 결정 |
+| 런처 아이콘 | 단일 vector — OS 어댑티브 마스크/parallax 미적용, Material You 테마 아이콘 비활성 | 디자인 의도(e-ink 단순성). 변경 시 monochrome 분리본만 추가 가능 |
+| ReaderViewModel | `androidx.lifecycle.ViewModel` 미상속 — 프로세스 사망 시 상태 미복원 | M1.4 Resume에서 `PositionKey` 영속화로 보강 |
 
 ---
 
@@ -176,4 +179,6 @@
 - **2026-05-05** — M1.0~M1.2 (뷰어 셸 + 입력) 완료
 - **2026-05-05** — M1.2.5/M1.2.6 (성능 보강) — random-access + downscale
 - **2026-05-05** — ReaderViewModel 라이프사이클 수정 (재진입 크래시 해결)
-- **2026-05-05** — 어댑티브 런처 아이콘 적용
+- **2026-05-05** — 런처 아이콘 v0.4: outline-only + 1.3× scale + 시각 균형 조정
+- **2026-05-05** — 어댑티브 분리본 폐기, 단일 vector drawable로 통일
+- **2026-05-05** — 캐시 복사 전략 결정 (`/proc/self/fd/N`은 SELinux로 차단)
