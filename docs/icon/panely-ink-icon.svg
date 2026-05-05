@@ -1,50 +1,37 @@
-<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Panely Ink - e-ink optimized icon -->
+<svg fill="none" height="1024" viewBox="0 0 1024 1024" width="1024"
+  xmlns="http://www.w3.org/2000/svg">
+  <!-- Panely Ink - master icon (marketing / web / store) -->
+  <!-- v0.4: outline-only, content scaled 1.3x, vertically biased upward (center y=490)
+       so the bottom margin is visibly larger than the top — visual stability. -->
+  <!-- Stroke hierarchy (PRD §13): outer (32) > front (26) > middle (22) > back (20) > cut (14) -->
 
-  <rect x="96" y="96" width="832" height="832" rx="188" fill="#FFFFFF"/>
-  <rect x="96" y="96" width="832" height="832" rx="188" stroke="#111111" stroke-width="36"/>
+  <!-- Outer rounded card -->
+  <rect fill="#FFFFFF" height="832" rx="188" width="832" x="96" y="96" />
+  <rect fill="none" height="832" rx="188" stroke="#111111" stroke-width="32" width="832" x="96"
+    y="96" />
 
-  <!-- Back panel -->
-  <rect
-    x="217"
-    y="250"
-    width="380"
-    height="500"
-    rx="46"
-    transform="rotate(-7 217 250)"
-    fill="#111111"
-  />
+  <!-- Back panel: outline only, rotated -7 around (168, 191) -->
+  <rect fill="#FFFFFF" height="650" rx="60" stroke="#111111" stroke-width="10"
+    transform="rotate(-7 168 191)" width="494" x="168" y="191" />
 
-  <!-- Middle panel -->
-  <rect
-    x="286"
-    y="226"
-    width="390"
-    height="520"
-    rx="50"
-    transform="rotate(4 286 226)"
-    fill="#FFFFFF"
-    stroke="#111111"
-    stroke-width="30"
-  />
+  <!-- Middle panel: outline only, rotated +4 around (257, 160) -->
+  <rect fill="#FFFFFF" height="676" rx="65" stroke="#111111" stroke-width="12"
+    transform="rotate(4 257 160)" width="507" x="257" y="160" />
 
-  <!-- Front panel -->
-  <rect
-    x="316"
-    y="262"
-    width="418"
-    height="500"
-    rx="54"
-    fill="#FFFFFF"
-    stroke="#111111"
-    stroke-width="34"
-  />
+  <!-- Front panel: outline only -->
+  <rect fill="#FFFFFF" height="650" rx="70" stroke="#111111" stroke-width="16" width="543" x="296"
+    y="207" />
 
-  <!-- Comic panels -->
-  <rect x="374" y="326" width="132" height="170" rx="24" fill="#111111"/>
-  <rect x="536" y="326" width="146" height="82" rx="22" fill="#111111"/>
-  <rect x="536" y="438" width="146" height="154" rx="24" fill="#111111"/>
-  <rect x="374" y="530" width="132" height="170" rx="24" fill="#111111"/>
-  <rect x="536" y="622" width="146" height="78" rx="22" fill="#111111"/>
+  <!-- Comic panel grid (5컷): outline only, hollow center -->
+  <rect fill="#FFFFFF" height="221" rx="31" stroke="#111111" stroke-width="14" width="172" x="372"
+    y="290" />
+  <rect fill="#FFFFFF" height="107" rx="29" stroke="#111111" stroke-width="14" width="190" x="582"
+    y="290" />
+  <rect fill="#FFFFFF" height="200" rx="31" stroke="#111111" stroke-width="14" width="190" x="582"
+    y="435" />
+  <rect fill="#FFFFFF" height="221" rx="31" stroke="#111111" stroke-width="14" width="172" x="372"
+    y="555" />
+  <rect fill="#FFFFFF" height="101" rx="29" stroke="#111111" stroke-width="14" width="190" x="582"
+    y="675" />
 
 </svg>
