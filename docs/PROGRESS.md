@@ -49,10 +49,17 @@
   - 3분할 탭 영역 (좌 30 / 중앙 40 / 우 30) + LTR/RTL 자동 반전 (Guidelines §11)
   - 하드웨어 키 — 볼륨 ↑↓ / Page Up·Down / DPad — `ReaderInput` 디스패처
   - Activity의 `dispatchKeyEvent` 가로채기로 시스템 볼륨 변동 차단
-- [x] **M1.2.5** — random-access 아카이브
-  - `CbzArchive`: SAF Uri → 캐시 디렉토리 복사 → `ZipFile` Central Directory 직참조
-  - 첫 진입 1~2초 (캐시 miss), 재진입 ms 단위 (캐시 hit)
+- [x] **M1.2.5** — random-access 아카이브 (1차: 캐시 복사)
+  - `CbzArchive`: SAF Uri → 캐시 디렉토리 복사 → `java.util.zip.ZipFile` Central Directory 직참조
+  - 첫 진입 1~10초+ (큰 파일은 외장 sdcard read 한계), 재진입 ms 단위
   - `/proc/self/fd/N` 트릭은 SELinux 정책으로 막혀 폐기
+  - **M1.2.7에서 Commons Compress로 대체됨** (캐시 복사 없음)
+- [x] **M1.2.7** — Commons Compress + SeekableByteChannel + `ignoreLocalFileHeader`
+  - SAF Uri → `ParcelFileDescriptor` → `FileInputStream.channel` → `org.apache.commons.compress.archivers.zip.ZipFile`
+  - **`setIgnoreLocalFileHeader(true)` 필수** — 이게 빠지면 entry × random seek 누적으로 외장 sdcard에서 13초+. 옵션 적용 시 ~500ms (~26배 단축)
+  - 220MB 책 첫 진입: build 477ms + enum 21ms = 502ms (Meebook M7 + 외장 sdcard 측정)
+  - 캐시 디렉토리 사용 안 함, 디스크 누적 0
+  - 의존성: `commons-compress` ~3MB
 - [x] **M1.2.6** — `inSampleSize` 다운스케일
   - `inJustDecodeBounds`로 헤더 → viewport 대비 sample 계산 → 본 디코드
   - 디코드 시간/메모리 1/N²로 감소
@@ -142,7 +149,6 @@
 - [ ] WebDAV / SMB 직접 마운트
 - [ ] ComicInfo.xml 파싱 (시리즈/볼륨/저자/요약)
 - [ ] 컬렉션 / 태그
-- [ ] Apache Commons Compress 도입 검토 (현재 캐시 복사 1~2초가 거슬리면)
 
 ---
 
@@ -163,8 +169,8 @@
 
 | 항목 | 한계 | 해결 시점 |
 |---|---|---|
-| 캐시 복사 | 첫 진입 1~2초 (큰 CBZ 기준) | v1.5 — Commons Compress + SeekableByteChannel로 교체 검토 |
-| 파일 변경 미감지 | 같은 SAF 파일이 갱신돼도 캐시는 옛 버전 | v1.0 후반 — mtime/size 비교로 invalidate |
+| ~~캐시 복사~~ | ~~첫 진입 1~2초~~ | **M1.2.7에서 해결** — Commons Compress로 random-access |
+| 파일 변경 미감지 | (해당 없음 — 캐시 안 쓰니까) | — |
 | ZipFile API | Java 표준만 사용 | Need-based: NDK libjpeg-turbo / libwebp는 디코드 측에서 (PRD §8) |
 | 키 코드 매핑 | 표준 KeyCode만 매핑됨 | M5 — 사용자 리바인드 화면 |
 | 색 변환 | ARGB8888 고정 | RGB565는 PRD §11 Q5에 명시, 측정 후 결정 |
@@ -182,3 +188,4 @@
 - **2026-05-05** — 런처 아이콘 v0.4: outline-only + 1.3× scale + 시각 균형 조정
 - **2026-05-05** — 어댑티브 분리본 폐기, 단일 vector drawable로 통일
 - **2026-05-05** — 캐시 복사 전략 결정 (`/proc/self/fd/N`은 SELinux로 차단)
+- **2026-05-05** — M1.2.7: Commons Compress + SeekableByteChannel로 교체. 220MB 첫 진입 11초 → ~500ms (`setIgnoreLocalFileHeader(true)` 필수)

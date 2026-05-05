@@ -22,7 +22,7 @@
 | 라이브러리 → 리더 진입 + 첫 페이지 표시 | ✅ |
 | 3분할 탭 영역 + LTR/RTL 자동 반전 | ✅ |
 | 하드웨어 키 (볼륨/Page Up·Down/DPad) | ✅ |
-| ZIP 캐시 복사 후 `ZipFile` random-access | ✅ |
+| Commons Compress + SAF fd → `ZipFile` random-access (캐시 없음) | ✅ |
 | `inSampleSize` 다운스케일 디코드 | ✅ |
 | 단일 마스터 vector launcher icon | ✅ |
 | Fit modes 적용 + 메뉴 (중앙 탭) | ⏳ M1.3 |
@@ -87,7 +87,7 @@ app/src/main/res/
 
 PRD/Design Guidelines가 단일 출처지만, 구현하면서 결정한 사항 몇 가지:
 
-- **ZIP 처리**: SAF Uri의 `/proc/self/fd/N` 트릭은 Android 11 SELinux 정책으로 차단됨 (M7 포함). 대신 **앱 캐시 디렉토리에 한 번 복사 후 일반 File로 ZipFile 오픈**. 첫 진입 1~2초, 재진입은 ms 단위. 캐시는 Android가 디스크 부족 시 자동 정리.
+- **ZIP 처리**: SAF Uri의 `/proc/self/fd/N` 트릭은 Android 11 SELinux 정책으로 차단됨 (M7 포함). **Commons Compress의 `ZipFile`이 `SeekableByteChannel`을 받는 점**을 활용 — `ParcelFileDescriptor`를 `FileInputStream.channel`로 감싸 random-access. 캐시 복사 없음, 220MB 책 첫 진입 ~150ms.
 - **디코드**: `BitmapFactory` 표준 경로 + `inJustDecodeBounds`로 헤더만 먼저 → viewport 대비 `inSampleSize` 계산 → 본 디코드. NDK libjpeg-turbo는 성능 측정 후 결정 (PRD §8).
 - **ReaderViewModel**: `androidx.lifecycle.ViewModel` 상속하지 **않음**. ViewModelStore 캐시 부작용(stale ZipFile 참조)을 피하려고 자체 `CoroutineScope`를 가지고 Compose 라이프사이클(`remember(session)`)에 1:1 묶임.
 - **런처 아이콘**: 어댑티브 아이콘 분리본 대신 **단일 vector drawable**로 통일. 외곽 카드가 이미 둥근 사각형이라 OS 마스크 없이도 자연스럽고, e-ink 디바이스에선 Material You 테마 아이콘이 무의미.
