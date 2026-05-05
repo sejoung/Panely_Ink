@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Mirrors Design Guidelines §2 tokens. Compose UI does not consume these;
+         they exist so the XML window theme uses the same Paper/Ink values. -->
+    <color name="ink">#111111</color>
+    <color name="paper">#FFFFFF</color>
+    <color name="mute">#6B6B6B</color>
+    <color name="hairline">#C8C8C8</color>
+</resources>

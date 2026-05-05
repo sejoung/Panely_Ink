@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- XML theme covers the cold-start window before Compose attaches.
+         All real styling lives in the Compose theme; here we only set a
+         pure white window background so the launcher transition does not
+         flash a non-Paper colour onto the Carta panel. -->
+    <style name="Theme.PanelyInk" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/paper</item>
+        <item name="android:statusBarColor">@color/paper</item>
+        <item name="android:navigationBarColor">@color/paper</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+</resources>

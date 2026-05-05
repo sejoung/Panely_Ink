@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Panely Ink</string>
+
+    <string name="library_title">라이브러리</string>
+    <string name="library_empty_title">아직 추가된 폴더가 없습니다</string>
+    <string name="library_empty_body">우측 상단 + 버튼으로 CBZ 폴더를 추가하세요.</string>
+    <string name="library_add_folder">폴더 추가</string>
+    <string name="library_remove_folder">제거</string>
+    <string name="library_scanning">스캔 중…</string>
+    <string name="library_scanning_progress">스캔 중 %1$d / %2$d</string>
+
+    <string name="reader_loading">로딩 중…</string>
+</resources>
