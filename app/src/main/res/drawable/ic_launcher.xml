@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Panely Ink launcher icon. docs/icon/panely-ink-icon.svg 1:1 변환 (단일 마스터).
+     어댑티브 아이콘 분리본을 두지 않는 단순 경로 — 외곽 카드가 이미 둥근 사각형이라
+     OS 마스크 효과 없이도 자연스럽다. Material You 테마 아이콘은 활용 안 함. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+
+    <!-- Outer rounded card: x=96 y=96 w=832 h=832 rx=188, white fill + Ink stroke 32 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M284,96 L740,96 A188,188 0 0,1 928,284 L928,740 A188,188 0 0,1 740,928 L284,928 A188,188 0 0,1 96,740 L96,284 A188,188 0 0,1 284,96 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#111111"
+        android:strokeWidth="32"
+        android:pathData="M284,96 L740,96 A188,188 0 0,1 928,284 L928,740 A188,188 0 0,1 740,928 L284,928 A188,188 0 0,1 96,740 L96,284 A188,188 0 0,1 284,96 Z" />
+
+    <!-- Back panel: x=168 y=191 w=494 h=650 rx=60, outline only, rotate -7 around (168,191), stroke 10 -->
+    <group
+        android:pivotX="168"
+        android:pivotY="191"
+        android:rotation="-7">
+        <path
+            android:fillColor="#FFFFFF"
+            android:strokeColor="#111111"
+            android:strokeWidth="10"
+            android:pathData="M228,191 L602,191 A60,60 0 0,1 662,251 L662,781 A60,60 0 0,1 602,841 L228,841 A60,60 0 0,1 168,781 L168,251 A60,60 0 0,1 228,191 Z" />
+    </group>
+
+    <!-- Middle panel: x=257 y=160 w=507 h=676 rx=65, outline only, rotate +4 around (257,160), stroke 12 -->
+    <group
+        android:pivotX="257"
+        android:pivotY="160"
+        android:rotation="4">
+        <path
+            android:fillColor="#FFFFFF"
+            android:strokeColor="#111111"
+            android:strokeWidth="12"
+            android:pathData="M322,160 L699,160 A65,65 0 0,1 764,225 L764,771 A65,65 0 0,1 699,836 L322,836 A65,65 0 0,1 257,771 L257,225 A65,65 0 0,1 322,160 Z" />
+    </group>
+
+    <!-- Front panel: x=296 y=207 w=543 h=650 rx=70, outline only, stroke 16 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#111111"
+        android:strokeWidth="16"
+        android:pathData="M366,207 L769,207 A70,70 0 0,1 839,277 L839,787 A70,70 0 0,1 769,857 L366,857 A70,70 0 0,1 296,787 L296,277 A70,70 0 0,1 366,207 Z" />
+
+    <!-- Comic panel grid (5컷): outline only, white fill, stroke 14 -->
+    <!-- 1 (top-left tall) x=372 y=290 w=172 h=221 rx=31 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#111111"
+        android:strokeWidth="14"
+        android:pathData="M403,290 L513,290 A31,31 0 0,1 544,321 L544,480 A31,31 0 0,1 513,511 L403,511 A31,31 0 0,1 372,480 L372,321 A31,31 0 0,1 403,290 Z" />
+    <!-- 2 (top-right short) x=582 y=290 w=190 h=107 rx=29 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#111111"
+        android:strokeWidth="14"
+        android:pathData="M611,290 L743,290 A29,29 0 0,1 772,319 L772,368 A29,29 0 0,1 743,397 L611,397 A29,29 0 0,1 582,368 L582,319 A29,29 0 0,1 611,290 Z" />
+    <!-- 3 (mid-right tall) x=582 y=435 w=190 h=200 rx=31 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#111111"
+        android:strokeWidth="14"
+        android:pathData="M613,435 L741,435 A31,31 0 0,1 772,466 L772,604 A31,31 0 0,1 741,635 L613,635 A31,31 0 0,1 582,604 L582,466 A31,31 0 0,1 613,435 Z" />
+    <!-- 4 (mid-left tall) x=372 y=555 w=172 h=221 rx=31 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#111111"
+        android:strokeWidth="14"
+        android:pathData="M403,555 L513,555 A31,31 0 0,1 544,586 L544,745 A31,31 0 0,1 513,776 L403,776 A31,31 0 0,1 372,745 L372,586 A31,31 0 0,1 403,555 Z" />
+    <!-- 5 (bottom-right short) x=582 y=675 w=190 h=101 rx=29 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#111111"
+        android:strokeWidth="14"
+        android:pathData="M611,675 L743,675 A29,29 0 0,1 772,704 L772,747 A29,29 0 0,1 743,776 L611,776 A29,29 0 0,1 582,747 L582,704 A29,29 0 0,1 611,675 Z" />
+
+</vector>
