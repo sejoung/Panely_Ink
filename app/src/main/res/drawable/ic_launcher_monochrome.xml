@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 어댑티브 아이콘 monochrome. docs/icon/panely-ink-icon-monochrome.svg 1:1 변환.
+     Android 13+ Material You 테마 아이콘 — 시스템이 단색 stencil을 테마 컬러로 tint.
+     채움(#000000) 영역만 그려지고, 비워진 영역은 OS 배경색이 비침.
+     foreground 와 차이점: 중간/앞 패널이 outline-only (속이 비어 보임). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+
+    <!-- Back panel: filled silhouette (anchor) -->
+    <group
+        android:name="back"
+        android:pivotX="290"
+        android:pivotY="315"
+        android:rotation="-7">
+        <path
+            android:fillColor="#000000"
+            android:pathData="M325,315 L540,315 A35,35 0 0,1 575,350 L575,655 A35,35 0 0,1 540,690 L325,690 A35,35 0 0,1 290,655 L290,350 A35,35 0 0,1 325,315 Z" />
+    </group>
+
+    <!-- Middle panel: outline only -->
+    <group
+        android:name="middle"
+        android:pivotX="342"
+        android:pivotY="295"
+        android:rotation="4">
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#000000"
+            android:strokeWidth="36"
+            android:pathData="M380,295 L597,295 A38,38 0 0,1 635,333 L635,647 A38,38 0 0,1 597,685 L380,685 A38,38 0 0,1 342,647 L342,333 A38,38 0 0,1 380,295 Z" />
+    </group>
+
+    <!-- Front panel: outline only -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#000000"
+        android:strokeWidth="40"
+        android:pathData="M410,325 L644,325 A40,40 0 0,1 684,365 L684,660 A40,40 0 0,1 644,700 L410,700 A40,40 0 0,1 370,660 L370,365 A40,40 0 0,1 410,325 Z" />
+
+    <!-- Comic panels: filled (give visual weight to the front cover) -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M426,361 L498,361 A20,20 0 0,1 518,381 L518,483 A20,20 0 0,1 498,503 L426,503 A20,20 0 0,1 406,483 L406,381 A20,20 0 0,1 426,361 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M554,361 L630,361 A18,18 0 0,1 648,379 L648,413 A18,18 0 0,1 630,431 L554,431 A18,18 0 0,1 536,413 L536,379 A18,18 0 0,1 554,361 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M556,449 L628,449 A20,20 0 0,1 648,469 L648,560 A20,20 0 0,1 628,580 L556,580 A20,20 0 0,1 536,560 L536,469 A20,20 0 0,1 556,449 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M426,521 L498,521 A20,20 0 0,1 518,541 L518,643 A20,20 0 0,1 498,663 L426,663 A20,20 0 0,1 406,643 L406,541 A20,20 0 0,1 426,521 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M554,598 L630,598 A18,18 0 0,1 648,616 L648,646 A18,18 0 0,1 630,664 L554,664 A18,18 0 0,1 536,646 L536,616 A18,18 0 0,1 554,598 Z" />
+
+</vector>

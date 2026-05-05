@@ -3,8 +3,8 @@ package io.github.sejoung.panelyink.reader
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.net.Uri
-import io.github.sejoung.panelyink.core.archive.CbzLoader
+import android.util.Log
+import io.github.sejoung.panelyink.core.archive.CbzArchive
 import io.github.sejoung.panelyink.core.archive.CbzPage
 import io.github.sejoung.panelyink.core.position.PositionKey
 import io.github.sejoung.panelyink.library.LibraryEntry
@@ -16,32 +16,76 @@ import java.io.IOException
  * 한 권의 책에 대한 자원 모음. ReaderScreen 라이프사이클과 1:1로 묶여 관리된다.
  *
  * 보유:
- * - 자연 정렬된 [pages] 인덱스
+ * - random-access [CbzArchive] (ZipFile + ParcelFileDescriptor)
  * - [BitmapPageCache] (PRD §9: 100MB 상한)
- * - 페이지 1장 디코드 함수
+ * - viewport hint — [decode] 시 inSampleSize 계산에 사용
  *
- * v1.0 디코더는 `BitmapFactory` 표준 경로. RK3566 성능이 부족하면 NDK
- * libjpeg-turbo / libwebp 로 교체 (PRD §8). SAF 경유라 RandomAccessFile을
- * 못 쓰고 매번 ContentResolver 새 스트림 — O(N) per fetch지만 ±3 프리로드 +
- * LRU 캐시로 평상시 OK.
+ * 디코드 파이프라인:
+ * 1. `inJustDecodeBounds`로 헤더만 읽어 원본 해상도 파악
+ * 2. viewport hint 대비 inSampleSize 계산 (1/2/4/8 …)
+ * 3. 다운스케일된 비트맵으로 본 디코드 → 메모리·시간 1/N²
+ *
+ * RK3566 + Carta 1200(1648×1236) 기준, 3000×4000 페이지가 inSampleSize=2로
+ * 1500×2000으로 디코드되면 화면에 그릴 때 `FitCalculator`가 다시 viewport에 맞게
+ * 미세 스케일. 추가 다운샘플로 디코드 자체는 1/4 시간.
  */
 class CbzBookSession private constructor(
     val bookId: String,
-    val pages: List<CbzPage>,
-    private val context: Context,
-    private val documentUri: Uri,
+    private val archive: CbzArchive,
     private val cache: BitmapPageCache,
 ) {
 
-    val pageCount: Int get() = pages.size
+    val pages: List<CbzPage> get() = archive.pages
+    val pageCount: Int get() = archive.pages.size
+
+    @Volatile private var hintWidth: Int = 0
+    @Volatile private var hintHeight: Int = 0
+
+    /** ReaderView가 onSizeChanged에서 갱신. 0/음수면 무시. */
+    fun setViewportHint(width: Int, height: Int) {
+        if (width > 0 && height > 0) {
+            hintWidth = width
+            hintHeight = height
+        }
+    }
 
     /** 캐시에 [pageIndex] 비트맵을 넣는다. 이미 있으면 재사용. */
     suspend fun decode(pageIndex: Int): Bitmap = withContext(Dispatchers.IO) {
         cache.get(pageIndex)?.let { return@withContext it }
         require(pageIndex in pages.indices) { "page $pageIndex out of range [$pageCount]" }
-        val bytes = readPageBytes(pageIndex)
-        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            ?: throw IOException("decode failed for page $pageIndex (${pages[pageIndex].name})")
+        val name = pages[pageIndex].name
+        val t0 = System.currentTimeMillis()
+
+        // 1. 헤더만 읽어 원본 크기 파악
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        archive.openPage(pageIndex).use { input ->
+            BitmapFactory.decodeStream(input, null, bounds)
+        }
+        val tBounds = System.currentTimeMillis()
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            throw IOException("decode bounds failed: $name")
+        }
+
+        // 2. viewport에 맞춰 inSampleSize 계산
+        val targetW = if (hintWidth > 0) hintWidth else bounds.outWidth
+        val targetH = if (hintHeight > 0) hintHeight else bounds.outHeight
+        val sample = computeInSampleSize(bounds.outWidth, bounds.outHeight, targetW, targetH)
+
+        // 3. 본 디코드
+        val opts = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.ARGB_8888 // RGB565 옵션은 v1.0 후반(또는 PRD §11 Q5) 검토
+        }
+        val bitmap = archive.openPage(pageIndex).use { input ->
+            BitmapFactory.decodeStream(input, null, opts)
+        } ?: throw IOException("decode failed: $name")
+        val tDecode = System.currentTimeMillis()
+        Log.d(
+            TAG,
+            "decode #$pageIndex $name: bounds=${tBounds - t0}ms decode=${tDecode - tBounds}ms " +
+                "src=${bounds.outWidth}x${bounds.outHeight} sample=$sample → ${bitmap.width}x${bitmap.height}",
+        )
+
         cache.put(pageIndex, bitmap)
         bitmap
     }
@@ -49,37 +93,64 @@ class CbzBookSession private constructor(
     /** 동기적으로 캐시 hit만 조회. View.onDraw 같은 메인스레드 핫패스용. */
     fun pageBitmap(pageIndex: Int): Bitmap? = cache.get(pageIndex)
 
-    fun close() {
-        cache.clear()
+    /** [ReaderViewModel] 이 사용하는 [PageDecoder] 어댑터.
+     *  viewport 인자를 hint로 받아 다음 디코드부터 다운스케일에 반영한다. */
+    fun asDecoder(): PageDecoder = object : PageDecoder {
+        override suspend fun decode(
+            pageIndex: Int,
+            viewportWidth: Int,
+            viewportHeight: Int,
+        ): DecodedPage {
+            setViewportHint(viewportWidth, viewportHeight)
+            val bitmap = this@CbzBookSession.decode(pageIndex)
+            return DecodedPage(
+                pageIndex = pageIndex,
+                width = bitmap.width,
+                height = bitmap.height,
+                payload = bitmap,
+            )
+        }
     }
 
-    private fun readPageBytes(pageIndex: Int): ByteArray {
-        val loader = CbzLoader {
-            context.contentResolver.openInputStream(documentUri)
-                ?: throw IOException("cannot open $documentUri")
-        }
-        return loader.openPage(pages, pageIndex).use { it.readBytes() }
+    fun close() {
+        cache.clear()
+        archive.close()
     }
 
     companion object {
+        private const val TAG = "PanelyInk.Session"
+
         suspend fun open(context: Context, entry: LibraryEntry): CbzBookSession =
             withContext(Dispatchers.IO) {
                 val ctx = context.applicationContext
-                val loader = CbzLoader {
-                    ctx.contentResolver.openInputStream(entry.documentUri)
-                        ?: throw IOException("cannot open ${entry.documentUri}")
-                }
-                val pages = loader.listPages()
-                if (pages.isEmpty()) {
+                Log.d(TAG, "open ${entry.displayName} (${entry.sizeBytes / 1024} KB) uri=${entry.documentUri}")
+                val archive = CbzArchive.open(ctx, entry.documentUri)
+                if (archive.pages.isEmpty()) {
+                    archive.close()
                     throw IOException("이미지 엔트리가 없습니다: ${entry.displayName}")
                 }
-                CbzBookSession(
+                val session = CbzBookSession(
                     bookId = PositionKey.bookIdFromUri(entry.documentUri.toString()),
-                    pages = pages,
-                    context = ctx,
-                    documentUri = entry.documentUri,
+                    archive = archive,
                     cache = BitmapPageCache(maxBytes = 100L * 1024 * 1024),
                 )
+                // 첫 디코드는 viewport가 아직 잡히기 전에 일어날 수 있다 — displayMetrics를 fallback으로.
+                val dm = ctx.resources.displayMetrics
+                session.setViewportHint(dm.widthPixels, dm.heightPixels)
+                session
             }
     }
+}
+
+/**
+ * Android Bitmap loading best practice — viewport보다 작아지지 않을 때까지 2의 거듭제곱으로
+ * 다운샘플. inSampleSize=4면 가로/세로 각각 1/4, 픽셀 수는 1/16, 메모리/시간도 그만큼 감소.
+ */
+private fun computeInSampleSize(srcW: Int, srcH: Int, dstW: Int, dstH: Int): Int {
+    if (srcW <= 0 || srcH <= 0 || dstW <= 0 || dstH <= 0) return 1
+    var sample = 1
+    while ((srcW / (sample * 2)) >= dstW && (srcH / (sample * 2)) >= dstH) {
+        sample *= 2
+    }
+    return sample
 }

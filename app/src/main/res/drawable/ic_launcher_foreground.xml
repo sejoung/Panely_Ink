@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 어댑티브 아이콘 foreground. docs/icon/panely-ink-icon-foreground.svg 1:1 변환.
+     모든 rect를 rounded path로, SVG transform=rotate(α cx cy)는
+     <group pivotX=cx pivotY=cy rotation=α>로 매핑.
+     콘텐츠는 1024 캔버스 내 199~825 (66/108 safe zone) 안. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+
+    <!-- Back panel: solid #111, rotated -7° around (290, 315). x=290 y=315 w=285 h=375 rx=35 -->
+    <group
+        android:name="back"
+        android:pivotX="290"
+        android:pivotY="315"
+        android:rotation="-7">
+        <path
+            android:fillColor="#111111"
+            android:pathData="M325,315 L540,315 A35,35 0 0,1 575,350 L575,655 A35,35 0 0,1 540,690 L325,690 A35,35 0 0,1 290,655 L290,350 A35,35 0 0,1 325,315 Z" />
+    </group>
+
+    <!-- Middle panel: outlined, rotated +4° around (342, 295). x=342 y=295 w=293 h=390 rx=38 stroke=36 -->
+    <group
+        android:name="middle"
+        android:pivotX="342"
+        android:pivotY="295"
+        android:rotation="4">
+        <path
+            android:fillColor="#FFFFFF"
+            android:strokeColor="#111111"
+            android:strokeWidth="36"
+            android:pathData="M380,295 L597,295 A38,38 0 0,1 635,333 L635,647 A38,38 0 0,1 597,685 L380,685 A38,38 0 0,1 342,647 L342,333 A38,38 0 0,1 380,295 Z" />
+    </group>
+
+    <!-- Front panel: outlined, no rotation. x=370 y=325 w=314 h=375 rx=40 stroke=40 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#111111"
+        android:strokeWidth="40"
+        android:pathData="M410,325 L644,325 A40,40 0 0,1 684,365 L684,660 A40,40 0 0,1 644,700 L410,700 A40,40 0 0,1 370,660 L370,365 A40,40 0 0,1 410,325 Z" />
+
+    <!-- Comic panel grid (5컷) on front cover. all filled #111 -->
+    <!-- Top-left tall: x=406 y=361 w=112 h=142 rx=20 -->
+    <path
+        android:fillColor="#111111"
+        android:pathData="M426,361 L498,361 A20,20 0 0,1 518,381 L518,483 A20,20 0 0,1 498,503 L426,503 A20,20 0 0,1 406,483 L406,381 A20,20 0 0,1 426,361 Z" />
+    <!-- Top-right short: x=536 y=361 w=112 h=70 rx=18 -->
+    <path
+        android:fillColor="#111111"
+        android:pathData="M554,361 L630,361 A18,18 0 0,1 648,379 L648,413 A18,18 0 0,1 630,431 L554,431 A18,18 0 0,1 536,413 L536,379 A18,18 0 0,1 554,361 Z" />
+    <!-- Mid-right tall: x=536 y=449 w=112 h=131 rx=20 -->
+    <path
+        android:fillColor="#111111"
+        android:pathData="M556,449 L628,449 A20,20 0 0,1 648,469 L648,560 A20,20 0 0,1 628,580 L556,580 A20,20 0 0,1 536,560 L536,469 A20,20 0 0,1 556,449 Z" />
+    <!-- Mid-left tall: x=406 y=521 w=112 h=142 rx=20 -->
+    <path
+        android:fillColor="#111111"
+        android:pathData="M426,521 L498,521 A20,20 0 0,1 518,541 L518,643 A20,20 0 0,1 498,663 L426,663 A20,20 0 0,1 406,643 L406,541 A20,20 0 0,1 426,521 Z" />
+    <!-- Bottom-right short: x=536 y=598 w=112 h=66 rx=18 -->
+    <path
+        android:fillColor="#111111"
+        android:pathData="M554,598 L630,598 A18,18 0 0,1 648,616 L648,646 A18,18 0 0,1 630,664 L554,664 A18,18 0 0,1 536,646 L536,616 A18,18 0 0,1 554,598 Z" />
+
+</vector>

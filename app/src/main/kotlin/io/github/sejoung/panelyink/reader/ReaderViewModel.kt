@@ -1,27 +1,39 @@
 package io.github.sejoung.panelyink.reader
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.core.position.PositionKey
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * 본문 리더 상태 머신. PRD §6.1 읽기 코어와 §6.1 e-ink 입력 정책의 공통 진입점.
+ * 본문 리더 상태 머신. PRD §6.1 읽기 코어와 §6.1 입력 정책의 공통 진입점.
+ *
+ * androidx.lifecycle.ViewModel 을 상속하지 **않는다** — Compose 라이프사이클
+ * (`remember(session)`)에 1:1로 묶이기 때문. ViewModelStore에 캐시되면 책을
+ * 닫고 다시 열었을 때 stale decoder(닫힌 ZipFile)를 잡고 있어 다음 디코드 시
+ * `IllegalStateException: zip file closed`가 발생한다.
+ *
+ * 자체 [scope]를 가지며 [close] 시 cancel. ReaderScreen의 DisposableEffect에서
+ * 호출.
  *
  * v1.0 책임:
  * - 현재 페이지 / 방향 / fit 모드 보유
- * - 프리로드 윈도(±3, PRD §6.1) 계산
- * - PositionKey 노출 — Resume / 북마크 저장의 1차 키
- * - 외부에서 주입된 [PageDecoder]에 프리로드 요청을 전달
+ * - 프리로드 윈도(±3) 계산 및 디코드 트리거
+ * - PositionKey 노출 (Resume의 1차 키)
  *
  * v1.0 비책임:
- * - 디코드 실제 호출 캐시 정책 (M1 페이지 캐시에서 다룸)
- * - 풀리프레시 주기 (Guidelines §10 — 뷰어 View 레이어가 결정)
+ * - 페이지 캐시 정책 (CbzBookSession 안 LruCache)
+ * - 풀리프레시 주기 (View 레이어 결정)
  */
 class ReaderViewModel(
     val bookId: String,
@@ -30,12 +42,14 @@ class ReaderViewModel(
     initialPage: Int = 0,
     initialDirection: ReadingDirection = ReadingDirection.Ltr,
     initialFitMode: FitMode = FitMode.FitScreen,
-) : ViewModel() {
+) {
 
     init {
         require(pageCount > 0) { "pageCount must be > 0" }
         require(initialPage in 0 until pageCount) { "initialPage out of range" }
     }
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val _state = MutableStateFlow(
         ReaderState(
@@ -47,13 +61,15 @@ class ReaderViewModel(
     )
     val state: StateFlow<ReaderState> = _state.asStateFlow()
 
-    /** 현재 페이지에 대한 영속 식별자. ViewModel 외부에서 Resume 저장 시 사용. */
+    /** 디코드 1장이 캐시에 들어왔다는 신호. 본문 View가 invalidate 트리거로 사용. */
+    private val _decoded = MutableSharedFlow<Int>(extraBufferCapacity = 16)
+    val decoded: SharedFlow<Int> = _decoded.asSharedFlow()
+
     val positionKey: PositionKey
         get() = PositionKey(bookId, state.value.currentPage)
 
     private var preloadJob: Job? = null
 
-    /** 다음 페이지 (방향 무관 — UI 레이어가 RTL 반전을 처리해서 호출). */
     fun goNext() = goTo(state.value.currentPage + 1)
 
     fun goPrevious() = goTo(state.value.currentPage - 1)
@@ -76,13 +92,9 @@ class ReaderViewModel(
     fun setFitMode(fitMode: FitMode) {
         if (fitMode == state.value.fitMode) return
         _state.value = _state.value.copy(fitMode = fitMode)
-        triggerPreload() // fit 변경 → 디코드 해상도 갱신 필요
+        triggerPreload()
     }
 
-    /**
-     * 현재 viewport 크기가 결정되면 호출 — 페이지 캐시 효율을 위해 디코드 해상도를
-     * 본문 영역 크기와 묶는다. 본문 뷰가 onLayout 시점에 1회 부른다.
-     */
     fun onViewportChanged(width: Int, height: Int) {
         if (width <= 0 || height <= 0) return
         val current = _state.value
@@ -91,14 +103,19 @@ class ReaderViewModel(
         triggerPreload()
     }
 
+    /** Compose 라이프사이클 종료 시 호출. 진행 중인 디코드를 cancel하고 scope 해제. */
+    fun close() {
+        scope.cancel()
+    }
+
     private fun triggerPreload() {
         val s = _state.value
         if (s.viewportWidth <= 0 || s.viewportHeight <= 0) return
         preloadJob?.cancel()
-        preloadJob = viewModelScope.launch {
-            // 현재 → 인접한 순서로 디코드. UI에는 도착하는 대로 캐시에 들어간다고 가정.
+        preloadJob = scope.launch {
             for (idx in s.preloadWindow.byProximityTo(s.currentPage)) {
                 decoder.decode(idx, s.viewportWidth, s.viewportHeight)
+                _decoded.emit(idx)
             }
         }
     }

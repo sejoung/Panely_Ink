@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- adaptive-icon은 OS가 마스크(원/스쿼클)를 자동 적용하므로 round/square 분리 정의 불필요.
+     ic_launcher와 동일 내용으로 유지 — manifest의 roundIcon 속성 호환을 위해 존재. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
+</adaptive-icon>
