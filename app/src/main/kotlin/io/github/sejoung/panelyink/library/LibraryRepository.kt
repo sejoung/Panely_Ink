@@ -36,6 +36,9 @@ class LibraryRepository(private val context: Context) {
 
     private fun DocumentFile.isCbzOrZip(): Boolean {
         val n = name ?: return false
+        // macOS AppleDouble (._book.cbz) 와 닷파일(.DS_Store) 제외.
+        // FAT/exFAT/SMB로 옮길 때 Finder가 짝으로 만들어 두는 메타데이터.
+        if (n.startsWith(".")) return false
         val ext = n.substringAfterLast('.', missingDelimiterValue = "").lowercase()
         return ext == "cbz" || ext == "zip"
     }

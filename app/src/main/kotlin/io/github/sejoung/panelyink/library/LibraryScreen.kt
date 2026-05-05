@@ -48,6 +48,7 @@ import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
 @Composable
 fun LibraryScreen(
     viewModel: LibraryViewModel = viewModel(),
+    onOpenBook: (LibraryEntry) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var manageOpen by remember { mutableStateOf(false) }
@@ -74,7 +75,7 @@ fun LibraryScreen(
                 scanning = state.scanning,
             )
         } else {
-            LibraryList(state.entries)
+            LibraryList(state.entries, onOpenBook = onOpenBook)
         }
     }
 
@@ -132,7 +133,10 @@ private fun LibraryHeader(
 }
 
 @Composable
-private fun LibraryList(entries: List<LibraryEntry>) {
+private fun LibraryList(
+    entries: List<LibraryEntry>,
+    onOpenBook: (LibraryEntry) -> Unit,
+) {
     val typography = LocalPanelyInkTypography.current
     val spacing = LocalPanelyInkSpacing.current
     LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -140,7 +144,7 @@ private fun LibraryList(entries: List<LibraryEntry>) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(enabled = false) { /* M1 reader 진입점 */ }
+                    .clickable { onOpenBook(entry) }
                     .padding(horizontal = spacing.space5, vertical = spacing.space2),
             ) {
                 Text(
