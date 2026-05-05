@@ -9,6 +9,7 @@
 | 타깃 플랫폼 | **Meebook M7** (Android 11, Carta 1200, 1648×1236, 7", RK3566, 3GB RAM) — v1.0 단일 디바이스 |
 | 작성일 | 2026-05-05                                                 |
 | 상태 | Draft v0.2                                                 |
+| 관련 문서 | [Panely_Ink_Design_Guidelines.md](./Panely_Ink_Design_Guidelines.md), [icon/](./icon/) |
 
 ---
 
@@ -204,6 +205,11 @@ e-ink의 물리적 제약 위에서 재해석한다. macOS Panely의 사용 경�
     찾으면 리플렉션·인텐트로 사용, 못 찾아도 v1.0은 1차 방어선만으로 출시 가능
   - Boox/Onyx SDK 연동은 v1.5 (P2 디바이스 확장 시점)
 - **테스트**: JUnit + Robolectric (코어 디코드/정렬), Compose UI test 일부
+- **브랜드 / 에셋**:
+  - 마스터 아이콘: `docs/icon/panely-ink-icon.svg` (1024×1024, `#111111` / `#FFFFFF` 2색)
+  - 안드로이드 어댑티브 아이콘 3종 분리본: `panely-ink-icon-{background,foreground,monochrome}.svg`
+  - 콘텐츠는 66/108 safe zone 준수, Material You 테마 아이콘(Android 13+) 지원
+  - 시각 규칙·컬러 토큰·타이포는 Design Guidelines 문서가 단일 출처
 
 ## 9. 비기능 요구사항
 
@@ -256,12 +262,19 @@ e-ink의 물리적 제약 위에서 재해석한다. macOS Panely의 사용 경�
 | **M2 — e-ink 최적화** | 풀리프레시 정책, 시스템 모드 연동(spike 결과 반영), 자동 트리밍, Floyd–Steinberg dithering, contrast/gamma | 2주 |
 | **M3 — 라이브러리** | SAF, 표지, 진행률, 검색, 시리즈 그룹 | 2주 |
 | **M4 — 시리즈 연속·북마크·Resume** | macOS Panely 동등 | 1~2주 |
-| **M5 — 베타** | Meebook M7 실기 테스트, 문서, 첫 릴리스 | 1~2주 |
+| **M5 — 베타** | Meebook M7 실기 테스트, 어댑티브 아이콘(`background`/`foreground`/`monochrome`) Android 리소스 변환·런처 검증, 문서, 첫 릴리스 | 1~2주 |
 | **v1.0 합계** | | **~2.5개월** |
 
 ## 13. 참고
 
+### 내부 문서
+- [Panely_Ink_Design_Guidelines.md](./Panely_Ink_Design_Guidelines.md) — 컬러·타이포·컴포넌트·리프레시 정책 단일 출처
+- [docs/icon/](./icon/) — 마스터 아이콘 + 어댑티브 3종
+
+### 외부 스펙
 - E Ink Carta 1200 spec: https://www.eink.com/
+- Android Adaptive Icons: https://developer.android.com/develop/ui/views/launch/icon_design_adaptive
+- Material You themed icons: https://developer.android.com/about/versions/13/features#themed-app-icons
 - OPDS spec: https://specs.opds.io/
 - ComicInfo.xml: https://anansi-project.github.io/docs/comicinfo/
 - Komga API: https://komga.org/docs/openapi/
