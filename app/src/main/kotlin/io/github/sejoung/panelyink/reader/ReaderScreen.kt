@@ -28,9 +28,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import io.github.sejoung.panelyink.MainActivity
 import io.github.sejoung.panelyink.library.LibraryEntry
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
@@ -53,6 +57,28 @@ fun ReaderScreen(
     onBack: () -> Unit,
 ) {
     BackHandler { onBack() }
+
+    // Guidelines §12: 본문 모드는 크롬 0dp. 시스템 status/navigation bar를 숨겨
+    // 페이지가 화면 전체를 차지하게 한다. 라이브러리 복귀 시 원상복귀.
+    val view = LocalView.current
+    val activity = LocalContext.current.findMainActivity()
+    DisposableEffect(activity, view) {
+        val window = activity?.window
+        if (window != null) {
+            val controller = WindowCompat.getInsetsController(window, view)
+            // 스와이프로 일시 표시 — e-ink에서 잔상 가능성은 있지만, 사용자가
+            // 의도적으로 시스템 바를 호출할 수 있어야 한다(예: 시간 확인).
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+        }
+        onDispose {
+            if (window != null) {
+                val controller = WindowCompat.getInsetsController(window, view)
+                controller.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
 
     val context = LocalContext.current.applicationContext
     var loadingStep by remember { mutableStateOf("책을 여는 중…") }
