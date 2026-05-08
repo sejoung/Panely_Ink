@@ -3,10 +3,10 @@
 > 진행 상황을 마일스톤 단위로 추적. PRD `panely_ink_prd.md` §6.1 / §12와 일치.
 > 체크하며 구현하기 위한 작업 보드.
 
-| 항목 | 값 |
-|---|---|
-| 작성일 | 2026-05-05 |
-| 기준 | PRD v0.2 (Meebook M7 단일 타깃) |
+| 항목    | 값                            |
+|-------|------------------------------|
+| 작성일   | 2026-05-05                   |
+| 기준    | PRD v0.2 (Meebook M7 단일 타깃)  |
 | 현재 단계 | **M1 — 뷰어 셸** 진행 중 (M1.3 완료) |
 
 범례: `[x]` 완료 · `[ ]` 미착수 · `[~]` 부분 구현 (한계 명시)
@@ -40,6 +40,7 @@
 ## M1 — 뷰어 셸
 
 ### 완료
+
 - [x] **M1.0** — AppleDouble (`._book.cbz`) / 닷파일 라이브러리 필터링
 - [x] **M1.1** — 라이브러리 → 리더 진입 + 첫 페이지 표시
   - `ReaderScreen`, `ReaderView` (View+Canvas), `BitmapPageCache`, `CbzBookSession`
@@ -73,6 +74,7 @@
   - Material You 테마 아이콘은 e-ink 디바이스에서 무의미하므로 비포기
 
 ### 남음
+
 - [x] **M1.3** — Fit modes 적용 + 최소 메뉴
   - `ReaderMenu` 컴포넌트 (`reader/ReaderMenu.kt`) — 하단 패널, Paper 배경 + 2dp Ink 보더
   - 중앙 탭 → 메뉴 토글, 패널 외부 탭 = 닫기 (Guidelines §6 다이얼로그 규칙)
@@ -96,12 +98,12 @@
   - 화면 폭(7"/1648×1236) 고려: 좌측 트리 사이드바 대신 한 화면 = 한 디렉토리
   - 자식 카운트, 표지, 진행률은 M3로 미룸 (lazy 캐시 비용 큼)
   - 중첩 ZIP-of-CBZ(PRD §6.1)는 다음 단계
-- [ ] **M1.후반** — 입력 보강
-  - 더블탭 / 길게 누르기 (페이지 점프 / 챕터 점프) — PRD §6.1
-  - 핀치 줌 (단계적, 1× ↔ 2× 더블탭) — PRD §6.1
-  - 사용자 키 학습/리바인드 화면 (선택, M3로 미룰 수도)
+- [ ] **M1.후반** — 입력 보강 — **출시 후 피드백 보고 결정**(2026-05-08). 현재 단일 탭 + 하드웨어 키 + 메뉴 슬라이더로 핵심 사용 가능
+  - (보류) 더블탭 / 길게 누르기 — 단일 탭 응답이 ~300ms 지연되는 트레이드오프
+  - (보류) 핀치 줌 — pan 정책·잔상 처리 비용. M2 자동 트리밍과 묶이는 게 자연스러움
+  - (보류) 키 리바인드 화면 — M5 베타 실기 테스트 후
 
----
+--- 
 
 ## M2 — e-ink 최적화
 
@@ -179,14 +181,14 @@
 
 ## 알려진 한계 / 임시 처방
 
-| 항목 | 한계 | 해결 시점 |
-|---|---|---|
-| ~~캐시 복사~~ | ~~첫 진입 1~2초~~ | **M1.2.7에서 해결** — Commons Compress로 random-access |
-| 파일 변경 미감지 | (해당 없음 — 캐시 안 쓰니까) | — |
-| ZipFile API | Java 표준만 사용 | Need-based: NDK libjpeg-turbo / libwebp는 디코드 측에서 (PRD §8) |
-| 키 코드 매핑 | 표준 KeyCode만 매핑됨 | M5 — 사용자 리바인드 화면 |
-| 색 변환 | ARGB8888 고정 | RGB565는 PRD §11 Q5에 명시, 측정 후 결정 |
-| 런처 아이콘 | 단일 vector — OS 어댑티브 마스크/parallax 미적용, Material You 테마 아이콘 비활성 | 디자인 의도(e-ink 단순성). 변경 시 monochrome 분리본만 추가 가능 |
+| 항목              | 한계                                                                                  | 해결 시점                                                                |
+|-----------------|-------------------------------------------------------------------------------------|----------------------------------------------------------------------|
+| ~~캐시 복사~~       | ~~첫 진입 1~2초~~                                                                       | **M1.2.7에서 해결** — Commons Compress로 random-access                    |
+| 파일 변경 미감지       | (해당 없음 — 캐시 안 쓰니까)                                                                  | —                                                                    |
+| ZipFile API     | Java 표준만 사용                                                                         | Need-based: NDK libjpeg-turbo / libwebp는 디코드 측에서 (PRD §8)            |
+| 키 코드 매핑         | 표준 KeyCode만 매핑됨                                                                     | M5 — 사용자 리바인드 화면                                                     |
+| 색 변환            | ARGB8888 고정                                                                         | RGB565는 PRD §11 Q5에 명시, 측정 후 결정                                      |
+| 런처 아이콘          | 단일 vector — OS 어댑티브 마스크/parallax 미적용, Material You 테마 아이콘 비활성                       | 디자인 의도(e-ink 단순성). 변경 시 monochrome 분리본만 추가 가능                        |
 | ReaderViewModel | `androidx.lifecycle.ViewModel` 미상속 — 프로세스 사망 시 in-memory 상태(fitMode/direction)는 미복원 | 페이지 위치는 M1.4에서 `PositionRepository`로 보강. fit/direction은 책별 설정과 함께 M3 |
 
 ---
@@ -211,3 +213,4 @@
 - **2026-05-08** — 라이브러리 last-visited path 영속화 + 복원 (JSON in SharedPrefs). `setPath` 단일 진입점에서 state 갱신과 영속화를 묶음. root가 사라진/path가 root 밖 인 경우 무시
 - **2026-05-08** — 폴더 자식 카운트 lazy + in-memory 캐시 (1차). `LibraryRepository.countBooks`(재귀, depth ≤ 3), `LibraryViewModel.requestFolderCount` 작업 dedup, `FolderRow`에 "N권" / "비어있음" 표시. 디스크 캐시·invalidation은 M3 Room 도입 시 통합
 - **2026-05-08** — 세로 스크롤(웹툰) 모드를 v1.5로 미룸. e-ink fling 스크롤 잔상/갱신 속도 한계. PRD §6.1·§6.2와 PROGRESS v1.5 갱신. `ReadingDirection.VerticalScroll` enum은 코드에 그대로 두되 `ReaderMenu`에서 비노출(이미 그 상태)
+- **2026-05-08** — M1.후반 입력 보강(더블탭/핀치 줌/키 리바인드)을 출시 후 피드백 의존으로 보류. 단일 탭+하드웨어 키+메뉴 슬라이더로 v1.0 핵심 사용성 확보. M2 e-ink 최적화로 진행
