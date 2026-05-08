@@ -16,22 +16,33 @@ sealed interface LibraryEntry {
     val rootUri: Uri
 }
 
-/** 책 1권. ReaderScreen에 그대로 전달돼 [io.github.sejoung.panelyink.reader.CbzBookSession]가 연다. */
+/**
+ * 책 1권. ReaderScreen에 그대로 전달돼 [io.github.sejoung.panelyink.reader.CbzBookSession]가 연다.
+ *
+ * [nestedEntryName]이 null이 아니면 ZIP-of-CBZ의 자식 책 — [documentUri]는 부모 ZIP의
+ * SAF URI이고, 진입 시 nested entry를 추출해 reader에 전달.
+ */
 data class BookEntry(
     override val documentUri: Uri,
     override val displayName: String,
     val sizeBytes: Long,
     val mimeType: String?,
     override val rootUri: Uri,
+    /** ZIP-of-CBZ의 자식이면 부모 ZIP 안 entry name. null이면 SAF 직속 책. */
+    val nestedEntryName: String? = null,
 ) : LibraryEntry
 
 /**
  * 폴더 1개. [isRoot]이면 사용자가 직접 추가한 SAF 트리(루트), 아니면 그 안의 하위 폴더.
- * 자식 카운트는 1단계에선 표시하지 않는다 — 향후 lazy 백그라운드 캐시로 보강(M3).
+ *
+ * [nestedBooks]가 null이 아니면 ZIP-of-CBZ를 가상 폴더로 표시하는 케이스 — [documentUri]는
+ * 부모 ZIP의 SAF URI이고 listChildren은 SAF query 대신 [nestedBooks]를 그대로 반환.
  */
 data class FolderEntry(
     override val documentUri: Uri,
     override val displayName: String,
     override val rootUri: Uri,
     val isRoot: Boolean,
+    /** ZIP-of-CBZ의 가상 폴더이면 자식 책 목록. SAF 폴더면 null. */
+    val nestedBooks: List<BookEntry>? = null,
 ) : LibraryEntry

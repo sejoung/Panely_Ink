@@ -36,13 +36,29 @@ class CbzArchive private constructor(
     private val channel: SeekableByteChannel,
     private val pfd: ParcelFileDescriptor,
     val pages: List<CbzPage>,
+    /**
+     * ZIP-of-CBZ 시리즈 — 이 아카이브 안의 .cbz/.zip 항목들. PRD §6.1 "중첩 아카이브
+     * 추출". [pages]가 비어있고 [nestedArchives]가 2+이면 가상 폴더(시리즈)로 취급.
+     * 단일 권 + nested = 혼합 케이스는 1차에선 [pages] 우선(일반 reader).
+     */
+    val nestedArchives: List<NestedArchiveEntry>,
     private val entriesByName: Map<String, ZipArchiveEntry>,
 ) : Closeable {
+
+    /** pages 비어있고 nested 2+ → ZIP-of-CBZ 시리즈로 취급. */
+    val isSeriesArchive: Boolean
+        get() = pages.isEmpty() && nestedArchives.size >= 2
 
     fun openPage(pageIndex: Int): InputStream {
         require(pageIndex in pages.indices) { "page $pageIndex out of bounds [${pages.size}]" }
         val name = pages[pageIndex].name
         val entry = entriesByName[name] ?: throw IOException("entry not found: $name")
+        return zipFile.getInputStream(entry)
+    }
+
+    /** ZIP-of-CBZ에서 nested entry를 OutputStream 또는 file로 추출하기 위한 InputStream. */
+    fun openNestedEntry(entryName: String): InputStream {
+        val entry = entriesByName[entryName] ?: throw IOException("entry not found: $entryName")
         return zipFile.getInputStream(entry)
     }
 
@@ -58,6 +74,19 @@ class CbzArchive private constructor(
         suspend fun open(context: Context, uri: Uri): CbzArchive = withContext(Dispatchers.IO) {
             val pfd = context.contentResolver.openFileDescriptor(uri, "r")
                 ?: throw IOException("cannot open $uri")
+            openInternal(pfd)
+        }
+
+        /**
+         * [java.io.File] 기반 — nested ZIP-of-CBZ에서 추출한 임시 cbz를 열 때 사용.
+         * SAF 경로 없이 직접 디스크 파일.
+         */
+        suspend fun open(file: java.io.File): CbzArchive = withContext(Dispatchers.IO) {
+            val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+            openInternal(pfd)
+        }
+
+        private fun openInternal(pfd: ParcelFileDescriptor): CbzArchive {
             val t0 = System.currentTimeMillis()
             val fis = FileInputStream(pfd.fileDescriptor)
             val channel = fis.channel
@@ -79,33 +108,63 @@ class CbzArchive private constructor(
             val tZf = System.currentTimeMillis()
             Log.d(TAG, "ZipFile build: ${tZf - tZf0}ms")
 
-            val (pages, byName) = try {
+            val triple = try {
                 val tEnum0 = System.currentTimeMillis()
                 val byName = mutableMapOf<String, ZipArchiveEntry>()
                 val pageList = mutableListOf<CbzPage>()
+                val nestedList = mutableListOf<NestedArchiveEntry>()
                 val entries = zipFile.entries
                 while (entries.hasMoreElements()) {
                     val entry = entries.nextElement()
-                    if (!entry.isDirectory && entry.name.isImageEntry()) {
-                        byName[entry.name] = entry
-                        pageList += CbzPage(name = entry.name, size = entry.size.coerceAtLeast(0))
+                    if (entry.isDirectory) continue
+                    when {
+                        entry.name.isImageEntry() -> {
+                            byName[entry.name] = entry
+                            pageList += CbzPage(
+                                name = entry.name,
+                                size = entry.size.coerceAtLeast(0),
+                            )
+                        }
+                        entry.name.isNestedArchiveEntry() -> {
+                            byName[entry.name] = entry
+                            nestedList += NestedArchiveEntry(
+                                entryName = entry.name,
+                                displayName = entry.name.substringAfterLast('/'),
+                                size = entry.size.coerceAtLeast(0),
+                            )
+                        }
                     }
                 }
-                val sorted = pageList.sortedWith(compareBy(NaturalOrderComparator) { it.name })
-                Log.d(TAG, "entries enum + sort: ${System.currentTimeMillis() - tEnum0}ms (${pageList.size} images)")
-                sorted to byName.toMap()
+                val sortedPages = pageList.sortedWith(compareBy(NaturalOrderComparator) { it.name })
+                val sortedNested = nestedList.sortedWith(
+                    compareBy(NaturalOrderComparator) { it.displayName },
+                )
+                Log.d(
+                    TAG,
+                    "entries enum + sort: ${System.currentTimeMillis() - tEnum0}ms " +
+                        "(${pageList.size} images, ${nestedList.size} nested)",
+                )
+                Triple(sortedPages, sortedNested, byName.toMap())
             } catch (t: Throwable) {
                 runCatching { zipFile.close() }
                 runCatching { channel.close() }
                 runCatching { pfd.close() }
                 throw t
             }
+            val pages = triple.first
+            val nestedArchives = triple.second
+            val byName = triple.third
 
-            Log.d(TAG, "open total: ${pages.size} pages in ${System.currentTimeMillis() - t0}ms")
-            CbzArchive(zipFile, channel, pfd, pages, byName)
+            Log.d(
+                TAG,
+                "open total: ${pages.size} pages, ${nestedArchives.size} nested " +
+                    "in ${System.currentTimeMillis() - t0}ms",
+            )
+            return CbzArchive(zipFile, channel, pfd, pages, nestedArchives, byName)
         }
 
         private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "bmp", "gif")
+        private val NESTED_ARCHIVE_EXTENSIONS = setOf("cbz", "zip")
 
         private fun String.isImageEntry(): Boolean {
             val name = substringAfterLast('/')
@@ -113,5 +172,22 @@ class CbzArchive private constructor(
             val ext = name.substringAfterLast('.', missingDelimiterValue = "").lowercase()
             return ext in IMAGE_EXTENSIONS
         }
+
+        private fun String.isNestedArchiveEntry(): Boolean {
+            val name = substringAfterLast('/')
+            if (name.isEmpty() || name.startsWith(".") || contains("__MACOSX/")) return false
+            val ext = name.substringAfterLast('.', missingDelimiterValue = "").lowercase()
+            return ext in NESTED_ARCHIVE_EXTENSIONS
+        }
     }
 }
+
+/** ZIP-of-CBZ에서 발견한 nested entry. */
+data class NestedArchiveEntry(
+    /** 부모 ZIP 안 entry 전체 경로 — extract 시 사용. */
+    val entryName: String,
+    /** 사용자에게 보여줄 이름(basename). */
+    val displayName: String,
+    /** 압축 해제 후 크기 — 추출 디스크 공간 추정. */
+    val size: Long,
+)

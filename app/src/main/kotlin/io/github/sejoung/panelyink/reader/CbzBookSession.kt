@@ -10,6 +10,7 @@ import io.github.sejoung.panelyink.core.fit.TrimRect
 import io.github.sejoung.panelyink.core.position.PositionKey
 import io.github.sejoung.panelyink.core.trim.MarginTrimmer
 import io.github.sejoung.panelyink.library.BookEntry
+import io.github.sejoung.panelyink.library.NestedZipExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -150,14 +151,33 @@ class CbzBookSession private constructor(
         suspend fun open(context: Context, entry: BookEntry): CbzBookSession =
             withContext(Dispatchers.IO) {
                 val ctx = context.applicationContext
-                Log.d(TAG, "open ${entry.displayName} (${entry.sizeBytes / 1024} KB) uri=${entry.documentUri}")
-                val archive = CbzArchive.open(ctx, entry.documentUri)
+                Log.d(
+                    TAG,
+                    "open ${entry.displayName} (${entry.sizeBytes / 1024} KB) " +
+                        "uri=${entry.documentUri} nested=${entry.nestedEntryName ?: "-"}",
+                )
+                val archive = if (entry.nestedEntryName != null) {
+                    // ZIP-of-CBZ 자식 — 부모 ZIP에서 추출 후 단일 cbz로 open
+                    val tempFile = NestedZipExtractor.extract(
+                        ctx, entry.documentUri, entry.nestedEntryName,
+                    )
+                    CbzArchive.open(tempFile)
+                } else {
+                    CbzArchive.open(ctx, entry.documentUri)
+                }
                 if (archive.pages.isEmpty()) {
                     archive.close()
                     throw IOException("이미지 엔트리가 없습니다: ${entry.displayName}")
                 }
+                // bookId 체계: nested entry는 부모 URI + entry name으로 unique. resume/
+                // BookSettings/CoverMeta가 nested 책별로 저장됨.
+                val bookIdSource = if (entry.nestedEntryName != null) {
+                    "${entry.documentUri}#${entry.nestedEntryName}"
+                } else {
+                    entry.documentUri.toString()
+                }
                 val session = CbzBookSession(
-                    bookId = PositionKey.bookIdFromUri(entry.documentUri.toString()),
+                    bookId = PositionKey.bookIdFromUri(bookIdSource),
                     archive = archive,
                     cache = BitmapPageCache(maxBytes = 100L * 1024 * 1024),
                 )

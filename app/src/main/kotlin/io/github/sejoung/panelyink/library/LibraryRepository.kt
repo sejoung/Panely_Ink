@@ -3,6 +3,8 @@ package io.github.sejoung.panelyink.library
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
+import android.util.Log
+import io.github.sejoung.panelyink.core.archive.CbzArchive
 import io.github.sejoung.panelyink.core.sort.NaturalOrderComparator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -72,6 +74,9 @@ class LibraryRepository(private val context: Context) {
      */
     suspend fun listChildren(parent: FolderEntry): List<LibraryEntry> =
         withContext(Dispatchers.IO) {
+            // 가상 폴더(ZIP-of-CBZ) — SAF query 없이 인스턴스가 들고 있는 nested 목록
+            // 그대로. 정렬은 inspectZipForSeries가 이미 자연순으로 만들어놨다.
+            parent.nestedBooks?.let { return@withContext it }
             // in-memory 캐시 hit → SAF query 0번
             childrenCache[parent.documentUri]?.let { return@withContext it }
             val parentDocId = parent.documentIdForChildren()
@@ -128,6 +133,46 @@ class LibraryRepository(private val context: Context) {
      */
     suspend fun firstBookIn(folder: FolderEntry): BookEntry? = withContext(Dispatchers.IO) {
         listChildren(folder).firstOrNull { it is BookEntry } as? BookEntry
+    }
+
+    /**
+     * [book]이 ZIP-of-CBZ(중첩 아카이브 시리즈)이면 가상 폴더로 변환해 반환. 아니면 null.
+     *
+     * 호출 시점: 사용자가 책 행 클릭 직후. ZIP을 열어 entries 분류 → 이미지가 없고
+     * nested .cbz/.zip이 2+이면 [FolderEntry.nestedBooks]로 자식 책 변환.
+     *
+     * 비용: 부모 ZIP 한 번 열기(Commons Compress + setIgnoreLocalFileHeader). 외장 SD에서
+     * 보통 100~500ms. 결과는 호출자가 캐싱.
+     */
+    suspend fun inspectZipForSeries(book: BookEntry): FolderEntry? = withContext(Dispatchers.IO) {
+        // 이미 nested entry인 책은 ZIP-of-CBZ 자식이라 다시 검사 안 함.
+        if (book.nestedEntryName != null) return@withContext null
+        val archive = runCatching { CbzArchive.open(context, book.documentUri) }.getOrElse {
+            Log.w("PanelyInk.Library", "inspect open failed: ${book.documentUri}", it)
+            return@withContext null
+        }
+        try {
+            if (!archive.isSeriesArchive) return@withContext null
+            val nestedBooks = archive.nestedArchives.map { entry ->
+                BookEntry(
+                    documentUri = book.documentUri, // 부모 ZIP URI 그대로 — open 시 nestedEntryName으로 분기
+                    displayName = entry.displayName,
+                    sizeBytes = entry.size,
+                    mimeType = null,
+                    rootUri = book.rootUri,
+                    nestedEntryName = entry.entryName,
+                )
+            }
+            FolderEntry(
+                documentUri = book.documentUri,
+                displayName = book.displayName,
+                rootUri = book.rootUri,
+                isRoot = false,
+                nestedBooks = nestedBooks,
+            )
+        } finally {
+            archive.close()
+        }
     }
 
     /**

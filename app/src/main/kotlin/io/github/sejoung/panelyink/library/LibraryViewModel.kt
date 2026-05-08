@@ -156,6 +156,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     fun clearCoverCache() {
         viewModelScope.launch {
             CoverPruner.clearAll(getApplication(), coverMetaRepo)
+            // ZIP-of-CBZ 임시 추출 파일도 같이 정리(cacheDir/nested) — 표지 캐시와 함께
+            // 사용자 의도 "캐시 비우기"에 포함.
+            NestedZipExtractor.clearAll(getApplication())
             // 진행 중인 추출 작업도 무효 — 이미 launch된 것은 끝나며 새 메타에 OK 기록됨.
             // 일관성을 위해 in-memory state + debounce 버퍼 모두 비우고 다음 lazy 요청에서 재추출.
             coverFlushJob?.cancel()
@@ -256,6 +259,33 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         setPath(nextPath)
         clearSearch()
         refreshChildren(folder)
+    }
+
+    /**
+     * 사용자가 책 행을 클릭 — ZIP-of-CBZ 검사 후 분기. PRD §6.1 "중첩 아카이브 추출".
+     *
+     * - 일반 책: [onBook] 콜백 (호출자가 ReaderScreen 진입 처리)
+     * - 시리즈 ZIP: 가상 폴더로 path push (라이브러리 자식 .cbz 목록)
+     * - 이미 nested 책: 즉시 [onBook] (재검사 X)
+     *
+     * 검사는 비동기 — 외장 SD에서 100~500ms 사용자 짧은 대기.
+     */
+    fun openBook(book: BookEntry, onBook: (BookEntry) -> Unit) {
+        if (book.nestedEntryName != null) {
+            onBook(book)
+            return
+        }
+        viewModelScope.launch {
+            val virtualFolder = repo.inspectZipForSeries(book)
+            if (virtualFolder != null) {
+                val nextPath = _state.value.path + virtualFolder
+                setPath(nextPath)
+                clearSearch()
+                refreshChildren(virtualFolder)
+            } else {
+                onBook(book)
+            }
+        }
     }
 
     /**

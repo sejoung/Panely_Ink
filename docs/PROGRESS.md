@@ -97,7 +97,7 @@
   - `BackHandler` — 폴더 안에서 시스템 뒤로 키 = `goUp`
   - 화면 폭(7"/1648×1236) 고려: 좌측 트리 사이드바 대신 한 화면 = 한 디렉토리
   - 자식 카운트, 표지, 진행률은 M3로 미룸 (lazy 캐시 비용 큼)
-  - 중첩 ZIP-of-CBZ(PRD §6.1)는 다음 단계
+  - 중첩 ZIP-of-CBZ는 별도 작업으로 정식 구현(2026-05-09 — 아래 진행 로그 참조)
 - [ ] **M1.후반** — 입력 보강 — **출시 후 피드백 보고 결정**(2026-05-08). 현재 단일 탭 + 하드웨어 키 + 메뉴 슬라이더로 핵심 사용 가능
   - (보류) 더블탭 / 길게 누르기 — 단일 탭 응답이 ~300ms 지연되는 트레이드오프
   - (보류) 핀치 줌 — pan 정책·잔상 처리 비용. M2 자동 트리밍과 묶이는 게 자연스러움
@@ -305,3 +305,4 @@
 - **2026-05-09** — 표지 state debounce flush 100ms. 추출 1장씩 도착마다 `_state.value.copy(covers = ...)` → 30번 recompose stutter 문제. `pendingCovers`/`pendingCoverStatus` 버퍼 + `delay(100)` flush 코루틴으로 100ms 동안 도착한 표지를 모아 한 번에 갱신. recompose 30번 → 1~2번. `clearCoverCache`/`resetAllData`에서도 버퍼 + flushJob cleanup
 - **2026-05-09** — 뷰어 좌상단 ← 라이브러리 복귀 아이콘 상시 노출. Guidelines §12 "크롬 0dp" 부분 보완 — 시스템 navigation bar가 노출되지 않는 e-ink 디바이스(Meebook M7)에선 메뉴(중앙 탭 → 하단 패널)를 거치지 않고 한 번에 라이브러리로. 메뉴/설정 열림 시엔 그 화면이 자체 back을 가지므로 숨김. 라이브러리/설정 화면과 일관된 ← 위치
 - **2026-05-09** — 뷰어 좌상단 상시 ← 제거 + 메뉴에 상단 헤더 추가. 본문 가독성을 위해 Guidelines §12 "크롬 0dp" 본문 모드 복원. 메뉴 호출(중앙 탭) 시 상단 헤더(← 라이브러리 + 책 제목 + "현재/전체" 페이지 인디케이터)와 하단 패널이 함께 등장 → 라이브러리/설정 화면과 일관된 ← 위치 + 사용자가 어떤 책 어디인지 한눈에. `entry.displayName`을 ReaderContent까지 prop drill로 전달
+- **2026-05-09** — PRD §6.1 **중첩 아카이브(ZIP-of-CBZ) 정식 구현**. (1) `CbzArchive`에 nested entries 분류(이미지/.cbz/.zip), `isSeriesArchive` 플래그, `openNestedEntry` InputStream, File 기반 `open(File)`. (2) `BookEntry.nestedEntryName` + `FolderEntry.nestedBooks` 필드로 sealed 도메인 확장. (3) `NestedZipExtractor` — `cacheDir/nested/<parentHash>__<entryHash>.cbz`로 1회 추출 + 캐시. (4) `LibraryRepository.inspectZipForSeries` — ZIP 안 nested .cbz 2+이면 가상 `FolderEntry` 반환. `listChildren`은 가상 폴더면 SAF query 대신 `nestedBooks` 그대로. (5) `LibraryViewModel.openBook` — 책 클릭 시 검사 → 시리즈면 가상 폴더 path push, 일반이면 onBook. (6) `CbzBookSession.open`이 nested entry면 추출 후 file 기반 open. bookId 체계: nested는 `parentUri#entryName`으로 unique → 진행률/BookSettings/CoverMeta 모두 nested 책별 저장. (7) `clearCoverCache`에서 nested cacheDir도 정리

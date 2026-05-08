@@ -92,6 +92,12 @@ fun LibraryScreen(
     var searchActive by remember { mutableStateOf(false) }
     var appSettingsOpen by remember { mutableStateOf(false) }
 
+    // ZIP-of-CBZ 검사 후 분기: 시리즈면 가상 폴더 진입, 일반이면 reader. PRD §6.1.
+    // 각 책 행이 호출하는 onOpenBook을 이 wrapper로 통과시켜 자동 처리.
+    val onOpenBookSafe: (BookEntry) -> Unit = { book ->
+        viewModel.openBook(book, onOpenBook)
+    }
+
     val pickFolder = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
     ) { uri -> if (uri != null) viewModel.addRoot(uri) }
@@ -188,7 +194,7 @@ fun LibraryScreen(
                         covers = state.covers,
                         bookProgress = state.bookProgress,
                         onEnterFolder = viewModel::enterFolder,
-                        onOpenBook = onOpenBook,
+                        onOpenBook = onOpenBookSafe,
                         onRequestCount = viewModel::requestFolderCount,
                         onRequestCover = viewModel::requestCover,
                         onRequestFolderCover = viewModel::requestFolderCover,
@@ -201,7 +207,7 @@ fun LibraryScreen(
                         covers = state.covers,
                         bookProgress = state.bookProgress,
                         onEnterFolder = viewModel::enterFolder,
-                        onOpenBook = onOpenBook,
+                        onOpenBook = onOpenBookSafe,
                         onRequestCount = viewModel::requestFolderCount,
                         onRequestCover = viewModel::requestCover,
                         onRequestFolderCover = viewModel::requestFolderCover,
