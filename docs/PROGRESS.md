@@ -81,9 +81,11 @@
   - 메뉴 열린 동안 하드웨어 키는 메뉴 닫기로 흡수 (의도치 않은 페이지 넘김 방지)
   - `ReaderView`는 이미 `FitCalculator` 결과를 사용 중 (M1.1부터). 메뉴에서 `FitMode` 선택 시 `ReaderViewModel.setFitMode` → `ReaderState` → `ReaderView.setFitMode` 단방향 전파
   - `ReadingDirection.VerticalScroll`은 M1.5에서 추가 (현재는 LTR/RTL만 노출)
-- [ ] **M1.4** — Resume / 위치 기억
-  - `PositionKey` 영속화 (SharedPreferences 또는 Room)
-  - 책 재진입 시 마지막 페이지 자동 복원
+- [x] **M1.4** — Resume / 위치 기억
+  - `core/position/PositionRepository` 인터페이스 + `SharedPreferencesPositionRepository` 구현 (`panely_ink_positions` prefs)
+  - `ReaderScreen`이 세션 오픈 후 `load(bookId)` → `ReaderViewModel.initialPage`로 복원 (페이지 수 줄어든 책에 대비해 `coerceIn`)
+  - `LaunchedEffect(state.currentPage)` 에서 `save(PositionKey(...))` — `apply()`로 메인스레드 블록 없이 합쳐짐
+  - 책 수 1000+ 시 Room으로 교체 (M3)
   - 라이브러리에서 마지막 책 자동 열기는 M3
 - [x] **M1.4.5** — 라이브러리 폴더 트리 탐색 (1단계)
   - `LibraryEntry`를 sealed로 분리: `BookEntry` / `FolderEntry` (root 폴더는 `isRoot=true`)
@@ -188,7 +190,7 @@
 | 키 코드 매핑 | 표준 KeyCode만 매핑됨 | M5 — 사용자 리바인드 화면 |
 | 색 변환 | ARGB8888 고정 | RGB565는 PRD §11 Q5에 명시, 측정 후 결정 |
 | 런처 아이콘 | 단일 vector — OS 어댑티브 마스크/parallax 미적용, Material You 테마 아이콘 비활성 | 디자인 의도(e-ink 단순성). 변경 시 monochrome 분리본만 추가 가능 |
-| ReaderViewModel | `androidx.lifecycle.ViewModel` 미상속 — 프로세스 사망 시 상태 미복원 | M1.4 Resume에서 `PositionKey` 영속화로 보강 |
+| ReaderViewModel | `androidx.lifecycle.ViewModel` 미상속 — 프로세스 사망 시 in-memory 상태(fitMode/direction)는 미복원 | 페이지 위치는 M1.4에서 `PositionRepository`로 보강. fit/direction은 책별 설정과 함께 M3 |
 
 ---
 
@@ -207,3 +209,4 @@
 - **2026-05-08** — 본문 모드에서 시스템 status/navigation bar 숨김(`WindowInsetsControllerCompat`) — Guidelines §12 "크롬 0dp"
 - **2026-05-08** — `PanelyIconButton` 추가 + 라이브러리 헤더 슬림화 (고정 80dp 제거, 정사각 아이콘 버튼이 짜부 없이 정렬)
 - **2026-05-08** — M1.4.5: 라이브러리 폴더 트리 탐색 1단계. `LibraryEntry` sealed(Book/Folder), `LibraryRepository.listChildren`, `path` 스택, breadcrumb UI, `BackHandler`로 `goUp`. 카운트/표지/ZIP-of-CBZ는 다음 단계
+- **2026-05-08** — M1.4: Resume / 위치 기억. `PositionRepository`(SharedPrefs 구현), 세션 오픈 시 `initialPage` 복원, 페이지 변경마다 `apply()`로 저장

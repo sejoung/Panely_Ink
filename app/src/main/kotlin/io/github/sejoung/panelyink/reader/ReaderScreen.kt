@@ -36,6 +36,9 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import io.github.sejoung.panelyink.MainActivity
+import io.github.sejoung.panelyink.core.position.PositionKey
+import io.github.sejoung.panelyink.core.position.PositionRepository
+import io.github.sejoung.panelyink.core.position.SharedPreferencesPositionRepository
 import io.github.sejoung.panelyink.library.BookEntry
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
@@ -56,6 +59,10 @@ fun ReaderScreen(
     entry: BookEntry,
     onBack: () -> Unit,
 ) {
+    val appContext = LocalContext.current.applicationContext
+    val positionRepo: PositionRepository = remember(appContext) {
+        SharedPreferencesPositionRepository(appContext)
+    }
     BackHandler { onBack() }
 
     // Guidelines §12: 본문 모드는 크롬 0dp. 시스템 status/navigation bar를 숨겨
@@ -80,13 +87,12 @@ fun ReaderScreen(
         }
     }
 
-    val context = LocalContext.current.applicationContext
     var loadingStep by remember { mutableStateOf("책을 여는 중…") }
     val sessionState by produceState<SessionState>(SessionState.Loading, entry.documentUri) {
         value = try {
             Log.d(TAG, "ReaderScreen open: ${entry.displayName}")
             loadingStep = "페이지 목록 스캔 중…"
-            val session = CbzBookSession.open(context, entry)
+            val session = CbzBookSession.open(appContext, entry)
             loadingStep = "첫 페이지 디코드 중… (${session.pageCount}쪽)"
             session.decode(0)
             Log.d(TAG, "ReaderScreen ready")
@@ -110,7 +116,11 @@ fun ReaderScreen(
         when (val s = sessionState) {
             SessionState.Loading -> ReaderLoading(loadingStep)
             is SessionState.Failed -> ReaderError(message = s.message)
-            is SessionState.Ready -> ReaderContent(session = s.session, onExit = onBack)
+            is SessionState.Ready -> ReaderContent(
+                session = s.session,
+                positionRepo = positionRepo,
+                onExit = onBack,
+            )
         }
     }
 }
@@ -118,14 +128,23 @@ fun ReaderScreen(
 private const val TAG = "PanelyInk.Reader"
 
 @Composable
-private fun ReaderContent(session: CbzBookSession, onExit: () -> Unit) {
+private fun ReaderContent(
+    session: CbzBookSession,
+    positionRepo: PositionRepository,
+    onExit: () -> Unit,
+) {
     // ViewModelStore에 캐시되지 않도록 remember(session)로 묶는다 — 책을 닫고
     // 다시 열 때 stale decoder(닫힌 ZipFile)를 잡는 문제 방지.
     val viewModel = remember(session) {
+        // PRD §6.1 Resume: 마지막 페이지 복원. 페이지 수가 줄어든 책에 대비해 clamp.
+        val resumed = positionRepo.load(session.bookId)
+            ?.coerceIn(0, session.pageCount - 1)
+            ?: 0
         ReaderViewModel(
             bookId = session.bookId,
             pageCount = session.pageCount,
             decoder = session.asDecoder(),
+            initialPage = resumed,
         )
     }
 
@@ -144,6 +163,12 @@ private fun ReaderContent(session: CbzBookSession, onExit: () -> Unit) {
     LaunchedEffect(state.currentPage, state.fitMode, view) {
         view?.setPageIndex(state.currentPage)
         view?.setFitMode(state.fitMode)
+    }
+
+    // PRD §6.1 Resume — 페이지 변경 시 저장. SharedPreferences.apply는 비동기
+    // 디스크 쓰기를 합치므로 페이지 이동 빈도(초당 수 회)에서도 부담 없다.
+    LaunchedEffect(state.currentPage, viewModel) {
+        positionRepo.save(PositionKey(viewModel.bookId, state.currentPage))
     }
 
     // 디코드 1장 도착 → invalidate. 현재 페이지가 캐시 hit이면 onDraw가 그림.
