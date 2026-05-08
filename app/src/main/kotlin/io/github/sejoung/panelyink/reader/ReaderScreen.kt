@@ -63,9 +63,16 @@ import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
  */
 @Composable
 fun ReaderScreen(
-    entry: BookEntry,
+    context: SeriesContext,
     onBack: () -> Unit,
+    /**
+     * 시리즈 형제 권으로 이동 — 호스트가 새 [SeriesContext]를 만들어 [ReaderScreen]을 다시
+     * 부르는 식으로 처리. M4 시리즈 연속 읽기 카드 / "다음 권" 카드에서 사용.
+     * 인자로 받은 [BookEntry]는 [SeriesContext.siblings] 안에 있어야 의미가 있다.
+     */
+    onNavigate: (BookEntry) -> Unit = {},
 ) {
+    val entry = context.current
     val appContext = LocalContext.current.applicationContext
     val db = remember(appContext) { PanelyDatabase.getInstance(appContext) }
     val positionRepo: PositionRepository = remember(db) { RoomPositionRepository(db) }
@@ -98,7 +105,9 @@ fun ReaderScreen(
     }
 
     var loadingStep by remember { mutableStateOf("책을 여는 중…") }
-    val sessionState by produceState<SessionState>(SessionState.Loading, entry.documentUri) {
+    // produceState 키는 nested 책까지 구분하는 [BookEntry.bookIdSource]를 사용 — 일반 책은
+    // documentUri와 동일, ZIP-of-CBZ 자식은 `${uri}#${entry}`라 형제 권 간 이동 시 새 책으로 정확히 재진입.
+    val sessionState by produceState<SessionState>(SessionState.Loading, entry.bookIdSource) {
         value = try {
             Log.d(TAG, "ReaderScreen open: ${entry.displayName}")
             loadingStep = "페이지 목록 스캔 중…"

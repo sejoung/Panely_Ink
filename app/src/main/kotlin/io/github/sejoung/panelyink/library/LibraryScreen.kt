@@ -59,6 +59,7 @@ import kotlin.math.roundToInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.sejoung.panelyink.R
+import io.github.sejoung.panelyink.reader.SeriesContext
 import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
 import io.github.sejoung.panelyink.ui.components.PanelyBookIcon
 import io.github.sejoung.panelyink.ui.components.PanelyChevronRightIcon
@@ -85,7 +86,7 @@ import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
 @Composable
 fun LibraryScreen(
     viewModel: LibraryViewModel = viewModel(),
-    onOpenBook: (BookEntry) -> Unit = {},
+    onOpenBook: (SeriesContext) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var sortOpen by remember { mutableStateOf(false) }
@@ -93,9 +94,12 @@ fun LibraryScreen(
     var appSettingsOpen by remember { mutableStateOf(false) }
 
     // ZIP-of-CBZ 검사 후 분기: 시리즈면 가상 폴더 진입, 일반이면 reader. PRD §6.1.
-    // 각 책 행이 호출하는 onOpenBook을 이 wrapper로 통과시켜 자동 처리.
-    val onOpenBookSafe: (BookEntry) -> Unit = { book ->
-        viewModel.openBook(book, onOpenBook)
+    // siblings은 클릭 시점의 visibleEntries에서 BookEntry만 — 가상 폴더 push 후 nested 책
+    // 클릭 시는 nestedBooks가 그대로 형제로 들어가 reader가 시리즈 연속 기능에 사용.
+    val onOpenBookSafe: (BookEntry, List<BookEntry>) -> Unit = { book, siblings ->
+        viewModel.openBook(book) { resolved ->
+            onOpenBook(SeriesContext(current = resolved, siblings = siblings))
+        }
     }
 
     val pickFolder = rememberLauncherForActivityResult(
@@ -413,12 +417,15 @@ private fun LibraryList(
     covers: Map<String, ImageBitmap>,
     bookProgress: Map<String, BookProgress>,
     onEnterFolder: (FolderEntry) -> Unit,
-    onOpenBook: (BookEntry) -> Unit,
+    onOpenBook: (BookEntry, List<BookEntry>) -> Unit,
     onRequestCount: (FolderEntry) -> Unit,
     onRequestCover: (BookEntry) -> Unit,
     onRequestFolderCover: (FolderEntry) -> Unit,
     onRequestProgress: (BookEntry) -> Unit,
 ) {
+    // 시리즈 컨텍스트의 형제 후보 — 같은 화면에 보이는 BookEntry. 폴더는 제외.
+    // ZIP-of-CBZ 가상 폴더 안에서는 nestedBooks만 들어있어 자연스럽게 형제로 작동.
+    val siblings = remember(entries) { entries.filterIsInstance<BookEntry>() }
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         items(items = entries, key = { it.stableKey }) { entry ->
             when (entry) {
@@ -440,14 +447,14 @@ private fun LibraryList(
                             entry = entry,
                             cover = covers[bookId],
                             progress = bookProgress[bookId],
-                            onClick = { onOpenBook(entry) },
+                            onClick = { onOpenBook(entry, siblings) },
                             onRequestCover = onRequestCover,
                             onRequestProgress = onRequestProgress,
                         )
                         ViewMode.List -> BookRowCompact(
                             entry = entry,
                             progress = bookProgress[bookId],
-                            onClick = { onOpenBook(entry) },
+                            onClick = { onOpenBook(entry, siblings) },
                             onRequestProgress = onRequestProgress,
                         )
                         // Grid는 LibraryGrid에서 처리. 여기 분기는 도달 X.
@@ -511,13 +518,14 @@ private fun LibraryGrid(
     covers: Map<String, ImageBitmap>,
     bookProgress: Map<String, BookProgress>,
     onEnterFolder: (FolderEntry) -> Unit,
-    onOpenBook: (BookEntry) -> Unit,
+    onOpenBook: (BookEntry, List<BookEntry>) -> Unit,
     onRequestCount: (FolderEntry) -> Unit,
     onRequestCover: (BookEntry) -> Unit,
     onRequestFolderCover: (FolderEntry) -> Unit,
     onRequestProgress: (BookEntry) -> Unit,
 ) {
     val spacing = LocalPanelyInkSpacing.current
+    val siblings = remember(entries) { entries.filterIsInstance<BookEntry>() }
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
         modifier = Modifier
@@ -544,7 +552,7 @@ private fun LibraryGrid(
                         entry = entry,
                         cover = covers[bookId],
                         progress = bookProgress[bookId],
-                        onClick = { onOpenBook(entry) },
+                        onClick = { onOpenBook(entry, siblings) },
                         onRequestCover = onRequestCover,
                         onRequestProgress = onRequestProgress,
                     )

@@ -12,9 +12,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import io.github.sejoung.panelyink.library.BookEntry
 import io.github.sejoung.panelyink.library.LibraryScreen
 import io.github.sejoung.panelyink.reader.ReaderScreen
+import io.github.sejoung.panelyink.reader.SeriesContext
 import io.github.sejoung.panelyink.ui.theme.PanelyInkTheme
 import io.github.sejoung.panelyink.ui.theme.PanelyInkTokens
 
@@ -39,11 +39,16 @@ class MainActivity : ComponentActivity() {
                 Box(Modifier.fillMaxSize().background(PanelyInkTokens.Color.Paper)) {
                     when (val s = screen) {
                         Screen.Library -> LibraryScreen(
-                            onOpenBook = { entry -> screen = Screen.Reader(entry) },
+                            onOpenBook = { ctx -> screen = Screen.Reader(ctx) },
                         )
                         is Screen.Reader -> ReaderScreen(
-                            entry = s.entry,
+                            context = s.context,
                             onBack = { screen = Screen.Library },
+                            // 시리즈 형제 권으로 이동 — siblings는 그대로 두고 current만 교체.
+                            // 새 ReaderScreen이 produceState 키(current.documentUri)로 재진입.
+                            onNavigate = { newCurrent ->
+                                screen = Screen.Reader(s.context.copy(current = newCurrent))
+                            },
                         )
                     }
                 }
@@ -58,6 +63,6 @@ class MainActivity : ComponentActivity() {
 
     private sealed interface Screen {
         data object Library : Screen
-        data class Reader(val entry: BookEntry) : Screen
+        data class Reader(val context: SeriesContext) : Screen
     }
 }
