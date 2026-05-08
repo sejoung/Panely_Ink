@@ -65,6 +65,8 @@ fun ReaderMenu(
     onFitModeChange: (FitMode) -> Unit,
     onDirectionChange: (ReadingDirection) -> Unit,
     onTrimEnabledChange: (Boolean) -> Unit,
+    onFullRefreshIntervalChange: (Int) -> Unit,
+    onTriggerFullRefresh: () -> Unit,
     onJumpToPage: (Int) -> Unit,
     onExitToLibrary: () -> Unit,
     onClose: () -> Unit,
@@ -141,6 +143,22 @@ fun ReaderMenu(
 
             Spacer(Modifier.height(spacing.space2))
 
+            SectionLabel("풀리프레시 주기 (페이지)")
+            Spacer(Modifier.height(spacing.space1))
+            FullRefreshIntervalSegments(
+                interval = state.fullRefreshInterval,
+                onSelect = onFullRefreshIntervalChange,
+            )
+            Spacer(Modifier.height(spacing.space1))
+            PanelyTextButton(
+                label = "지금 풀리프레시",
+                onClick = onTriggerFullRefresh,
+                primary = false,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(Modifier.height(spacing.space2))
+
             SectionLabel("페이지 점프")
             Spacer(Modifier.height(spacing.space1))
             PageJump(
@@ -175,6 +193,27 @@ private fun FitSegments(
     Segments(
         options = options,
         isSelected = { it == selected },
+        labelOf = { options.first { p -> p.first == it }.second },
+        onSelect = onSelect,
+    )
+}
+
+@Composable
+private fun FullRefreshIntervalSegments(
+    interval: Int,
+    onSelect: (Int) -> Unit,
+) {
+    // 0=끔, 1=매 페이지, 3/5/10=일반. 1과 10은 잔상 체감 비교용 양쪽 끝.
+    val options = listOf(
+        1 to "1",
+        3 to "3",
+        5 to "5",
+        10 to "10",
+        0 to "끔",
+    )
+    Segments(
+        options = options,
+        isSelected = { it == interval },
         labelOf = { options.first { p -> p.first == it }.second },
         onSelect = onSelect,
     )

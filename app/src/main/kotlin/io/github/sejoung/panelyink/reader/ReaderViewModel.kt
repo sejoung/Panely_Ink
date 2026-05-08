@@ -64,11 +64,11 @@ class ReaderViewModel(
     val state: StateFlow<ReaderState> = _state.asStateFlow()
 
     /**
-     * 마지막 풀리프레시 이후 페이지 변경 횟수. [fullRefreshInterval]에 도달하면
-     * [ReaderState.fullRefreshGeneration]을 1 증가시키고 reset.
+     * 마지막 풀리프레시 이후 페이지 변경 횟수. [ReaderState.fullRefreshInterval]에
+     * 도달하면 [ReaderState.fullRefreshGeneration]을 1 증가시키고 reset.
+     * interval=0이면 자동 트리거 비활성(사용자가 끔 선택), [triggerFullRefresh]만 동작.
      */
     private var pagesSinceFullRefresh = 0
-    private var fullRefreshInterval = FULL_REFRESH_INTERVAL_DEFAULT
 
     /** 디코드 1장이 캐시에 들어왔다는 신호. 본문 View가 invalidate 트리거로 사용. */
     private val _decoded = MutableSharedFlow<Int>(extraBufferCapacity = 16)
@@ -90,9 +90,14 @@ class ReaderViewModel(
 
         // 풀리프레시 정책 — N페이지마다 generation++ → ReaderView가 검정 한 프레임으로
         // e-ink 컨트롤러를 풀리프레시 모드로 끌어내림(잔상 누적 방어선).
-        pagesSinceFullRefresh += 1
-        val triggerFull = pagesSinceFullRefresh >= fullRefreshInterval
-        if (triggerFull) pagesSinceFullRefresh = 0
+        // interval=0이면 자동 트리거 비활성(사용자 명시 선택).
+        val interval = current.fullRefreshInterval
+        val triggerFull = if (interval > 0) {
+            pagesSinceFullRefresh += 1
+            (pagesSinceFullRefresh >= interval).also { hit ->
+                if (hit) pagesSinceFullRefresh = 0
+            }
+        } else false
 
         _state.value = current.copy(
             currentPage = clamped,
@@ -104,12 +109,29 @@ class ReaderViewModel(
     }
 
     /**
-     * 풀리프레시 주기 변경. M5 실기 테스트 결과 또는 사용자 설정에서 호출.
-     * 1 이상이어야 — 0 또는 음수는 매 페이지 풀리프레시(=깜빡임 폭주)라 의도된 사용 아님.
+     * 풀리프레시 주기 변경. 메뉴에서 사용자 조정 또는 M5 실기 테스트 결과로 호출.
+     *
+     * - 0: 자동 트리거 끔. [triggerFullRefresh]로만 동작
+     * - 1: 매 페이지마다 (잔상 방어 최대, 깜빡임 빈도 ↑)
+     * - 5(기본) / 10 등: 일반 사용
      */
     fun setFullRefreshInterval(n: Int) {
-        require(n >= 1) { "interval must be >= 1, got $n" }
-        fullRefreshInterval = n
+        require(n >= 0) { "interval must be >= 0, got $n" }
+        if (n == _state.value.fullRefreshInterval) return
+        // 주기 변경 시 카운터를 리셋해 직전 카운트가 새 주기에 영향 주지 않게.
+        pagesSinceFullRefresh = 0
+        _state.value = _state.value.copy(fullRefreshInterval = n)
+    }
+
+    /**
+     * 카운터 무관하게 즉시 풀리프레시 1회. 메뉴 "지금 풀리프레시" 버튼이 호출.
+     * 카운터는 0으로 리셋되어 다음 자동 트리거는 N페이지 후로 미뤄진다.
+     */
+    fun triggerFullRefresh() {
+        pagesSinceFullRefresh = 0
+        _state.value = _state.value.copy(
+            fullRefreshGeneration = _state.value.fullRefreshGeneration + 1,
+        )
     }
 
     fun setDirection(direction: ReadingDirection) {
@@ -186,6 +208,8 @@ data class ReaderState(
     val fullRefreshGeneration: Int = 0,
     /** 자동 여백 트리밍(M2) 적용 여부. ReaderView가 onDraw에서 참조. */
     val trimEnabled: Boolean = true,
+    /** 자동 풀리프레시 주기(페이지 수). 0이면 자동 비활성. UI 토글이 변경. */
+    val fullRefreshInterval: Int = ReaderViewModel.FULL_REFRESH_INTERVAL_DEFAULT,
 )
 
 private fun IntRange.byProximityTo(center: Int): List<Int> {

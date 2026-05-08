@@ -299,13 +299,65 @@ class ReaderViewModelTest {
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun fullRefreshIntervalMustBePositive() {
+    fun fullRefreshIntervalRejectsNegative() {
         val vm = ReaderViewModel("b", 10, FakePageDecoder())
         try {
-            vm.setFullRefreshInterval(0)
+            vm.setFullRefreshInterval(-1)
         } finally {
             vm.close()
         }
+    }
+
+    @Test
+    fun fullRefreshIntervalZeroDisablesAutoTrigger() {
+        val vm = ReaderViewModel("b", 100, FakePageDecoder())
+        vm.setFullRefreshInterval(0)
+        assertEquals(0, vm.state.value.fullRefreshInterval)
+        // 끔 상태에서는 페이지 이동에 generation 증가 없음
+        repeat(20) { vm.goNext() }
+        assertEquals(0, vm.state.value.fullRefreshGeneration)
+        vm.close()
+    }
+
+    @Test
+    fun triggerFullRefreshIncrementsGenerationImmediately() {
+        val vm = ReaderViewModel("b", 100, FakePageDecoder())
+        assertEquals(0, vm.state.value.fullRefreshGeneration)
+        vm.triggerFullRefresh()
+        assertEquals(1, vm.state.value.fullRefreshGeneration)
+        vm.triggerFullRefresh()
+        assertEquals(2, vm.state.value.fullRefreshGeneration)
+        vm.close()
+    }
+
+    @Test
+    fun triggerFullRefreshResetsCounter() {
+        val vm = ReaderViewModel("b", 100, FakePageDecoder())
+        // 4페이지 진행 (자동 트리거 직전)
+        repeat(4) { vm.goNext() }
+        assertEquals(0, vm.state.value.fullRefreshGeneration)
+        // 강제 트리거 — 1로 즉시 증가, 카운터 리셋
+        vm.triggerFullRefresh()
+        assertEquals(1, vm.state.value.fullRefreshGeneration)
+        // 4페이지 더 — 자동 트리거 안 됨(카운터가 리셋됐으니)
+        repeat(4) { vm.goNext() }
+        assertEquals(1, vm.state.value.fullRefreshGeneration)
+        // 5번째에 자동 트리거
+        vm.goNext()
+        assertEquals(2, vm.state.value.fullRefreshGeneration)
+        vm.close()
+    }
+
+    @Test
+    fun setFullRefreshIntervalUpdatesState() {
+        val vm = ReaderViewModel("b", 10, FakePageDecoder())
+        assertEquals(
+            ReaderViewModel.FULL_REFRESH_INTERVAL_DEFAULT,
+            vm.state.value.fullRefreshInterval,
+        )
+        vm.setFullRefreshInterval(3)
+        assertEquals(3, vm.state.value.fullRefreshInterval)
+        vm.close()
     }
 }
 

@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
+import android.util.Log
 import android.view.View
 import io.github.sejoung.panelyink.core.fit.FitCalculator
 import io.github.sejoung.panelyink.core.fit.FitMode
@@ -21,6 +22,8 @@ import io.github.sejoung.panelyink.core.fit.FitMode
  * 상태(현재 페이지/fit)는 외부 setter로 받음. Compose 레이어가 ViewModel 상태를
  * collect 해서 setPageIndex/setFitMode를 호출 → 단방향 흐름 유지.
  */
+private const val TAG = "PanelyInk.ReaderView"
+
 class ReaderView(context: Context) : View(context) {
 
     private var session: CbzBookSession? = null
@@ -97,6 +100,7 @@ class ReaderView(context: Context) : View(context) {
         // 다시 그린다. 표준 안드로이드 API에는 풀리프레시 강제가 없어, 큰 색차로
         // 컨트롤러를 끌어내리는 게 SDK 의존 없는 1차 방어선.
         if (pendingFullRefresh) {
+            Log.d(TAG, "full refresh tick — page=$pageIndex")
             canvas.drawColor(Color.BLACK)
             pendingFullRefresh = false
             postInvalidateOnAnimation()

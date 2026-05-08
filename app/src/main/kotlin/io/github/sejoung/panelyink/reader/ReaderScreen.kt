@@ -236,6 +236,8 @@ private fun ReaderContent(
                 onFitModeChange = viewModel::setFitMode,
                 onDirectionChange = viewModel::setDirection,
                 onTrimEnabledChange = viewModel::setTrimEnabled,
+                onFullRefreshIntervalChange = viewModel::setFullRefreshInterval,
+                onTriggerFullRefresh = viewModel::triggerFullRefresh,
                 onJumpToPage = { page ->
                     viewModel.goTo(page)
                     menuOpen = false

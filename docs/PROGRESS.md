@@ -108,11 +108,13 @@
 ## M2 — e-ink 최적화
 
 - [x] **풀리프레시 정책** — N페이지마다 검정 1프레임 → 정상 1프레임. e-ink 컨트롤러가 큰 색차를 풀리프레시 신호로 인식 (SDK 의존 없는 1차 방어선)
-  - `ReaderViewModel.fullRefreshInterval`(기본 5) + `pagesSinceFullRefresh` 카운터
   - `ReaderState.fullRefreshGeneration` monotonic 증가 — `LaunchedEffect` 키로 사용
-  - `ReaderView.requestFullRefresh()` → `pendingFullRefresh` 플래그 → 다음 onDraw에서 검정 fill 후 `postInvalidateOnAnimation`으로 정상 콘텐츠 1프레임
-  - 단위 테스트 4개 추가 (총 24개)
-  - 실제 효과는 디바이스 의존 — M5 실기 테스트에서 N 조정
+  - `ReaderView.requestFullRefresh()` → `pendingFullRefresh` 플래그 → 다음 onDraw에서 검정 fill 후 `postInvalidateOnAnimation`으로 정상 콘텐츠 1프레임. logcat `PanelyInk.ReaderView`에 `full refresh tick — page=N` 출력
+  - **사용자 조정 가능**: 메뉴에 "풀리프레시 주기 (페이지) [1/3/5/10/끔]" 세그먼트 + "지금 풀리프레시" 강제 버튼
+  - `setFullRefreshInterval(0)`은 자동 비활성, `triggerFullRefresh()`만 동작
+  - `ReaderState.fullRefreshInterval` 기본 5
+  - 단위 테스트 8개 (총 28개) — 자동 트리거, 같은 페이지 no-op, custom interval, 0=끔, 즉시 트리거, 카운터 리셋, state 갱신
+  - 실제 효과는 디바이스 의존 — M5 실기 테스트에서 default 조정
 - [ ] **시스템 refresh 모드 연동** (M0.5 spike 결과 반영, best-effort)
 - [x] **자동 여백 트리밍** — 좌/우/상/하 흰 여백 감지 후 `TrimRect`로 fit
   - `core/trim/MarginTrimmer` (JVM 순수 함수, 단위 테스트 7개) — IntArray + width/height 입력. 임계값(밝기 240, 흰 비율 95%, 안전가드 30%) 조정 가능
@@ -226,3 +228,4 @@
 - **2026-05-08** — M1.후반 입력 보강(더블탭/핀치 줌/키 리바인드)을 출시 후 피드백 의존으로 보류. 단일 탭+하드웨어 키+메뉴 슬라이더로 v1.0 핵심 사용성 확보. M2 e-ink 최적화로 진행
 - **2026-05-08** — M2 풀리프레시 정책. `ReaderViewModel`에 페이지 카운터 + `fullRefreshGeneration` state, `ReaderView`에 검정 1프레임 + `postInvalidateOnAnimation` trick. 기본 N=5, `setFullRefreshInterval`로 조정 가능. 단위 테스트 4개 추가
 - **2026-05-08** — M2 자동 여백 트리밍. `MarginTrimmer`(JVM 순수 함수, 단위 테스트 7개), `CbzBookSession.trimCache`, `ReaderState.trimEnabled` + 메뉴 토글. 디코드 후 1회 계산되어 onDraw에서 즉시 사용. 안전가드(결과 < 30%)로 잘못 감지 방지
+- **2026-05-08** — 풀리프레시 정책 사용자 가시화. 메뉴에 주기 세그먼트(1/3/5/10/끔) + "지금 풀리프레시" 버튼. `triggerFullRefresh()`/`setFullRefreshInterval(0)` API. `ReaderView`에 logcat 한 줄. 단위 테스트 4개 추가
