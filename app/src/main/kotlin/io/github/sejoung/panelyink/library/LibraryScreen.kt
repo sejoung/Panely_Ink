@@ -154,18 +154,16 @@ private fun LibraryHeader(
                 }
             }
         }
-        // 첫 화면(root 목록)에서만 폴더 추가/관리 노출 — 폴더 안에선 책 행에 집중.
-        if (!inFolder) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(spacing.space1),
-            ) {
-                PanelyIconButton(onClick = onManage, primary = false) { tint ->
-                    PanelyMenuIcon(tint = tint)
-                }
-                PanelyIconButton(onClick = onAdd, primary = true) { tint ->
-                    PanelyPlusIcon(tint = tint)
-                }
+        // 폴더 안/밖 모두 노출 — single-root 자동 진입 시에도 root 추가/관리 가능해야 함.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(spacing.space1),
+        ) {
+            PanelyIconButton(onClick = onManage, primary = false) { tint ->
+                PanelyMenuIcon(tint = tint)
+            }
+            PanelyIconButton(onClick = onAdd, primary = true) { tint ->
+                PanelyPlusIcon(tint = tint)
             }
         }
     }

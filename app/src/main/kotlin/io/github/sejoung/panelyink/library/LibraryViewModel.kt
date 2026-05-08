@@ -32,9 +32,19 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     /** 현재 진행 중인 list/scan 작업. 폴더 진입 도중 새 진입이 들어오면 cancel. */
     private var listJob: Job? = null
 
+    /**
+     * 다음 [refreshRoots] 시 자동으로 단일 root 안으로 한 단계 진입할지.
+     *
+     * - init / addRoot / removeRoot 직후에 켠다(사용자가 추가/제거한 결과 root가 1개로
+     *   정리된 시점). root 1개면 첫 화면 = "폴더 1개" 짜리 의미 없는 단계라 건너뜀.
+     * - [goUp]으로 사용자가 의도적으로 root 화면에 도달했을 땐 끈다 — 무한 루프 방지.
+     */
+    private var pendingAutoDescend = false
+
     init {
         val saved = prefs.getStringSet(KEY_ROOTS, emptySet()).orEmpty().map(Uri::parse)
         _state.value = _state.value.copy(roots = saved)
+        pendingAutoDescend = true
         refreshRoots()
     }
 
@@ -49,8 +59,15 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         if (current.any { it == uri }) return
         val next = current + uri
         persist(next)
-        _state.value = _state.value.copy(roots = next, path = emptyList())
-        refreshRoots()
+        _state.value = _state.value.copy(roots = next)
+        // 새 root 1개로 시작했으면 자동 진입. 이미 다른 root에 들어와 있다면 그대로 둔다.
+        if (next.size == 1 && _state.value.path.isEmpty()) {
+            pendingAutoDescend = true
+            refreshRoots()
+        } else if (_state.value.path.isEmpty()) {
+            refreshRoots()
+        }
+        // 폴더 안에 들어가 있는 동안의 추가는 entries에 영향 없음(현재 폴더 children은 그대로).
     }
 
     fun removeRoot(uri: Uri) {
@@ -65,7 +82,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         // 사용자가 현재 진입해 있던 root가 사라졌으면 첫 화면으로 복귀.
         val newPath = _state.value.path.takeIf { it.firstOrNull()?.rootUri != uri }.orEmpty()
         _state.value = _state.value.copy(roots = next, path = newPath)
-        if (newPath.isEmpty()) refreshRoots() else refreshChildren(newPath.last())
+        if (newPath.isEmpty()) {
+            // 제거 결과 root 1개만 남았으면 거기로 자동 진입.
+            pendingAutoDescend = (next.size == 1)
+            refreshRoots()
+        } else {
+            refreshChildren(newPath.last())
+        }
     }
 
     /** 폴더 진입 — path에 push 후 그 폴더의 직계 로드. */
@@ -83,7 +106,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         if (current.isEmpty()) return false
         val nextPath = current.dropLast(1)
         _state.value = _state.value.copy(path = nextPath)
-        if (nextPath.isEmpty()) refreshRoots() else refreshChildren(nextPath.last())
+        if (nextPath.isEmpty()) {
+            // 사용자 의도로 root 목록까지 올라온 경우 — 자동 진입 X
+            pendingAutoDescend = false
+            refreshRoots()
+        } else {
+            refreshChildren(nextPath.last())
+        }
         return true
     }
 
@@ -97,8 +126,20 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         listJob?.cancel()
         listJob = viewModelScope.launch {
             _state.value = _state.value.copy(scanning = true)
-            val rootEntries: List<LibraryEntry> = repo.listRoots(_state.value.roots)
-            _state.value = _state.value.copy(entries = rootEntries, scanning = false)
+            val rootEntries = repo.listRoots(_state.value.roots)
+
+            // 자동 진입: root 1개면 한 프레임도 root 화면을 노출하지 않고
+            // 바로 그 안 children 로드 — e-ink 깜빡임 방지.
+            if (pendingAutoDescend && rootEntries.size == 1 && _state.value.path.isEmpty()) {
+                pendingAutoDescend = false
+                val target = rootEntries.first()
+                _state.value = _state.value.copy(path = listOf(target))
+                val children = repo.listChildren(target)
+                _state.value = _state.value.copy(entries = children, scanning = false)
+            } else {
+                pendingAutoDescend = false
+                _state.value = _state.value.copy(entries = rootEntries, scanning = false)
+            }
         }
     }
 

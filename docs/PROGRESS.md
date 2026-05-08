@@ -210,3 +210,4 @@
 - **2026-05-08** — `PanelyIconButton` 추가 + 라이브러리 헤더 슬림화 (고정 80dp 제거, 정사각 아이콘 버튼이 짜부 없이 정렬)
 - **2026-05-08** — M1.4.5: 라이브러리 폴더 트리 탐색 1단계. `LibraryEntry` sealed(Book/Folder), `LibraryRepository.listChildren`, `path` 스택, breadcrumb UI, `BackHandler`로 `goUp`. 카운트/표지/ZIP-of-CBZ는 다음 단계
 - **2026-05-08** — M1.4: Resume / 위치 기억. `PositionRepository`(SharedPrefs 구현), 세션 오픈 시 `initialPage` 복원, 페이지 변경마다 `apply()`로 저장
+- **2026-05-08** — 라이브러리 single-root 자동 진입. root 1개면 첫 화면 한 프레임도 노출하지 않고 그 안으로 한 단계 진입. `pendingAutoDescend` 플래그로 init/add/remove에서만 트리거하고 `goUp`(사용자 의도)에선 끔. 폴더 안에서도 +/관리 버튼 노출
