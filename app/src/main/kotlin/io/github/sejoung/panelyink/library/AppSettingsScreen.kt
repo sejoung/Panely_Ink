@@ -56,6 +56,7 @@ fun AppSettingsScreen(
     onAddRoot: () -> Unit,
     onRemoveRoot: (Uri) -> Unit,
     onClearCoverCache: () -> Unit,
+    onResetAllData: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -68,6 +69,7 @@ fun AppSettingsScreen(
         SharedPrefsAppPreferencesRepository(ctx)
     }
     val scope = rememberCoroutineScope()
+    var resetDialogOpen by remember { mutableStateOf(false) }
 
     // 화면 진입 시 1회 SharedPreferences 로드. 책 진입 흐름과 달리 빈번하지 않아 단순.
     var prefs by remember { mutableStateOf<AppPreferences?>(null) }
@@ -209,8 +211,43 @@ fun AppSettingsScreen(
                 color = PanelyInkColors.Mute,
             )
 
+            Spacer(Modifier.height(spacing.space4))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(PanelyInkColors.Hairline),
+            )
+            Spacer(Modifier.height(spacing.space4))
+
+            // 위험 영역 — 신규 사용자 상태로 복귀(Room/Prefs/SAF/캐시 모두 비움).
+            GroupHeader("초기화")
+            Spacer(Modifier.height(spacing.space2))
+            Text(
+                text = "라이브러리 폴더, 진행률, 책별 설정, 표지 캐시 등 모든 데이터를 비웁니다. 되돌릴 수 없습니다.",
+                style = typography.body,
+                color = PanelyInkColors.Mute,
+            )
+            Spacer(Modifier.height(spacing.space2))
+            PanelyTextButton(
+                label = "전체 초기화",
+                onClick = { resetDialogOpen = true },
+                primary = false,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
             Spacer(Modifier.height(spacing.space3))
         }
+    }
+
+    if (resetDialogOpen) {
+        ConfirmResetDialog(
+            onConfirm = {
+                resetDialogOpen = false
+                onResetAllData()
+            },
+            onDismiss = { resetDialogOpen = false },
+        )
     }
 }
 

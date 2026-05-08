@@ -203,6 +203,10 @@ fun LibraryScreen(
             onAddRoot = onAddFolder,
             onRemoveRoot = viewModel::removeRoot,
             onClearCoverCache = viewModel::clearCoverCache,
+            onResetAllData = {
+                viewModel.resetAllData()
+                appSettingsOpen = false
+            },
             onBack = { appSettingsOpen = false },
         )
     }

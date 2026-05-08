@@ -124,9 +124,9 @@
   - `ReaderMenu`에 "자동 여백 트리밍 [자동/끔]" 세그먼트 추가
 - [ ] **흑백 변환 + Floyd–Steinberg dithering** (1종만)
 - [~] **Contrast / Gamma** 슬라이더 + 책별 저장
-  - [x] **Contrast** 세션 한정 — `core/render/ContrastMatrix` (JVM 순수 함수, 단위 테스트 6개), `ReaderState.contrast`, `ReaderView.setContrast`로 `ColorMatrixColorFilter` 토글, 메뉴 슬라이더(0.5..2.0, 5% 스냅) + "원본" 버튼
+  - [x] **Contrast** — `core/render/ContrastMatrix` (JVM 순수 함수, 단위 테스트 6개), `ReaderState.contrast`, `ReaderView.setContrast`로 `ColorMatrixColorFilter` 토글, 메뉴 슬라이더(0.5..2.0, 5% 스냅) + "원본" 버튼
+  - [x] **책별 저장** — M3 BookSettings 도입 시 통합(`book_settings.contrast` REAL 컬럼, `ReaderScreen`이 변경 시 자동 upsert). 책 재진입 시 마지막 대비 그대로 복원
   - [ ] **Gamma** — ColorMatrix는 선형이라 비선형 gamma는 비트맵 LUT 변환 필요. minSdk 30에선 RuntimeShader 미사용, Bitmap pixel manipulation. 비용 큼 → 다음 단계
-  - [ ] **책별 저장** — `BookSettingsRepository` 추가 필요 (PositionRepository 패턴). M3 Room 도입과 묶어도 OK
 - [x] **Invert (블랙/화이트 반전)** — macOS 다크모드 대체
   - `core/render/InvertMatrix` (4×5 ColorMatrix, JVM 단위 테스트 1개)
   - `ReaderState.invertEnabled` + `setInvertEnabled`. 설정 화면에 [끔/켬] 세그먼트
@@ -292,3 +292,5 @@
 - **2026-05-08** — M3 CoverMeta 도입. Room v3→v4(`cover_meta` 테이블), `CoverStatus.OK/FAILED` enum, `RoomCoverMetaRepository`. `LibraryViewModel.requestCover`가 메타 확인 후 FAILED는 영구 skip — 깨진 책에 archive open 매번 시도하던 부담 제거. 디스크 파일 손상은 재추출. 사용자 새로고침 UI는 후속(현재는 `coverMetaRepo.delete`로 재추출 가능 API만)
 - **2026-05-08** — M3 표지 캐시 LRU 정리. `CoverPruner.prune` — covers 디렉토리 사이즈 80MB 초과 시 가장 오래된 메타+파일부터 삭제. `loadOkOrderedByLru` 쿼리. `PanelyInkApp.onCreate`에서 백그라운드 1회 호출. orphan 파일은 1차 미처리
 - **2026-05-08** — 캐시 정리 보강. `CoverPruner.prune`에 orphan(메타 없는 디스크 파일) 정리 통합 + `clearAll`(전체 비우기 — FAILED 메타 포함) 신규. `LibraryViewModel.clearCoverCache` + 앱 설정 화면 캐시 그룹에 "표지 캐시 비우기" 버튼. 호환성 고려는 미배포라 X
+- **2026-05-09** — Contrast 책별 저장은 M3 BookSettings 도입 시 이미 통합되어 동작 중. PROGRESS.md M2 메모만 갱신(코드 변경 없음)
+- **2026-05-09** — 전체 초기화 기능. `data/AppDataResetter` — Room clearAllTables + SharedPreferences 3종 + SAF 권한 release(prefs 비우기 전 root 읽기) + covers 디렉토리 삭제. `LibraryViewModel.resetAllData` (진행 중 작업 cancel + state 초기화). `ConfirmResetDialog`(취소 primary, 초기화 secondary). 앱 설정 화면 끝에 "초기화" 그룹 + 버튼. 디버깅/기기 양도 시 신규 사용자 상태 복귀

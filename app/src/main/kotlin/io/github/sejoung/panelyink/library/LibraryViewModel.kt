@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.sejoung.panelyink.core.position.BookProgress
 import io.github.sejoung.panelyink.core.position.PositionKey
 import io.github.sejoung.panelyink.core.sort.NaturalOrderComparator
+import io.github.sejoung.panelyink.data.AppDataResetter
 import io.github.sejoung.panelyink.data.db.CoverStatus
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
 import io.github.sejoung.panelyink.data.db.RoomCoverMetaRepository
@@ -93,6 +94,28 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         } else {
             pendingAutoDescend = true
             refreshRoots()
+        }
+    }
+
+    /**
+     * 사용자 명시 "전체 초기화" — Room/Prefs/SAF 권한/디스크 캐시 모두 비움.
+     * 신규 사용자 상태로 복귀. state도 [LibraryState] 기본값으로 갱신해 화면이
+     * 빈 상태로 보이도록.
+     */
+    fun resetAllData() {
+        viewModelScope.launch {
+            // 진행 중인 작업 모두 취소 — 이후 빈 state에 누락된 결과가 반영되지 않게.
+            listJob?.cancel()
+            countingJobs.values.forEach { it.cancel() }
+            countingJobs.clear()
+            coverJobs.values.forEach { it.cancel() }
+            coverJobs.clear()
+            progressJobs.values.forEach { it.cancel() }
+            progressJobs.clear()
+
+            AppDataResetter.resetAll(getApplication(), db)
+            pendingAutoDescend = false
+            _state.value = LibraryState()
         }
     }
 
