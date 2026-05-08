@@ -49,6 +49,20 @@ import kotlin.math.roundToInt
  * - 슬라이더 드래그 중 본문 변경 X — 손을 떼야 commit
  */
 
+/**
+ * 설정 그룹의 상위 헤더(예: "페이지 레이아웃", "화질"). [SectionLabel]은 한 그룹
+ * 안의 개별 섹션 라벨이므로 위계상 더 옅게 표현 — 두 단계 hierarchy.
+ */
+@Composable
+internal fun GroupHeader(text: String) {
+    val typography = LocalPanelyInkTypography.current
+    Text(
+        text = text,
+        style = typography.list,
+        color = PanelyInkColors.Ink,
+    )
+}
+
 @Composable
 internal fun SectionLabel(text: String) {
     val typography = LocalPanelyInkTypography.current

@@ -241,3 +241,4 @@
 - **2026-05-08** — M2 Contrast 1단계(세션 한정). `ContrastMatrix` 4×5 ColorMatrix 빌더, `ColorMatrixColorFilter` 적용, 슬라이더 0.5..2.0(5% 스냅) + "원본" 버튼. 옅은 스캔본 만화 가독성용. Gamma·책별 저장은 보류
 - **2026-05-08** — 리더 메뉴를 빠른 메뉴 + 설정 화면으로 분리. 메뉴 패널 = 페이지 점프 + 라이브러리로 + "설정 ⋯"만(본문 가독성 ↑). 책당 1회 설정(맞춤/방향/트림/대비/풀리프레시)은 풀스크린 `ReaderSettingsScreen`. 공통 컨트롤은 `ReaderControls.kt`로 추출. BackHandler 우선순위(settings → menu → 라이브러리). 2차 "자주 쓰는 메뉴 핀" 옵션은 출시 후 사용 패턴 보고 SharedPrefs로 결정
 - **2026-05-08** — M2 Invert. `InvertMatrix` 4×5 ColorMatrix, contrast와 결합(postConcat). 설정 화면에 [끔/켬] 세그먼트. 단위 테스트 3개 추가
+- **2026-05-08** — 설정 화면 3그룹 분리. `GroupHeader`(list+Ink) 추가, 섹션 라벨(caption+Mute)과 시각 hierarchy. 그룹: [페이지 레이아웃] / [화질] / [디스플레이]. 그룹 사이 Hairline divider + space4 spacing

@@ -86,13 +86,18 @@ fun ReaderSettingsScreen(
                 .background(PanelyInkColors.Hairline),
         )
 
-        // 본문 — 섹션이 늘어나도 스크롤 처리. 7" 가로면 다 보이지만 안전장치.
+        // 본문 — 3그룹(페이지 레이아웃 / 화질 / 디스플레이)으로 묶고 Hairline divider로
+        // 분리. 섹션 라벨은 caption Mute, 그룹 헤더는 list Ink로 시각 hierarchy.
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = spacing.space3, vertical = spacing.space2),
         ) {
+            // ── 그룹 1: 페이지 레이아웃 ─────────────────────────────
+            GroupHeader("페이지 레이아웃")
+            Spacer(Modifier.height(spacing.space2))
+
             SectionLabel("화면 맞춤")
             Spacer(Modifier.height(spacing.space1))
             FitSegments(
@@ -100,7 +105,7 @@ fun ReaderSettingsScreen(
                 onSelect = onFitModeChange,
             )
 
-            Spacer(Modifier.height(spacing.space3))
+            Spacer(Modifier.height(spacing.space2))
 
             SectionLabel("읽기 방향")
             Spacer(Modifier.height(spacing.space1))
@@ -109,7 +114,7 @@ fun ReaderSettingsScreen(
                 onSelect = onDirectionChange,
             )
 
-            Spacer(Modifier.height(spacing.space3))
+            Spacer(Modifier.height(spacing.space2))
 
             SectionLabel("자동 여백 트리밍")
             Spacer(Modifier.height(spacing.space1))
@@ -118,7 +123,11 @@ fun ReaderSettingsScreen(
                 onSelect = onTrimEnabledChange,
             )
 
-            Spacer(Modifier.height(spacing.space3))
+            GroupSeparator(spacing.space4)
+
+            // ── 그룹 2: 화질 ────────────────────────────────────
+            GroupHeader("화질")
+            Spacer(Modifier.height(spacing.space2))
 
             SectionLabel("대비")
             Spacer(Modifier.height(spacing.space1))
@@ -128,7 +137,7 @@ fun ReaderSettingsScreen(
                 onReset = { onContrastChange(ContrastMatrix.IDENTITY) },
             )
 
-            Spacer(Modifier.height(spacing.space3))
+            Spacer(Modifier.height(spacing.space2))
 
             SectionLabel("흑백 반전")
             Spacer(Modifier.height(spacing.space1))
@@ -137,7 +146,11 @@ fun ReaderSettingsScreen(
                 onSelect = onInvertEnabledChange,
             )
 
-            Spacer(Modifier.height(spacing.space3))
+            GroupSeparator(spacing.space4)
+
+            // ── 그룹 3: 디스플레이 ──────────────────────────────
+            GroupHeader("디스플레이")
+            Spacer(Modifier.height(spacing.space2))
 
             SectionLabel("풀리프레시 주기 (페이지)")
             Spacer(Modifier.height(spacing.space1))
@@ -156,4 +169,17 @@ fun ReaderSettingsScreen(
             Spacer(Modifier.height(spacing.space3))
         }
     }
+}
+
+/** 그룹 사이 큰 spacing + 1dp Hairline divider. */
+@Composable
+private fun GroupSeparator(verticalSpace: androidx.compose.ui.unit.Dp) {
+    Spacer(Modifier.height(verticalSpace))
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(PanelyInkColors.Hairline),
+    )
+    Spacer(Modifier.height(verticalSpace))
 }
