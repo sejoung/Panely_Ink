@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -68,5 +70,111 @@ fun PanelyMinusIcon(
         val cy = s.height / 2f
         val pad = s.minDimension * 0.15f
         drawLine(tint, Offset(pad, cy), Offset(s.width - pad, cy), strokeWidth = IconConstants.Stroke.toPx())
+    }
+}
+
+/** 폴더 아이콘 — 탭 모양 outline. */
+@Composable
+fun PanelyFolderIcon(
+    modifier: Modifier = Modifier,
+    tint: Color = PanelyInkColors.Ink,
+    size: Dp = IconConstants.DefaultSize,
+) {
+    Canvas(modifier = modifier.size(size)) {
+        val s = this.size
+        val stroke = IconConstants.Stroke.toPx()
+        val pad = s.minDimension * 0.12f
+        // 본체: 좌상단부터 우하단까지 사각형, 위쪽에 탭(돌출부) 표현
+        val tabWidth = s.width * 0.4f
+        val tabHeight = s.height * 0.12f
+        val bodyTop = pad + tabHeight
+        val left = pad
+        val right = s.width - pad
+        val bottom = s.height - pad
+
+        val path = Path().apply {
+            moveTo(left, bodyTop)
+            lineTo(left, pad)
+            lineTo(left + tabWidth, pad)
+            lineTo(left + tabWidth + tabHeight, bodyTop)
+            lineTo(right, bodyTop)
+            lineTo(right, bottom)
+            lineTo(left, bottom)
+            close()
+        }
+        drawPath(path = path, color = tint, style = Stroke(width = stroke))
+    }
+}
+
+/** 책 아이콘 — 세워둔 책 outline. */
+@Composable
+fun PanelyBookIcon(
+    modifier: Modifier = Modifier,
+    tint: Color = PanelyInkColors.Ink,
+    size: Dp = IconConstants.DefaultSize,
+) {
+    Canvas(modifier = modifier.size(size)) {
+        val s = this.size
+        val stroke = IconConstants.Stroke.toPx()
+        val padX = s.width * 0.20f
+        val padY = s.height * 0.10f
+        val left = padX
+        val right = s.width - padX
+        val top = padY
+        val bottom = s.height - padY
+        // 책 외곽
+        drawRect(
+            color = tint,
+            topLeft = Offset(left, top),
+            size = Size(right - left, bottom - top),
+            style = Stroke(width = stroke),
+        )
+        // 책등 안쪽 라인 (좌측에서 살짝 들어와 세로선)
+        val spineX = left + (right - left) * 0.18f
+        drawLine(tint, Offset(spineX, top), Offset(spineX, bottom), strokeWidth = stroke)
+    }
+}
+
+/** 우측을 향한 chevron — breadcrumb 구분자 / 행 끝 인디케이터. */
+@Composable
+fun PanelyChevronRightIcon(
+    modifier: Modifier = Modifier,
+    tint: Color = PanelyInkColors.Mute,
+    size: Dp = IconConstants.DefaultSize,
+) {
+    Canvas(modifier = modifier.size(size)) {
+        val s = this.size
+        val stroke = IconConstants.Stroke.toPx()
+        val cx = s.width * 0.40f
+        val tip = s.width * 0.65f
+        val top = s.height * 0.25f
+        val mid = s.height * 0.50f
+        val bot = s.height * 0.75f
+        drawLine(tint, Offset(cx, top), Offset(tip, mid), strokeWidth = stroke)
+        drawLine(tint, Offset(tip, mid), Offset(cx, bot), strokeWidth = stroke)
+    }
+}
+
+/** 좌향 화살표 — 헤더 back 액션. chevron보다 머리가 작고 본체에 라인이 있다. */
+@Composable
+fun PanelyArrowBackIcon(
+    modifier: Modifier = Modifier,
+    tint: Color = PanelyInkColors.Ink,
+    size: Dp = IconConstants.DefaultSize,
+) {
+    Canvas(modifier = modifier.size(size)) {
+        val s = this.size
+        val stroke = IconConstants.Stroke.toPx()
+        val padX = s.width * 0.18f
+        val cy = s.height / 2f
+        val tip = padX
+        val tail = s.width - padX
+        val head = s.width * 0.36f
+        val headSpan = s.height * 0.25f
+        // 본체
+        drawLine(tint, Offset(tip, cy), Offset(tail, cy), strokeWidth = stroke)
+        // 머리 두 변
+        drawLine(tint, Offset(tip, cy), Offset(head, cy - headSpan), strokeWidth = stroke)
+        drawLine(tint, Offset(tip, cy), Offset(head, cy + headSpan), strokeWidth = stroke)
     }
 }

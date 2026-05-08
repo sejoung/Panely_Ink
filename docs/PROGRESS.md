@@ -85,6 +85,15 @@
   - `PositionKey` 영속화 (SharedPreferences 또는 Room)
   - 책 재진입 시 마지막 페이지 자동 복원
   - 라이브러리에서 마지막 책 자동 열기는 M3
+- [x] **M1.4.5** — 라이브러리 폴더 트리 탐색 (1단계)
+  - `LibraryEntry`를 sealed로 분리: `BookEntry` / `FolderEntry` (root 폴더는 `isRoot=true`)
+  - `LibraryRepository.listRoots` / `listChildren(parent)` — 한 단계만 SAF 호출
+  - `LibraryViewModel.path: List<FolderEntry>` 스택, `enterFolder` / `goUp`
+  - `LibraryScreen` — breadcrumb (`라이브러리 ▸ root ▸ folder`) + 폴더/책 행 분기 + back 화살표
+  - `BackHandler` — 폴더 안에서 시스템 뒤로 키 = `goUp`
+  - 화면 폭(7"/1648×1236) 고려: 좌측 트리 사이드바 대신 한 화면 = 한 디렉토리
+  - 자식 카운트, 표지, 진행률은 M3로 미룸 (lazy 캐시 비용 큼)
+  - 중첩 ZIP-of-CBZ(PRD §6.1)는 다음 단계
 - [ ] **M1.5** — 세로 스크롤(웹툰) 모드
   - `ReadingDirection.VerticalScroll` 활성
   - 페이지 사이 8dp Paper 간격 (Design Guidelines §12)
@@ -194,3 +203,7 @@
 - **2026-05-05** — 캐시 복사 전략 결정 (`/proc/self/fd/N`은 SELinux로 차단)
 - **2026-05-05** — M1.2.7: Commons Compress + SeekableByteChannel로 교체. 220MB 첫 진입 11초 → ~500ms (`setIgnoreLocalFileHeader(true)` 필수)
 - **2026-05-08** — M1.3: 최소 메뉴 (`ReaderMenu`) — fit/방향 세그먼트 + 페이지 점프 슬라이더. Guidelines §6 슬라이더 규칙(드래그 중 본문 변경 X) 준수. 메뉴 열린 동안 하드웨어 키는 메뉴 닫기로 흡수
+- **2026-05-08** — `ReaderViewModel` JVM 단위 테스트 20개 추가 (페이지 이동/clamp/preload window/cancel/close)
+- **2026-05-08** — 본문 모드에서 시스템 status/navigation bar 숨김(`WindowInsetsControllerCompat`) — Guidelines §12 "크롬 0dp"
+- **2026-05-08** — `PanelyIconButton` 추가 + 라이브러리 헤더 슬림화 (고정 80dp 제거, 정사각 아이콘 버튼이 짜부 없이 정렬)
+- **2026-05-08** — M1.4.5: 라이브러리 폴더 트리 탐색 1단계. `LibraryEntry` sealed(Book/Folder), `LibraryRepository.listChildren`, `path` 스택, breadcrumb UI, `BackHandler`로 `goUp`. 카운트/표지/ZIP-of-CBZ는 다음 단계

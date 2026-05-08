@@ -12,7 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import io.github.sejoung.panelyink.library.LibraryEntry
+import io.github.sejoung.panelyink.library.BookEntry
 import io.github.sejoung.panelyink.library.LibraryScreen
 import io.github.sejoung.panelyink.reader.ReaderScreen
 import io.github.sejoung.panelyink.ui.theme.PanelyInkTheme
@@ -58,6 +58,6 @@ class MainActivity : ComponentActivity() {
 
     private sealed interface Screen {
         data object Library : Screen
-        data class Reader(val entry: LibraryEntry) : Screen
+        data class Reader(val entry: BookEntry) : Screen
     }
 }

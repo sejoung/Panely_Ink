@@ -36,7 +36,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import io.github.sejoung.panelyink.MainActivity
-import io.github.sejoung.panelyink.library.LibraryEntry
+import io.github.sejoung.panelyink.library.BookEntry
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
 import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
@@ -53,7 +53,7 @@ import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
  */
 @Composable
 fun ReaderScreen(
-    entry: LibraryEntry,
+    entry: BookEntry,
     onBack: () -> Unit,
 ) {
     BackHandler { onBack() }

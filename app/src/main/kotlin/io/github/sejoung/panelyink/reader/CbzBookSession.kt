@@ -7,7 +7,7 @@ import android.util.Log
 import io.github.sejoung.panelyink.core.archive.CbzArchive
 import io.github.sejoung.panelyink.core.archive.CbzPage
 import io.github.sejoung.panelyink.core.position.PositionKey
-import io.github.sejoung.panelyink.library.LibraryEntry
+import io.github.sejoung.panelyink.library.BookEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -120,7 +120,7 @@ class CbzBookSession private constructor(
     companion object {
         private const val TAG = "PanelyInk.Session"
 
-        suspend fun open(context: Context, entry: LibraryEntry): CbzBookSession =
+        suspend fun open(context: Context, entry: BookEntry): CbzBookSession =
             withContext(Dispatchers.IO) {
                 val ctx = context.applicationContext
                 Log.d(TAG, "open ${entry.displayName} (${entry.sizeBytes / 1024} KB) uri=${entry.documentUri}")
