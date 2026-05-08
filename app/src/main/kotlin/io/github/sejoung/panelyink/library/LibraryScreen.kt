@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -32,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.sejoung.panelyink.R
-import io.github.sejoung.panelyink.ui.components.PanelyButton
+import io.github.sejoung.panelyink.ui.components.PanelyIconButton
 import io.github.sejoung.panelyink.ui.components.PanelyMenuIcon
 import io.github.sejoung.panelyink.ui.components.PanelyPlusIcon
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
@@ -99,12 +98,14 @@ private fun LibraryHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(80.dp)
-            .padding(horizontal = spacing.space5, vertical = spacing.space2),
+            .padding(horizontal = spacing.space4, vertical = spacing.space2),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column(verticalArrangement = Arrangement.Center) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.Center,
+        ) {
             Text(
                 text = stringResourceCompat(R.string.library_title),
                 style = typography.title,
@@ -122,11 +123,11 @@ private fun LibraryHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(spacing.space1),
         ) {
-            PanelyButton(onClick = onManage, primary = false, modifier = Modifier.size(48.dp)) {
-                PanelyMenuIcon()
+            PanelyIconButton(onClick = onManage, primary = false) { tint ->
+                PanelyMenuIcon(tint = tint)
             }
-            PanelyButton(onClick = onAdd, primary = true, modifier = Modifier.size(48.dp)) {
-                PanelyPlusIcon(tint = PanelyInkColors.Paper)
+            PanelyIconButton(onClick = onAdd, primary = true) { tint ->
+                PanelyPlusIcon(tint = tint)
             }
         }
     }
