@@ -37,10 +37,13 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import io.github.sejoung.panelyink.MainActivity
 import io.github.sejoung.panelyink.core.position.PositionRepository
+import io.github.sejoung.panelyink.core.preferences.AppPreferences
+import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
 import io.github.sejoung.panelyink.data.db.BookSettingsRepository
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
 import io.github.sejoung.panelyink.data.db.RoomBookSettingsRepository
 import io.github.sejoung.panelyink.data.db.RoomPositionRepository
+import io.github.sejoung.panelyink.data.preferences.SharedPrefsAppPreferencesRepository
 import io.github.sejoung.panelyink.library.BookEntry
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
@@ -65,6 +68,9 @@ fun ReaderScreen(
     val db = remember(appContext) { PanelyDatabase.getInstance(appContext) }
     val positionRepo: PositionRepository = remember(db) { RoomPositionRepository(db) }
     val bookSettingsRepo: BookSettingsRepository = remember(db) { RoomBookSettingsRepository(db) }
+    val appPrefsRepo: AppPreferencesRepository = remember(appContext) {
+        SharedPrefsAppPreferencesRepository(appContext)
+    }
     BackHandler { onBack() }
 
     // Guidelines §12: 본문 모드는 크롬 0dp. 시스템 status/navigation bar를 숨겨
@@ -105,10 +111,17 @@ fun ReaderScreen(
             // 책별 설정도 같이 로드 — 없으면 DEFAULTS. 책당 1행이라 가벼움.
             val bookSettings = bookSettingsRepo.load(session.bookId)
                 ?: BookSettings.DEFAULTS
+            // 전역 prefs(흑백 반전, 풀리프레시 주기) — SharedPreferences 1회 read.
+            val appPrefs = appPrefsRepo.load()
             loadingStep = "첫 페이지 디코드 중… (${session.pageCount}쪽)"
             session.decode(resumed)
             Log.d(TAG, "ReaderScreen ready (resume page=$resumed)")
-            SessionState.Ready(session, resumedPage = resumed, bookSettings = bookSettings)
+            SessionState.Ready(
+                session = session,
+                resumedPage = resumed,
+                bookSettings = bookSettings,
+                appPreferences = appPrefs,
+            )
         } catch (cancel: kotlinx.coroutines.CancellationException) {
             // 코루틴 취소는 다시 던져야 한다 — Failed로 잡으면 화면이 잘못 표시됨
             throw cancel
@@ -132,8 +145,10 @@ fun ReaderScreen(
                 session = s.session,
                 resumedPage = s.resumedPage,
                 initialBookSettings = s.bookSettings,
+                initialAppPreferences = s.appPreferences,
                 positionRepo = positionRepo,
                 bookSettingsRepo = bookSettingsRepo,
+                appPrefsRepo = appPrefsRepo,
                 onExit = onBack,
             )
         }
@@ -147,20 +162,23 @@ private fun ReaderContent(
     session: CbzBookSession,
     resumedPage: Int,
     initialBookSettings: BookSettings,
+    initialAppPreferences: AppPreferences,
     positionRepo: PositionRepository,
     bookSettingsRepo: BookSettingsRepository,
+    appPrefsRepo: AppPreferencesRepository,
     onExit: () -> Unit,
 ) {
     // ViewModelStore에 캐시되지 않도록 remember(session)로 묶는다 — 책을 닫고
     // 다시 열 때 stale decoder(닫힌 ZipFile)를 잡는 문제 방지.
     val viewModel = remember(session) {
-        // 마지막 페이지/책별 설정은 produceState 안에서 이미 로드됨(Room suspend).
+        // 마지막 페이지/책별 설정/전역 prefs는 produceState 안에서 이미 로드됨.
         ReaderViewModel(
             bookId = session.bookId,
             pageCount = session.pageCount,
             decoder = session.asDecoder(),
             initialPage = resumedPage,
             initialBookSettings = initialBookSettings,
+            initialAppPreferences = initialAppPreferences,
         )
     }
 
@@ -209,16 +227,13 @@ private fun ReaderContent(
         )
     }
 
-    // PRD §6.1 책별 설정 저장 — 사용자가 fit/방향/트림/대비/반전/풀리프레시 주기를
-    // 바꿀 때마다 Room에 upsert. 첫 진입에서 한 번 발화하지만 동일 값 저장이라 무해.
+    // 책별 설정 저장 — fit/방향/트림/대비. 첫 진입 한 번 발화는 동일 값 저장이라 무해.
     LaunchedEffect(
         viewModel,
         state.fitMode,
         state.direction,
         state.trimEnabled,
         state.contrast,
-        state.invertEnabled,
-        state.fullRefreshInterval,
     ) {
         bookSettingsRepo.save(
             bookId = viewModel.bookId,
@@ -227,10 +242,17 @@ private fun ReaderContent(
                 direction = state.direction,
                 trimEnabled = state.trimEnabled,
                 contrast = state.contrast,
-                invertEnabled = state.invertEnabled,
-                fullRefreshInterval = state.fullRefreshInterval,
             ),
         )
+    }
+
+    // 전역 prefs 저장 — 흑백 반전 / 풀리프레시 주기. 책 메뉴에서 변경되어도 모든
+    // 책에 같은 값을 적용하기 위해 SharedPreferences로 분리(2026-05-08).
+    LaunchedEffect(viewModel, state.invertEnabled) {
+        appPrefsRepo.setInvertEnabled(state.invertEnabled)
+    }
+    LaunchedEffect(viewModel, state.fullRefreshInterval) {
+        appPrefsRepo.setFullRefreshInterval(state.fullRefreshInterval)
     }
 
     // 디코드 1장 도착 → invalidate. 현재 페이지가 캐시 hit이면 onDraw가 그림.
@@ -322,7 +344,6 @@ private fun ReaderContent(
                 onTrimEnabledChange = viewModel::setTrimEnabled,
                 onContrastChange = viewModel::setContrast,
                 onInvertEnabledChange = viewModel::setInvertEnabled,
-                onFullRefreshIntervalChange = viewModel::setFullRefreshInterval,
                 onTriggerFullRefresh = viewModel::triggerFullRefresh,
                 onBack = {
                     settingsOpen = false
@@ -414,6 +435,7 @@ private sealed interface SessionState {
         val session: CbzBookSession,
         val resumedPage: Int,
         val bookSettings: BookSettings,
+        val appPreferences: AppPreferences,
     ) : SessionState
     data class Failed(val message: String) : SessionState
 }

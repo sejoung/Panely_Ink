@@ -2,6 +2,7 @@ package io.github.sejoung.panelyink.reader
 
 import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.core.position.PositionKey
+import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.core.render.ContrastMatrix
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +43,7 @@ class ReaderViewModel(
     private val decoder: PageDecoder,
     initialPage: Int = 0,
     initialBookSettings: BookSettings = BookSettings.DEFAULTS,
+    initialAppPreferences: AppPreferences = AppPreferences.DEFAULTS,
 ) {
 
     init {
@@ -59,8 +61,9 @@ class ReaderViewModel(
             preloadWindow = preloadWindowFor(initialPage),
             trimEnabled = initialBookSettings.trimEnabled,
             contrast = initialBookSettings.contrast,
-            invertEnabled = initialBookSettings.invertEnabled,
-            fullRefreshInterval = initialBookSettings.fullRefreshInterval,
+            // 전역 prefs에서 받음 — 책별 저장은 안 함.
+            invertEnabled = initialAppPreferences.invertEnabled,
+            fullRefreshInterval = initialAppPreferences.fullRefreshInterval,
         )
     )
     val state: StateFlow<ReaderState> = _state.asStateFlow()

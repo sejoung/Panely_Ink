@@ -155,6 +155,52 @@ fun PanelyChevronRightIcon(
     }
 }
 
+/**
+ * 톱니바퀴 — 앱 설정 진입. e-ink 친화 단순 outline: 외곽 톱니 8개 + 안쪽 원.
+ *
+ * Material 표준 16개 톱니는 디테일이 많아 1648×1236 화면에서 흐릿. 8개로 단순화.
+ */
+@Composable
+fun PanelySettingsIcon(
+    modifier: Modifier = Modifier,
+    tint: Color = PanelyInkColors.Ink,
+    size: Dp = IconConstants.DefaultSize,
+) {
+    Canvas(modifier = modifier.size(size)) {
+        val s = this.size
+        val stroke = IconConstants.Stroke.toPx()
+        val cx = s.width / 2f
+        val cy = s.height / 2f
+        val outerR = s.minDimension * 0.40f
+        val toothR = s.minDimension * 0.46f
+        val innerR = s.minDimension * 0.18f
+        // 안쪽 원 (구멍)
+        drawCircle(
+            color = tint,
+            radius = innerR,
+            center = Offset(cx, cy),
+            style = Stroke(width = stroke),
+        )
+        // 외곽 원
+        drawCircle(
+            color = tint,
+            radius = outerR,
+            center = Offset(cx, cy),
+            style = Stroke(width = stroke),
+        )
+        // 8개 톱니 — 외곽 원 위로 짧은 막대
+        val toothCount = 8
+        for (i in 0 until toothCount) {
+            val angle = (Math.PI * 2 * i / toothCount).toFloat()
+            val sx = cx + outerR * kotlin.math.cos(angle)
+            val sy = cy + outerR * kotlin.math.sin(angle)
+            val ex = cx + toothR * kotlin.math.cos(angle)
+            val ey = cy + toothR * kotlin.math.sin(angle)
+            drawLine(tint, Offset(sx, sy), Offset(ex, ey), strokeWidth = stroke)
+        }
+    }
+}
+
 /** 돋보기 — 라이브러리 헤더 검색 진입. */
 @Composable
 fun PanelySearchIcon(

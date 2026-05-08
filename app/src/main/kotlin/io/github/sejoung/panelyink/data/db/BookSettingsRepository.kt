@@ -36,14 +36,17 @@ class RoomBookSettingsRepository(
         }
 }
 
-/** Entity → 도메인. 깨진 enum/sealed 값은 deserializer가 안전 폴백. */
+/**
+ * Entity → 도메인. 깨진 enum/sealed 값은 deserializer가 안전 폴백.
+ *
+ * `invert_enabled` / `full_refresh_interval` 컬럼은 v3 시점에 [BookSettings]에서 빠져
+ * orphan(2026-05-08 분리). 매퍼에서 무시 — 컬럼 drop은 Room SQLite 한계로 미룸.
+ */
 internal fun BookSettingsEntity.toDomain(): BookSettings = BookSettings(
     fitMode = deserializeFitMode(fitMode),
     direction = deserializeDirection(direction),
     trimEnabled = trimEnabled,
     contrast = contrast,
-    invertEnabled = invertEnabled,
-    fullRefreshInterval = fullRefreshInterval,
 )
 
 internal fun BookSettings.toEntity(bookId: String, updatedAt: Long): BookSettingsEntity =
@@ -53,7 +56,8 @@ internal fun BookSettings.toEntity(bookId: String, updatedAt: Long): BookSetting
         direction = direction.name,
         trimEnabled = trimEnabled,
         contrast = contrast,
-        invertEnabled = invertEnabled,
-        fullRefreshInterval = fullRefreshInterval,
+        // orphan 컬럼 — 코드는 사용 안 함. NOT NULL 스키마 충족용 더미.
+        invertEnabled = false,
+        fullRefreshInterval = 0,
         updatedAt = updatedAt,
     )

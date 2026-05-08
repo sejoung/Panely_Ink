@@ -59,9 +59,9 @@ import io.github.sejoung.panelyink.ui.components.PanelyChevronRightIcon
 import io.github.sejoung.panelyink.ui.components.PanelyCloseIcon
 import io.github.sejoung.panelyink.ui.components.PanelyFolderIcon
 import io.github.sejoung.panelyink.ui.components.PanelyIconButton
-import io.github.sejoung.panelyink.ui.components.PanelyMenuIcon
 import io.github.sejoung.panelyink.ui.components.PanelyPlusIcon
 import io.github.sejoung.panelyink.ui.components.PanelySearchIcon
+import io.github.sejoung.panelyink.ui.components.PanelySettingsIcon
 import io.github.sejoung.panelyink.ui.components.PanelySortIcon
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
@@ -82,9 +82,9 @@ fun LibraryScreen(
     onOpenBook: (BookEntry) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    var manageOpen by remember { mutableStateOf(false) }
     var sortOpen by remember { mutableStateOf(false) }
     var searchActive by remember { mutableStateOf(false) }
+    var appSettingsOpen by remember { mutableStateOf(false) }
 
     val pickFolder = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
@@ -115,7 +115,7 @@ fun LibraryScreen(
             },
             onSearchQueryChange = viewModel::setSearchQuery,
             onAdd = { pickFolder.launch(null) },
-            onManage = { manageOpen = true },
+            onOpenSettings = { appSettingsOpen = true },
             onSort = { sortOpen = true },
             onUp = viewModel::goUp,
         )
@@ -161,11 +161,11 @@ fun LibraryScreen(
         }
     }
 
-    if (manageOpen) {
-        ManageRootsDialog(
+    if (appSettingsOpen) {
+        AppSettingsScreen(
             roots = state.roots,
-            onRemove = viewModel::removeRoot,
-            onDismiss = { manageOpen = false },
+            onRemoveRoot = viewModel::removeRoot,
+            onBack = { appSettingsOpen = false },
         )
     }
 
@@ -190,7 +190,7 @@ private fun LibraryHeader(
     onCancelSearch: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onAdd: () -> Unit,
-    onManage: () -> Unit,
+    onOpenSettings: () -> Unit,
     onSort: () -> Unit,
     onUp: () -> Boolean,
 ) {
@@ -253,8 +253,8 @@ private fun LibraryHeader(
             PanelyIconButton(onClick = onSort, primary = false) { tint ->
                 PanelySortIcon(tint = tint)
             }
-            PanelyIconButton(onClick = onManage, primary = false) { tint ->
-                PanelyMenuIcon(tint = tint)
+            PanelyIconButton(onClick = onOpenSettings, primary = false) { tint ->
+                PanelySettingsIcon(tint = tint)
             }
             PanelyIconButton(onClick = onAdd, primary = true) { tint ->
                 PanelyPlusIcon(tint = tint)

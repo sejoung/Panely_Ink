@@ -11,6 +11,9 @@ import io.github.sejoung.panelyink.core.render.ContrastMatrix
  * 위치는 매 페이지 이동마다 갱신 빈도가 높지만, 설정은 사용자가 책당 1~2회만 바꾸므로
  * 분리해 저장(Room 두 테이블).
  *
+ * 전역 의미가 강한 옵션(`invertEnabled`, `fullRefreshInterval`)은
+ * [io.github.sejoung.panelyink.core.preferences.AppPreferences]로 분리(2026-05-08).
+ *
  * Room 직렬화는 [serializeFitMode] / [deserializeFitMode] / [ReadingDirection.name]을
  * 사용 — Room이 sealed/enum을 직접 다루지 못하므로 String으로 우회.
  */
@@ -19,8 +22,6 @@ data class BookSettings(
     val direction: ReadingDirection,
     val trimEnabled: Boolean,
     val contrast: Float,
-    val invertEnabled: Boolean,
-    val fullRefreshInterval: Int,
 ) {
     companion object {
         /** 새 책 진입 시 기본값. ReaderState 기본값과 일치해야 일관됨. */
@@ -29,8 +30,6 @@ data class BookSettings(
             direction = ReadingDirection.Ltr,
             trimEnabled = true,
             contrast = ContrastMatrix.IDENTITY,
-            invertEnabled = false,
-            fullRefreshInterval = ReaderViewModel.FULL_REFRESH_INTERVAL_DEFAULT,
         )
     }
 }

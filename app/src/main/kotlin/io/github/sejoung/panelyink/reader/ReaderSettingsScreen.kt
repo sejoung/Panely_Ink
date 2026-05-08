@@ -47,7 +47,6 @@ fun ReaderSettingsScreen(
     onTrimEnabledChange: (Boolean) -> Unit,
     onContrastChange: (Float) -> Unit,
     onInvertEnabledChange: (Boolean) -> Unit,
-    onFullRefreshIntervalChange: (Int) -> Unit,
     onTriggerFullRefresh: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -148,17 +147,12 @@ fun ReaderSettingsScreen(
 
             GroupSeparator(spacing.space4)
 
-            // ── 그룹 3: 디스플레이 ──────────────────────────────
+            // ── 그룹 3: 디스플레이 (현재 책에 즉시 영향) ─────────
+            // 풀리프레시 주기는 디바이스 특성이라 라이브러리 앱 설정에서 전역 관리.
+            // 여기엔 "현재 책에 한 번 깜빡임"만 둠.
             GroupHeader("디스플레이")
             Spacer(Modifier.height(spacing.space2))
 
-            SectionLabel("풀리프레시 주기 (페이지)")
-            Spacer(Modifier.height(spacing.space1))
-            FullRefreshIntervalSegments(
-                interval = state.fullRefreshInterval,
-                onSelect = onFullRefreshIntervalChange,
-            )
-            Spacer(Modifier.height(spacing.space1))
             PanelyTextButton(
                 label = "지금 풀리프레시",
                 onClick = onTriggerFullRefresh,
