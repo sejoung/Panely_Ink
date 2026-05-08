@@ -41,9 +41,7 @@ class ReaderViewModel(
     val pageCount: Int,
     private val decoder: PageDecoder,
     initialPage: Int = 0,
-    initialDirection: ReadingDirection = ReadingDirection.Ltr,
-    initialFitMode: FitMode = FitMode.FitScreen,
-    initialTrimEnabled: Boolean = true,
+    initialBookSettings: BookSettings = BookSettings.DEFAULTS,
 ) {
 
     init {
@@ -56,10 +54,13 @@ class ReaderViewModel(
     private val _state = MutableStateFlow(
         ReaderState(
             currentPage = initialPage,
-            direction = initialDirection,
-            fitMode = initialFitMode,
+            direction = initialBookSettings.direction,
+            fitMode = initialBookSettings.fitMode,
             preloadWindow = preloadWindowFor(initialPage),
-            trimEnabled = initialTrimEnabled,
+            trimEnabled = initialBookSettings.trimEnabled,
+            contrast = initialBookSettings.contrast,
+            invertEnabled = initialBookSettings.invertEnabled,
+            fullRefreshInterval = initialBookSettings.fullRefreshInterval,
         )
     )
     val state: StateFlow<ReaderState> = _state.asStateFlow()

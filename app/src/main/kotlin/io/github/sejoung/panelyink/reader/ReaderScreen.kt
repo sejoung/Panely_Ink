@@ -38,7 +38,9 @@ import androidx.core.view.WindowInsetsControllerCompat
 import io.github.sejoung.panelyink.MainActivity
 import io.github.sejoung.panelyink.core.position.PositionKey
 import io.github.sejoung.panelyink.core.position.PositionRepository
+import io.github.sejoung.panelyink.data.db.BookSettingsRepository
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
+import io.github.sejoung.panelyink.data.db.RoomBookSettingsRepository
 import io.github.sejoung.panelyink.data.db.RoomPositionRepository
 import io.github.sejoung.panelyink.library.BookEntry
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
@@ -61,9 +63,9 @@ fun ReaderScreen(
     onBack: () -> Unit,
 ) {
     val appContext = LocalContext.current.applicationContext
-    val positionRepo: PositionRepository = remember(appContext) {
-        RoomPositionRepository(PanelyDatabase.getInstance(appContext))
-    }
+    val db = remember(appContext) { PanelyDatabase.getInstance(appContext) }
+    val positionRepo: PositionRepository = remember(db) { RoomPositionRepository(db) }
+    val bookSettingsRepo: BookSettingsRepository = remember(db) { RoomBookSettingsRepository(db) }
     BackHandler { onBack() }
 
     // Guidelines §12: 본문 모드는 크롬 0dp. 시스템 status/navigation bar를 숨겨
@@ -100,10 +102,13 @@ fun ReaderScreen(
             val resumed = positionRepo.load(session.bookId)
                 ?.coerceIn(0, session.pageCount - 1)
                 ?: 0
+            // 책별 설정도 같이 로드 — 없으면 DEFAULTS. 책당 1행이라 가벼움.
+            val bookSettings = bookSettingsRepo.load(session.bookId)
+                ?: BookSettings.DEFAULTS
             loadingStep = "첫 페이지 디코드 중… (${session.pageCount}쪽)"
             session.decode(resumed)
             Log.d(TAG, "ReaderScreen ready (resume page=$resumed)")
-            SessionState.Ready(session, resumedPage = resumed)
+            SessionState.Ready(session, resumedPage = resumed, bookSettings = bookSettings)
         } catch (cancel: kotlinx.coroutines.CancellationException) {
             // 코루틴 취소는 다시 던져야 한다 — Failed로 잡으면 화면이 잘못 표시됨
             throw cancel
@@ -126,7 +131,9 @@ fun ReaderScreen(
             is SessionState.Ready -> ReaderContent(
                 session = s.session,
                 resumedPage = s.resumedPage,
+                initialBookSettings = s.bookSettings,
                 positionRepo = positionRepo,
+                bookSettingsRepo = bookSettingsRepo,
                 onExit = onBack,
             )
         }
@@ -139,18 +146,21 @@ private const val TAG = "PanelyInk.Reader"
 private fun ReaderContent(
     session: CbzBookSession,
     resumedPage: Int,
+    initialBookSettings: BookSettings,
     positionRepo: PositionRepository,
+    bookSettingsRepo: BookSettingsRepository,
     onExit: () -> Unit,
 ) {
     // ViewModelStore에 캐시되지 않도록 remember(session)로 묶는다 — 책을 닫고
     // 다시 열 때 stale decoder(닫힌 ZipFile)를 잡는 문제 방지.
     val viewModel = remember(session) {
-        // 마지막 페이지는 produceState 안에서 이미 로드됨(Room suspend 호출).
+        // 마지막 페이지/책별 설정은 produceState 안에서 이미 로드됨(Room suspend).
         ReaderViewModel(
             bookId = session.bookId,
             pageCount = session.pageCount,
             decoder = session.asDecoder(),
             initialPage = resumedPage,
+            initialBookSettings = initialBookSettings,
         )
     }
 
@@ -188,10 +198,33 @@ private fun ReaderContent(
         view?.setInvertEnabled(state.invertEnabled)
     }
 
-    // PRD §6.1 Resume — 페이지 변경 시 저장. SharedPreferences.apply는 비동기
-    // 디스크 쓰기를 합치므로 페이지 이동 빈도(초당 수 회)에서도 부담 없다.
+    // PRD §6.1 Resume — 페이지 변경 시 저장. Room upsert는 IO 디스패처에서 가벼움.
     LaunchedEffect(state.currentPage, viewModel) {
         positionRepo.save(PositionKey(viewModel.bookId, state.currentPage))
+    }
+
+    // PRD §6.1 책별 설정 저장 — 사용자가 fit/방향/트림/대비/반전/풀리프레시 주기를
+    // 바꿀 때마다 Room에 upsert. 첫 진입에서 한 번 발화하지만 동일 값 저장이라 무해.
+    LaunchedEffect(
+        viewModel,
+        state.fitMode,
+        state.direction,
+        state.trimEnabled,
+        state.contrast,
+        state.invertEnabled,
+        state.fullRefreshInterval,
+    ) {
+        bookSettingsRepo.save(
+            bookId = viewModel.bookId,
+            settings = BookSettings(
+                fitMode = state.fitMode,
+                direction = state.direction,
+                trimEnabled = state.trimEnabled,
+                contrast = state.contrast,
+                invertEnabled = state.invertEnabled,
+                fullRefreshInterval = state.fullRefreshInterval,
+            ),
+        )
     }
 
     // 디코드 1장 도착 → invalidate. 현재 페이지가 캐시 hit이면 onDraw가 그림.
@@ -371,7 +404,11 @@ private fun ReaderError(message: String) {
 
 private sealed interface SessionState {
     data object Loading : SessionState
-    data class Ready(val session: CbzBookSession, val resumedPage: Int) : SessionState
+    data class Ready(
+        val session: CbzBookSession,
+        val resumedPage: Int,
+        val bookSettings: BookSettings,
+    ) : SessionState
     data class Failed(val message: String) : SessionState
 }
 

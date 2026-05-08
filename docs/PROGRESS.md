@@ -144,7 +144,7 @@
 - [ ] 시리즈 그룹핑 (폴더 = 시리즈 자동 인식)
 - [~] Room 도입 (라이브러리/메타/진행률/북마크)
   - [x] **인프라 + Position 마이그레이션** — KSP + Room 2.6.1, `data/db/PanelyDatabase` v1, `PositionEntity`/`PositionDao`, `RoomPositionRepository`(suspend). `PanelyInkApp`에서 1회 SharedPrefs → Room 이전(`PositionMigration`, 멱등). `PositionRepository` 인터페이스를 suspend로 변경, `ReaderScreen`은 `produceState`에서 비동기 로드 후 `SessionState.Ready(session, resumedPage)`로 전달
-  - [ ] BookSettings (책별 contrast/invert/fit/direction/trim) — 다음 단계
+  - [x] **BookSettings** (책별 fit/direction/trim/contrast/invert/풀리프레시 주기) — `book_settings` 테이블 v2 마이그레이션. `BookSettings` 도메인 + 직렬화 헬퍼(JVM 단위 테스트 8개), `BookSettingsRepository` Room 구현. `ReaderViewModel.initialBookSettings`로 초기 상태 통합, settings 변경 시 `LaunchedEffect`로 자동 upsert
   - [ ] CoverMeta (표지 캐시 메타) — 표지 작업과 함께
   - [ ] Bookmark (M4 페이지 북마크용)
 - [ ] 캐시 디렉토리 LRU 정리 정책 (현재는 Android 자동 정리에만 의존)
@@ -247,3 +247,4 @@
 - **2026-05-08** — M2 Invert. `InvertMatrix` 4×5 ColorMatrix, contrast와 결합(postConcat). 설정 화면에 [끔/켬] 세그먼트. 단위 테스트 3개 추가
 - **2026-05-08** — 설정 화면 3그룹 분리. `GroupHeader`(list+Ink) 추가, 섹션 라벨(caption+Mute)과 시각 hierarchy. 그룹: [페이지 레이아웃] / [화질] / [디스플레이]. 그룹 사이 Hairline divider + space4 spacing
 - **2026-05-08** — M3 Room 인프라 도입(KSP 2.0.20-1.0.25 + Room 2.6.1). `PanelyDatabase` v1 + `PositionEntity`/`PositionDao` + `RoomPositionRepository`. `PositionRepository` 인터페이스 suspend로 변경, `ReaderScreen.produceState`에서 비동기 로드 → `SessionState.Ready(session, resumedPage)`. SharedPreferences → Room 1회 마이그레이션(`PositionMigration`, 멱등 플래그)은 `PanelyInkApp.onCreate`에서 백그라운드 실행. `SharedPreferencesPositionRepository` 클래스 제거
+- **2026-05-08** — M3 BookSettings 책별 저장. Room v1→v2 마이그레이션(`book_settings` 테이블 신규). `BookSettings` 도메인 + FitMode/Direction 직렬화 헬퍼(테스트 8개), `RoomBookSettingsRepository`. `ReaderViewModel`은 `initialBookSettings: BookSettings`로 초기 상태 통합(기존 initialDirection/FitMode/TrimEnabled 인자 제거). `ReaderScreen`에서 settings 6필드 변경 시 자동 upsert
