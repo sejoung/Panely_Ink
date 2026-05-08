@@ -229,3 +229,5 @@
 - **2026-05-08** — M2 풀리프레시 정책. `ReaderViewModel`에 페이지 카운터 + `fullRefreshGeneration` state, `ReaderView`에 검정 1프레임 + `postInvalidateOnAnimation` trick. 기본 N=5, `setFullRefreshInterval`로 조정 가능. 단위 테스트 4개 추가
 - **2026-05-08** — M2 자동 여백 트리밍. `MarginTrimmer`(JVM 순수 함수, 단위 테스트 7개), `CbzBookSession.trimCache`, `ReaderState.trimEnabled` + 메뉴 토글. 디코드 후 1회 계산되어 onDraw에서 즉시 사용. 안전가드(결과 < 30%)로 잘못 감지 방지
 - **2026-05-08** — 풀리프레시 정책 사용자 가시화. 메뉴에 주기 세그먼트(1/3/5/10/끔) + "지금 풀리프레시" 버튼. `triggerFullRefresh()`/`setFullRefreshInterval(0)` API. `ReaderView`에 logcat 한 줄. 단위 테스트 4개 추가
+- **2026-05-08** — 풀리프레시 검정 hold 120ms. 한 vsync(16ms)는 LCD에서 거의 안 보여 사용자가 동작 여부를 의심. `postInvalidateOnAnimation` → `postInvalidateDelayed(120)`로 검정 유지 시간 명시. e-ink 픽셀 변환(~150ms) 시간에도 부합
+- **2026-05-08** — 풀리프레시 시퀀스 = 검정→흰→검정 (80ms × 3 = 240ms). Meebook M7 실기에서 단일 검정 프레임은 풀리프레시 waveform을 트리거하지 못했음 — 컨트롤러가 부분 갱신으로 흡수. 픽셀 다수가 두 번 반전되는 시퀀스로 해결. **Meebook M7 실기 깜빡임 확인됨**

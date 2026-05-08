@@ -24,6 +24,15 @@ import io.github.sejoung.panelyink.core.fit.FitMode
  */
 private const val TAG = "PanelyInk.ReaderView"
 
+/**
+ * 풀리프레시 시퀀스의 한 프레임이 화면에 머무는 시간(ms).
+ *
+ * e-ink 픽셀 변환은 ~150ms이므로 80ms는 짧지만, 시퀀스가 3프레임이라 누적 240ms로
+ * 충분히 컨트롤러 풀리프레시 waveform을 트리거한다. 너무 길면 사용자가 체감하는
+ * 페이지 흐름이 끊긴다(자동 트리거 케이스에서).
+ */
+private const val FULL_REFRESH_FRAME_HOLD_MS = 80L
+
 class ReaderView(context: Context) : View(context) {
 
     private var session: CbzBookSession? = null
@@ -33,11 +42,14 @@ class ReaderView(context: Context) : View(context) {
     private var trimEnabled: Boolean = true
 
     /**
-     * true면 다음 [onDraw]에서 검정 한 프레임을 그리고 즉시 다음 invalidate를 예약한다.
-     * e-ink 컨트롤러는 큰 색차(검정 → 정상)를 풀리프레시 신호로 인식 — SDK 의존 없이
-     * 잔상 누적을 정리하는 1차 방어선.
+     * 풀리프레시 시퀀스. [requestFullRefresh] 호출 시 채워지고, 매 onDraw에서
+     * 1프레임씩 소비된다. 비워지면 다음 onDraw가 정상 콘텐츠를 그린다.
+     *
+     * 단일 검정 프레임은 일부 e-ink OEM 컨트롤러가 "큰 변화"로 인식하지 못하고
+     * 그냥 다음 부분 갱신으로 합쳐버린다. 검정 → 흰색 → 검정 시퀀스로 픽셀 다수가
+     * 두 번 반전되면 풀리프레시 waveform이 발화할 가능성이 훨씬 높다.
      */
-    private var pendingFullRefresh = false
+    private val refreshSequence = ArrayDeque<Int>()
 
     private val paint = Paint().apply {
         // e-ink + dithering 별도 단계(v1.5)에서 다룸. View 단계에선 fastest.
@@ -83,11 +95,14 @@ class ReaderView(context: Context) : View(context) {
     }
 
     /**
-     * 풀리프레시 1회 트리거. 다음 onDraw에서 검정 한 프레임을 그리고 그 직후
-     * 정상 콘텐츠를 한 번 더 그려 e-ink 컨트롤러가 큰 변화로 인식하게 한다.
+     * 풀리프레시 1회 트리거. 검정→흰색→검정 시퀀스 후 정상 콘텐츠로 복귀.
+     * e-ink 컨트롤러가 큰 픽셀 변화를 감지해 풀리프레시 waveform 발화 가능성 ↑.
      */
     fun requestFullRefresh() {
-        pendingFullRefresh = true
+        refreshSequence.clear()
+        refreshSequence.add(Color.BLACK)
+        refreshSequence.add(Color.WHITE)
+        refreshSequence.add(Color.BLACK)
         invalidate()
     }
 
@@ -99,11 +114,15 @@ class ReaderView(context: Context) : View(context) {
         // 풀리프레시 트릭: 한 프레임은 검정으로 칠하고, 다음 vsync에 정상 콘텐츠로
         // 다시 그린다. 표준 안드로이드 API에는 풀리프레시 강제가 없어, 큰 색차로
         // 컨트롤러를 끌어내리는 게 SDK 의존 없는 1차 방어선.
-        if (pendingFullRefresh) {
-            Log.d(TAG, "full refresh tick — page=$pageIndex")
-            canvas.drawColor(Color.BLACK)
-            pendingFullRefresh = false
-            postInvalidateOnAnimation()
+        if (refreshSequence.isNotEmpty()) {
+            val color = refreshSequence.removeFirst()
+            Log.d(
+                TAG,
+                "full refresh frame color=${"%08X".format(color)} remaining=${refreshSequence.size}",
+            )
+            canvas.drawColor(color)
+            // 다음 프레임 색상으로 또 invalidate. 시퀀스가 비면 정상 onDraw 진입.
+            postInvalidateDelayed(FULL_REFRESH_FRAME_HOLD_MS)
             return
         }
         canvas.drawColor(Color.WHITE)
