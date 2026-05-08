@@ -11,15 +11,21 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * 라이브러리 화면용 상태 보유. 트리 탐색 모델:
  *
  * - [LibraryState.path] 가 비어있으면 root 목록(첫 화면)
  * - 비어있지 않으면 마지막 항목이 "현재 폴더", entries는 그 폴더의 직계
- * - root 추가/제거 시 path는 root까지 비움 (사용자 컨텍스트가 깨지지 않게)
  *
  * SAF 권한은 root URI에만 부여 — 모든 자식 접근은 같은 권한 트리 안에서 일어난다.
+ *
+ * 영속 상태:
+ * - [KEY_ROOTS]  : 사용자가 추가한 SAF 트리 URI 집합
+ * - [KEY_PATH]   : 마지막으로 보던 path (JSON 직렬화). 앱 재시작 시 복원.
+ *                  root가 사라졌거나 path가 비어있으면 무시.
  */
 class LibraryViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -38,14 +44,23 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
      * - init / addRoot / removeRoot 직후에 켠다(사용자가 추가/제거한 결과 root가 1개로
      *   정리된 시점). root 1개면 첫 화면 = "폴더 1개" 짜리 의미 없는 단계라 건너뜀.
      * - [goUp]으로 사용자가 의도적으로 root 화면에 도달했을 땐 끈다 — 무한 루프 방지.
+     * - 저장된 path가 복원되면 그쪽이 우선이라 자동 진입은 끈다.
      */
     private var pendingAutoDescend = false
 
     init {
-        val saved = prefs.getStringSet(KEY_ROOTS, emptySet()).orEmpty().map(Uri::parse)
-        _state.value = _state.value.copy(roots = saved)
-        pendingAutoDescend = true
-        refreshRoots()
+        val savedRoots = prefs.getStringSet(KEY_ROOTS, emptySet()).orEmpty().map(Uri::parse)
+        val savedPath = decodePath(prefs.getString(KEY_PATH, null))
+            .takeIf { isPathValid(it, savedRoots) }
+            .orEmpty()
+        _state.value = _state.value.copy(roots = savedRoots, path = savedPath)
+        if (savedPath.isNotEmpty()) {
+            // 마지막 위치 복원 — pendingAutoDescend는 비활성, 직접 children 로드.
+            refreshChildren(savedPath.last())
+        } else {
+            pendingAutoDescend = true
+            refreshRoots()
+        }
     }
 
     fun addRoot(uri: Uri) {
@@ -58,7 +73,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val current = _state.value.roots
         if (current.any { it == uri }) return
         val next = current + uri
-        persist(next)
+        persistRoots(next)
         _state.value = _state.value.copy(roots = next)
         // 새 root 1개로 시작했으면 자동 진입. 이미 다른 root에 들어와 있다면 그대로 둔다.
         if (next.size == 1 && _state.value.path.isEmpty()) {
@@ -67,7 +82,6 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         } else if (_state.value.path.isEmpty()) {
             refreshRoots()
         }
-        // 폴더 안에 들어가 있는 동안의 추가는 entries에 영향 없음(현재 폴더 children은 그대로).
     }
 
     fun removeRoot(uri: Uri) {
@@ -78,12 +92,11 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             )
         }
         val next = _state.value.roots.filterNot { it == uri }
-        persist(next)
+        persistRoots(next)
         // 사용자가 현재 진입해 있던 root가 사라졌으면 첫 화면으로 복귀.
         val newPath = _state.value.path.takeIf { it.firstOrNull()?.rootUri != uri }.orEmpty()
-        _state.value = _state.value.copy(roots = next, path = newPath)
+        setPath(newPath, alsoUpdateRoots = next)
         if (newPath.isEmpty()) {
-            // 제거 결과 root 1개만 남았으면 거기로 자동 진입.
             pendingAutoDescend = (next.size == 1)
             refreshRoots()
         } else {
@@ -94,7 +107,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     /** 폴더 진입 — path에 push 후 그 폴더의 직계 로드. */
     fun enterFolder(folder: FolderEntry) {
         val nextPath = _state.value.path + folder
-        _state.value = _state.value.copy(path = nextPath)
+        setPath(nextPath)
         refreshChildren(folder)
     }
 
@@ -105,7 +118,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val current = _state.value.path
         if (current.isEmpty()) return false
         val nextPath = current.dropLast(1)
-        _state.value = _state.value.copy(path = nextPath)
+        setPath(nextPath)
         if (nextPath.isEmpty()) {
             // 사용자 의도로 root 목록까지 올라온 경우 — 자동 진입 X
             pendingAutoDescend = false
@@ -133,7 +146,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             if (pendingAutoDescend && rootEntries.size == 1 && _state.value.path.isEmpty()) {
                 pendingAutoDescend = false
                 val target = rootEntries.first()
-                _state.value = _state.value.copy(path = listOf(target))
+                setPath(listOf(target))
                 val children = repo.listChildren(target)
                 _state.value = _state.value.copy(entries = children, scanning = false)
             } else {
@@ -152,13 +165,70 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun persist(roots: List<Uri>) {
+    /** path 변경의 단일 진입점. state 갱신 + 디스크 영속화를 한 곳에서 묶어 누락을 방지. */
+    private fun setPath(newPath: List<FolderEntry>, alsoUpdateRoots: List<Uri>? = null) {
+        _state.value = if (alsoUpdateRoots != null) {
+            _state.value.copy(roots = alsoUpdateRoots, path = newPath)
+        } else {
+            _state.value.copy(path = newPath)
+        }
+        prefs.edit { putString(KEY_PATH, encodePath(newPath)) }
+    }
+
+    private fun persistRoots(roots: List<Uri>) {
         prefs.edit { putStringSet(KEY_ROOTS, roots.map(Uri::toString).toSet()) }
+    }
+
+    /**
+     * 저장된 path가 현재 roots와 정합한지 검증 — root가 사라졌거나 path 첫 단계의
+     * rootUri가 더 이상 추가된 root 목록에 없으면 path는 무효.
+     *
+     * 폴더 자체 존재 여부(SAF에서 사라진 폴더)는 여기서 검증하지 않는다 — refreshChildren이
+     * 빈 결과를 반환하면 사용자가 ← back으로 한 단계 위로 가면 됨.
+     */
+    private fun isPathValid(path: List<FolderEntry>, currentRoots: List<Uri>): Boolean {
+        if (path.isEmpty()) return false
+        val firstRoot = path.first().rootUri
+        return firstRoot in currentRoots && path.all { it.rootUri == firstRoot }
+    }
+
+    private fun encodePath(path: List<FolderEntry>): String {
+        val arr = JSONArray()
+        for (f in path) {
+            arr.put(JSONObject().apply {
+                put(JSON_NAME, f.displayName)
+                put(JSON_DOC, f.documentUri.toString())
+                put(JSON_ROOT, f.rootUri.toString())
+                put(JSON_IS_ROOT, f.isRoot)
+            })
+        }
+        return arr.toString()
+    }
+
+    private fun decodePath(raw: String?): List<FolderEntry> {
+        if (raw.isNullOrEmpty()) return emptyList()
+        return runCatching {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                FolderEntry(
+                    documentUri = Uri.parse(o.getString(JSON_DOC)),
+                    displayName = o.getString(JSON_NAME),
+                    rootUri = Uri.parse(o.getString(JSON_ROOT)),
+                    isRoot = o.getBoolean(JSON_IS_ROOT),
+                )
+            }
+        }.getOrElse { emptyList() }
     }
 
     companion object {
         private const val PREFS_NAME = "panely_ink_prefs"
         private const val KEY_ROOTS = "library_root_uris"
+        private const val KEY_PATH = "library_last_path"
+        private const val JSON_NAME = "name"
+        private const val JSON_DOC = "doc"
+        private const val JSON_ROOT = "root"
+        private const val JSON_IS_ROOT = "isRoot"
     }
 }
 
