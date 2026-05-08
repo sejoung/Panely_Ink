@@ -96,10 +96,6 @@
   - 화면 폭(7"/1648×1236) 고려: 좌측 트리 사이드바 대신 한 화면 = 한 디렉토리
   - 자식 카운트, 표지, 진행률은 M3로 미룸 (lazy 캐시 비용 큼)
   - 중첩 ZIP-of-CBZ(PRD §6.1)는 다음 단계
-- [ ] **M1.5** — 세로 스크롤(웹툰) 모드
-  - `ReadingDirection.VerticalScroll` 활성
-  - 페이지 사이 8dp Paper 간격 (Design Guidelines §12)
-  - 멈춤 감지 후 풀리프레시 1회 (Guidelines §10)
 - [ ] **M1.후반** — 입력 보강
   - 더블탭 / 길게 누르기 (페이지 점프 / 챕터 점프) — PRD §6.1
   - 핀치 줌 (단계적, 1× ↔ 2× 더블탭) — PRD §6.1
@@ -154,6 +150,7 @@
 
 ## v1.5 (이후)
 
+- [ ] **세로 스크롤(웹툰) 모드** — v1.0에서 미뤘음. vertical paginated(viewport 단위 분할 + 흰 줄 컷 보호) 또는 Onyx fast-mode 연동 검토. 표준 안드로이드 fling 스크롤은 e-ink 잔상으로 부적합 — `ReadingDirection.VerticalScroll` enum은 코드에 그대로 두고 메뉴/UI에선 비노출
 - [ ] 두 페이지 펼침 모드 (10"+ 디바이스 확장 시)
 - [ ] CBR (RAR) 지원 — junrar GPL 격리 또는 native 7z
 - [ ] Dithering 추가 알고리즘 — Atkinson / Threshold
@@ -213,3 +210,4 @@
 - **2026-05-08** — 라이브러리 single-root 자동 진입. root 1개면 첫 화면 한 프레임도 노출하지 않고 그 안으로 한 단계 진입. `pendingAutoDescend` 플래그로 init/add/remove에서만 트리거하고 `goUp`(사용자 의도)에선 끔. 폴더 안에서도 +/관리 버튼 노출
 - **2026-05-08** — 라이브러리 last-visited path 영속화 + 복원 (JSON in SharedPrefs). `setPath` 단일 진입점에서 state 갱신과 영속화를 묶음. root가 사라진/path가 root 밖 인 경우 무시
 - **2026-05-08** — 폴더 자식 카운트 lazy + in-memory 캐시 (1차). `LibraryRepository.countBooks`(재귀, depth ≤ 3), `LibraryViewModel.requestFolderCount` 작업 dedup, `FolderRow`에 "N권" / "비어있음" 표시. 디스크 캐시·invalidation은 M3 Room 도입 시 통합
+- **2026-05-08** — 세로 스크롤(웹툰) 모드를 v1.5로 미룸. e-ink fling 스크롤 잔상/갱신 속도 한계. PRD §6.1·§6.2와 PROGRESS v1.5 갱신. `ReadingDirection.VerticalScroll` enum은 코드에 그대로 두되 `ReaderMenu`에서 비노출(이미 그 상태)
