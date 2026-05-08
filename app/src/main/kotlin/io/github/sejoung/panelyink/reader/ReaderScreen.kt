@@ -84,7 +84,7 @@ fun ReaderScreen(
         when (val s = sessionState) {
             SessionState.Loading -> ReaderLoading(loadingStep)
             is SessionState.Failed -> ReaderError(message = s.message)
-            is SessionState.Ready -> ReaderContent(session = s.session)
+            is SessionState.Ready -> ReaderContent(session = s.session, onExit = onBack)
         }
     }
 }
@@ -92,7 +92,7 @@ fun ReaderScreen(
 private const val TAG = "PanelyInk.Reader"
 
 @Composable
-private fun ReaderContent(session: CbzBookSession) {
+private fun ReaderContent(session: CbzBookSession, onExit: () -> Unit) {
     // ViewModelStore에 캐시되지 않도록 remember(session)로 묶는다 — 책을 닫고
     // 다시 열 때 stale decoder(닫힌 ZipFile)를 잡는 문제 방지.
     val viewModel = remember(session) {
@@ -112,6 +112,7 @@ private fun ReaderContent(session: CbzBookSession) {
 
     val state by viewModel.state.collectAsState()
     var view by remember { mutableStateOf<ReaderView?>(null) }
+    var menuOpen by remember { mutableStateOf(false) }
 
     // 상태 → View 명령형 setter
     LaunchedEffect(state.currentPage, state.fitMode, view) {
@@ -125,15 +126,24 @@ private fun ReaderContent(session: CbzBookSession) {
     }
 
     // 하드웨어 키 라우팅 — Activity의 dispatchKeyEvent에서 가로채서
-    // 시스템 볼륨 변동 같은 부작용 차단.
+    // 시스템 볼륨 변동 같은 부작용 차단. 메뉴가 열려 있으면 키 입력은 메뉴 닫기로
+    // 흡수해 본문 페이지가 의도치 않게 넘어가는 걸 막는다.
     val activity = LocalContext.current.findMainActivity()
-    DisposableEffect(activity, viewModel) {
+    DisposableEffect(activity, viewModel, menuOpen) {
         activity?.keyDispatcher = { event ->
-            ReaderInput.dispatch(
-                event = event,
-                onPrev = viewModel::goPrevious,
-                onNext = viewModel::goNext,
-            )
+            if (menuOpen) {
+                ReaderInput.dispatch(
+                    event = event,
+                    onPrev = { menuOpen = false },
+                    onNext = { menuOpen = false },
+                )
+            } else {
+                ReaderInput.dispatch(
+                    event = event,
+                    onPrev = viewModel::goPrevious,
+                    onNext = viewModel::goNext,
+                )
+            }
         }
         onDispose { activity?.keyDispatcher = null }
     }
@@ -152,12 +162,30 @@ private fun ReaderContent(session: CbzBookSession) {
                 if (view === v) view = null
             },
         )
-        TapRegions(
-            directionIsRtl = state.direction == ReadingDirection.Rtl,
-            onPrev = viewModel::goPrevious,
-            onNext = viewModel::goNext,
-            onMenu = { /* M1.3 메뉴 자리 */ },
-        )
+        if (!menuOpen) {
+            TapRegions(
+                directionIsRtl = state.direction == ReadingDirection.Rtl,
+                onPrev = viewModel::goPrevious,
+                onNext = viewModel::goNext,
+                onMenu = { menuOpen = true },
+            )
+        } else {
+            ReaderMenu(
+                state = state,
+                pageCount = viewModel.pageCount,
+                onFitModeChange = viewModel::setFitMode,
+                onDirectionChange = viewModel::setDirection,
+                onJumpToPage = { page ->
+                    viewModel.goTo(page)
+                    menuOpen = false
+                },
+                onExitToLibrary = {
+                    menuOpen = false
+                    onExit()
+                },
+                onClose = { menuOpen = false },
+            )
+        }
     }
 }
 

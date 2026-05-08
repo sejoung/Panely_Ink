@@ -7,7 +7,7 @@
 |---|---|
 | 작성일 | 2026-05-05 |
 | 기준 | PRD v0.2 (Meebook M7 단일 타깃) |
-| 현재 단계 | **M1 — 뷰어 셸** 진행 중 |
+| 현재 단계 | **M1 — 뷰어 셸** 진행 중 (M1.3 완료) |
 
 범례: `[x]` 완료 · `[ ]` 미착수 · `[~]` 부분 구현 (한계 명시)
 
@@ -73,10 +73,14 @@
   - Material You 테마 아이콘은 e-ink 디바이스에서 무의미하므로 비포기
 
 ### 남음
-- [ ] **M1.3** — Fit modes 적용 + 최소 메뉴
-  - 중앙 탭 → 메뉴 표시 (fit 토글 / 방향 토글 / 페이지 점프)
-  - `FitCalculator` 결과를 `ReaderView`가 사용 (현재 FitScreen 고정)
-  - 슬라이더 / 토글 — Guidelines §6 컴포넌트 규칙 준수
+- [x] **M1.3** — Fit modes 적용 + 최소 메뉴
+  - `ReaderMenu` 컴포넌트 (`reader/ReaderMenu.kt`) — 하단 패널, Paper 배경 + 2dp Ink 보더
+  - 중앙 탭 → 메뉴 토글, 패널 외부 탭 = 닫기 (Guidelines §6 다이얼로그 규칙)
+  - Fit 세그먼트(화면/가로/세로) + 방향 세그먼트(좌→우/우→좌) — 선택 시 fill 반전 (§7)
+  - 페이지 점프 슬라이더 — 트랙 4dp Hairline / fill 4dp Ink / 24dp 정사각 핸들, 드래그 중 본문 변경 안 함, 손 떼야 적용 (§6)
+  - 메뉴 열린 동안 하드웨어 키는 메뉴 닫기로 흡수 (의도치 않은 페이지 넘김 방지)
+  - `ReaderView`는 이미 `FitCalculator` 결과를 사용 중 (M1.1부터). 메뉴에서 `FitMode` 선택 시 `ReaderViewModel.setFitMode` → `ReaderState` → `ReaderView.setFitMode` 단방향 전파
+  - `ReadingDirection.VerticalScroll`은 M1.5에서 추가 (현재는 LTR/RTL만 노출)
 - [ ] **M1.4** — Resume / 위치 기억
   - `PositionKey` 영속화 (SharedPreferences 또는 Room)
   - 책 재진입 시 마지막 페이지 자동 복원
@@ -189,3 +193,4 @@
 - **2026-05-05** — 어댑티브 분리본 폐기, 단일 vector drawable로 통일
 - **2026-05-05** — 캐시 복사 전략 결정 (`/proc/self/fd/N`은 SELinux로 차단)
 - **2026-05-05** — M1.2.7: Commons Compress + SeekableByteChannel로 교체. 220MB 첫 진입 11초 → ~500ms (`setIgnoreLocalFileHeader(true)` 필수)
+- **2026-05-08** — M1.3: 최소 메뉴 (`ReaderMenu`) — fit/방향 세그먼트 + 페이지 점프 슬라이더. Guidelines §6 슬라이더 규칙(드래그 중 본문 변경 X) 준수. 메뉴 열린 동안 하드웨어 키는 메뉴 닫기로 흡수
