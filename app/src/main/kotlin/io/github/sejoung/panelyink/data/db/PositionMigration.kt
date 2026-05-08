@@ -28,7 +28,13 @@ object PositionMigration {
             val entries = prefs.all.mapNotNull { (key, value) ->
                 if (key == KEY_MIGRATED) return@mapNotNull null
                 val page = (value as? Int) ?: return@mapNotNull null
-                PositionEntity(bookId = key, pageIndex = page, updatedAt = now)
+                // pageCount=0(unknown) — 사용자가 책을 다시 열면 ReaderScreen이 갱신.
+                PositionEntity(
+                    bookId = key,
+                    pageIndex = page,
+                    pageCount = 0,
+                    updatedAt = now,
+                )
             }
             if (entries.isNotEmpty()) {
                 db.positionDao().insertAll(entries)

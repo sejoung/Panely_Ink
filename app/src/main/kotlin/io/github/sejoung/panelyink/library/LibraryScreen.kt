@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,7 +36,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.github.sejoung.panelyink.core.position.BookProgress
 import io.github.sejoung.panelyink.core.position.PositionKey
+import kotlin.math.roundToInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.sejoung.panelyink.R
@@ -99,10 +102,12 @@ fun LibraryScreen(
                 entries = state.entries,
                 folderCounts = state.folderCounts,
                 covers = state.covers,
+                bookProgress = state.bookProgress,
                 onEnterFolder = viewModel::enterFolder,
                 onOpenBook = onOpenBook,
                 onRequestCount = viewModel::requestFolderCount,
                 onRequestCover = viewModel::requestCover,
+                onRequestProgress = viewModel::requestProgress,
             )
         }
     }
@@ -200,10 +205,12 @@ private fun LibraryList(
     entries: List<LibraryEntry>,
     folderCounts: Map<android.net.Uri, Int>,
     covers: Map<String, ImageBitmap>,
+    bookProgress: Map<String, BookProgress>,
     onEnterFolder: (FolderEntry) -> Unit,
     onOpenBook: (BookEntry) -> Unit,
     onRequestCount: (FolderEntry) -> Unit,
     onRequestCover: (BookEntry) -> Unit,
+    onRequestProgress: (BookEntry) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         items(items = entries, key = { it.documentUri.toString() }) { entry ->
@@ -221,8 +228,10 @@ private fun LibraryList(
                     BookRow(
                         entry = entry,
                         cover = covers[bookId],
+                        progress = bookProgress[bookId],
                         onClick = { onOpenBook(entry) },
                         onRequestCover = onRequestCover,
+                        onRequestProgress = onRequestProgress,
                     )
                 }
             }
@@ -277,14 +286,19 @@ private fun FolderRow(
 private fun BookRow(
     entry: BookEntry,
     cover: ImageBitmap?,
+    progress: BookProgress?,
     onClick: () -> Unit,
     onRequestCover: (BookEntry) -> Unit,
+    onRequestProgress: (BookEntry) -> Unit,
 ) {
     val typography = LocalPanelyInkTypography.current
     val spacing = LocalPanelyInkSpacing.current
 
-    // 행이 처음 컴포지션될 때 lazy 표지 요청. 캐시 hit이면 ViewModel이 즉시 반환.
-    LaunchedEffect(entry.documentUri) { onRequestCover(entry) }
+    // 행이 처음 컴포지션될 때 lazy 요청 — 표지/진행률 둘 다.
+    LaunchedEffect(entry.documentUri) {
+        onRequestCover(entry)
+        onRequestProgress(entry)
+    }
 
     Row(
         modifier = Modifier
@@ -295,6 +309,7 @@ private fun BookRow(
         horizontalArrangement = Arrangement.spacedBy(spacing.space2),
     ) {
         // 표지 자리 — 만화 비율 4:5.6에 가깝게 80×112dp. 미추출 시 책 아이콘 placeholder.
+        // 우하단에 진행률 % 라벨(미열람 책은 미표시).
         Box(
             modifier = Modifier
                 .size(width = 80.dp, height = 112.dp)
@@ -310,6 +325,21 @@ private fun BookRow(
                 )
             } else {
                 PanelyBookIcon()
+            }
+            if (progress != null && progress.isKnown) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .background(PanelyInkColors.Paper)
+                        .border(1.dp, PanelyInkColors.Ink)
+                        .padding(horizontal = 4.dp, vertical = 1.dp),
+                ) {
+                    Text(
+                        text = "${(progress.percent * 100).roundToInt()}%",
+                        style = typography.caption,
+                        color = PanelyInkColors.Ink,
+                    )
+                }
             }
         }
         Column(modifier = Modifier.weight(1f)) {

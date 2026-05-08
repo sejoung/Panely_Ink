@@ -36,7 +36,6 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import io.github.sejoung.panelyink.MainActivity
-import io.github.sejoung.panelyink.core.position.PositionKey
 import io.github.sejoung.panelyink.core.position.PositionRepository
 import io.github.sejoung.panelyink.data.db.BookSettingsRepository
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
@@ -100,6 +99,7 @@ fun ReaderScreen(
             // Room에서 마지막 페이지를 미리 로드 — ReaderViewModel 생성 시점이 동기라
             // 여기서 비동기로 받아 Ready에 묶어서 넘긴다. 페이지 수 줄어든 책은 clamp.
             val resumed = positionRepo.load(session.bookId)
+                ?.pageIndex
                 ?.coerceIn(0, session.pageCount - 1)
                 ?: 0
             // 책별 설정도 같이 로드 — 없으면 DEFAULTS. 책당 1행이라 가벼움.
@@ -198,9 +198,15 @@ private fun ReaderContent(
         view?.setInvertEnabled(state.invertEnabled)
     }
 
-    // PRD §6.1 Resume — 페이지 변경 시 저장. Room upsert는 IO 디스패처에서 가벼움.
+    // PRD §6.1 Resume + M3 진행률 — 페이지 변경 시 (pageIndex, pageCount) 저장.
+    // pageCount는 viewModel 생성 후 불변이라 매번 같은 값을 같이 넘김 → 라이브러리에서
+    // 진행률 % 계산 가능.
     LaunchedEffect(state.currentPage, viewModel) {
-        positionRepo.save(PositionKey(viewModel.bookId, state.currentPage))
+        positionRepo.save(
+            bookId = viewModel.bookId,
+            pageIndex = state.currentPage,
+            pageCount = viewModel.pageCount,
+        )
     }
 
     // PRD §6.1 책별 설정 저장 — 사용자가 fit/방향/트림/대비/반전/풀리프레시 주기를

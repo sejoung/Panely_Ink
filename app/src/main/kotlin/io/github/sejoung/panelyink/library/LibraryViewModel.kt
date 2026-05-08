@@ -8,7 +8,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.sejoung.panelyink.core.position.BookProgress
 import io.github.sejoung.panelyink.core.position.PositionKey
+import io.github.sejoung.panelyink.data.db.PanelyDatabase
+import io.github.sejoung.panelyink.data.db.RoomPositionRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +39,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     private val prefs = application.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
     private val repo = LibraryRepository(application)
+    private val positionRepo = RoomPositionRepository(PanelyDatabase.getInstance(application))
 
     private val _state = MutableStateFlow(LibraryState())
     val state: StateFlow<LibraryState> = _state.asStateFlow()
@@ -51,6 +55,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     /** 표지 추출 진행 중인 작업. 동일 책에 대한 중복 요청 dedup. */
     private val coverJobs = mutableMapOf<String, Job>()
+
+    /** 진행률 로드 진행 중인 작업. 동일 책에 대한 중복 요청 dedup. */
+    private val progressJobs = mutableMapOf<String, Job>()
 
     /**
      * 다음 [refreshRoots] 시 자동으로 단일 root 안으로 한 단계 진입할지.
@@ -165,6 +172,29 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             countingJobs.remove(key)
         }
         countingJobs[key] = job
+    }
+
+    /**
+     * 책 행이 화면에 등장할 때 호출 — Room에서 진행률을 lazy 로드해 캐시.
+     *
+     * 미열람 책은 Room에 row 자체가 없어 결과 null → covers와 달리 map에 키 자체를
+     * 추가하지 않는다(라이브러리 라벨 표시 X). 사용자가 한 번이라도 책을 열면 다음
+     * 라이브러리 진입에서 % 라벨이 등장.
+     */
+    fun requestProgress(book: BookEntry) {
+        val bookId = PositionKey.bookIdFromUri(book.documentUri.toString())
+        if (_state.value.bookProgress.containsKey(bookId)) return
+        if (progressJobs.containsKey(bookId)) return
+        val job = viewModelScope.launch {
+            val progress = positionRepo.load(bookId)
+            if (progress != null && progress.isKnown) {
+                _state.value = _state.value.copy(
+                    bookProgress = _state.value.bookProgress + (bookId to progress),
+                )
+            }
+            progressJobs.remove(bookId)
+        }
+        progressJobs[bookId] = job
     }
 
     /**
@@ -314,4 +344,6 @@ data class LibraryState(
     val folderCounts: Map<Uri, Int> = emptyMap(),
     /** bookId(SHA-1 hex) → 표지 썸네일 ImageBitmap. 미추출 책은 키 없음. */
     val covers: Map<String, ImageBitmap> = emptyMap(),
+    /** bookId → 책 진행률(현재 페이지 + 전체). 미열람/모름 책은 키 없음. */
+    val bookProgress: Map<String, BookProgress> = emptyMap(),
 )

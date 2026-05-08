@@ -144,7 +144,13 @@
   - `BookRow`에 80×112dp 표지 자리. 미추출 시 `PanelyBookIcon` placeholder, 도착 시 `Image(ContentScale.Fit)`. 행에 `LaunchedEffect`로 등장 시 1회 요청
   - 표지 메타(`CoverMeta` Room 테이블)는 다음 단계 — 추출 실패 책 재시도 방지/표지 페이지 변경 옵션에 사용
   - LRU 정리 정책은 별도 항목으로 추후
-- [ ] 진행률 배지 (% 또는 호선)
+- [x] 진행률 배지 (% 또는 호선)
+  - `core/position/BookProgress(pageIndex, pageCount)` 도메인 (단위 테스트 4개) — `(pageIndex+1)/pageCount` 수식, `isKnown` 가드
+  - Room v2→v3 마이그레이션: `position` 테이블에 `page_count INTEGER DEFAULT 0` 컬럼 추가
+  - `PositionRepository` 시그니처 갱신: `load → BookProgress?`, `save(bookId, pageIndex, pageCount)`. ReaderScreen이 `viewModel.pageCount` 같이 저장
+  - `LibraryViewModel.requestProgress` lazy + dedup. `state.bookProgress: Map<bookId, BookProgress>` (미열람 책은 키 없음)
+  - `BookRow` 표지 우하단에 작은 라벨 "N%" — Paper 배경 + 1dp Ink 보더, caption typography
+  - 미열람/page_count=0 책은 라벨 미표시 (한 번이라도 책 열면 다음 진입에서 등장)
 - [ ] 정렬: 이름 / Last opened / Recently added
 - [ ] 검색 (파일명 / 시리즈명)
 - [ ] 시리즈 그룹핑 (폴더 = 시리즈 자동 인식)
@@ -255,3 +261,4 @@
 - **2026-05-08** — M3 Room 인프라 도입(KSP 2.0.20-1.0.25 + Room 2.6.1). `PanelyDatabase` v1 + `PositionEntity`/`PositionDao` + `RoomPositionRepository`. `PositionRepository` 인터페이스 suspend로 변경, `ReaderScreen.produceState`에서 비동기 로드 → `SessionState.Ready(session, resumedPage)`. SharedPreferences → Room 1회 마이그레이션(`PositionMigration`, 멱등 플래그)은 `PanelyInkApp.onCreate`에서 백그라운드 실행. `SharedPreferencesPositionRepository` 클래스 제거
 - **2026-05-08** — M3 BookSettings 책별 저장. Room v1→v2 마이그레이션(`book_settings` 테이블 신규). `BookSettings` 도메인 + FitMode/Direction 직렬화 헬퍼(테스트 8개), `RoomBookSettingsRepository`. `ReaderViewModel`은 `initialBookSettings: BookSettings`로 초기 상태 통합(기존 initialDirection/FitMode/TrimEnabled 인자 제거). `ReaderScreen`에서 settings 6필드 변경 시 자동 upsert
 - **2026-05-08** — M3 표지 자동 추출 + 디스크 캐시 1단계. `CoverExtractor`(첫 페이지 inSampleSize 다운스케일 ≤ 400px), `CoverCache`(filesDir/covers PNG 저장), `LibraryViewModel.requestCover` lazy + dedup, `BookRow` 80×112dp 표지 자리. 추출 실패 메타/LRU 정리는 후속
+- **2026-05-08** — M3 진행률 배지. Room v2→v3(`position.page_count` 컬럼), `BookProgress` 도메인 + 테스트 4개. `PositionRepository`가 `BookProgress?`/`save(bookId, pageIndex, pageCount)`로 변경. ReaderScreen이 페이지 변경마다 viewModel.pageCount 같이 저장. 라이브러리 표지 우하단 "N%" 라벨(미열람 책 미표시)

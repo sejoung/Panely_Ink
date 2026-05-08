@@ -19,6 +19,14 @@ data class PositionEntity(
     @ColumnInfo(name = "page_index")
     val pageIndex: Int,
 
+    /**
+     * 책의 전체 페이지 수 — M3 라이브러리 진행률 배지에 사용.
+     * v0.x SharedPrefs 마이그레이션 데이터는 0(unknown)으로 시작, 사용자가 책을
+     * 열면 ReaderScreen이 자동으로 갱신.
+     */
+    @ColumnInfo(name = "page_count", defaultValue = "0")
+    val pageCount: Int,
+
     /** 마지막 갱신 epoch ms — 정렬(Last opened)과 LRU 정리에 사용. */
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long,

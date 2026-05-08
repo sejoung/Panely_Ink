@@ -1,6 +1,6 @@
 package io.github.sejoung.panelyink.data.db
 
-import io.github.sejoung.panelyink.core.position.PositionKey
+import io.github.sejoung.panelyink.core.position.BookProgress
 import io.github.sejoung.panelyink.core.position.PositionRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -22,17 +22,19 @@ class RoomPositionRepository(
 
     private val dao get() = db.positionDao()
 
-    override suspend fun load(bookId: String): Int? = withContext(Dispatchers.IO) {
-        dao.load(bookId)?.pageIndex
+    override suspend fun load(bookId: String): BookProgress? = withContext(Dispatchers.IO) {
+        dao.load(bookId)?.let { BookProgress(pageIndex = it.pageIndex, pageCount = it.pageCount) }
     }
 
-    override suspend fun save(key: PositionKey) = withContext(Dispatchers.IO) {
-        dao.upsert(
-            PositionEntity(
-                bookId = key.bookId,
-                pageIndex = key.pageIndex,
-                updatedAt = clock(),
-            ),
-        )
-    }
+    override suspend fun save(bookId: String, pageIndex: Int, pageCount: Int) =
+        withContext(Dispatchers.IO) {
+            dao.upsert(
+                PositionEntity(
+                    bookId = bookId,
+                    pageIndex = pageIndex,
+                    pageCount = pageCount,
+                    updatedAt = clock(),
+                ),
+            )
+        }
 }

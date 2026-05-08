@@ -14,14 +14,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * 버전 이력:
  * - v1: `position` 테이블 (SharedPreferences 마이그레이션)
  * - v2: `book_settings` 테이블 추가 (책별 fit/direction/trim/contrast/invert/refresh)
+ * - v3: `position.page_count` 컬럼 추가 (라이브러리 진행률 배지용)
  *
- * 다음 단계 후보: `cover_meta` 테이블(표지 캐시) → v3, `bookmark` 테이블 → v4
+ * 다음 단계 후보: `cover_meta` 테이블(표지 캐시 메타) → v4, `bookmark` 테이블 → v5
  *
  * 싱글톤 보장: [getInstance]가 더블 체크 락. 안드로이드 앱에서 DB는 프로세스당 1개.
  */
 @Database(
     entities = [PositionEntity::class, BookSettingsEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class PanelyDatabase : RoomDatabase() {
@@ -53,6 +54,18 @@ abstract class PanelyDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v2 → v3: position에 page_count 컬럼 추가. 기존 행은 0(unknown)으로
+         * 시작하고, 사용자가 책을 열면 ReaderScreen이 자동으로 채운다.
+         */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `position` ADD COLUMN `page_count` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
         @Volatile
         private var instance: PanelyDatabase? = null
 
@@ -63,7 +76,7 @@ abstract class PanelyDatabase : RoomDatabase() {
                     PanelyDatabase::class.java,
                     DB_NAME,
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { instance = it }
             }
