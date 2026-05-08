@@ -53,6 +53,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun AppSettingsScreen(
     roots: List<Uri>,
+    onAddRoot: () -> Unit,
     onRemoveRoot: (Uri) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -151,13 +152,13 @@ fun AppSettingsScreen(
             )
             Spacer(Modifier.height(spacing.space4))
 
-            // 폴더 관리 — root 추가는 헤더 "+" 아이콘에서, 제거는 여기서.
-            // 이전엔 별도 ManageRootsDialog였으나 단계 깊어서 통합(2026-05-08).
+            // 폴더 관리 — 추가/제거 모두 여기. 이전엔 별도 ManageRootsDialog였고
+            // 추가는 헤더 + 아이콘에 분리됐지만 둘 다 흡수해 한 곳에 모음(2026-05-08).
             GroupHeader("폴더")
             Spacer(Modifier.height(spacing.space2))
             if (roots.isEmpty()) {
                 Text(
-                    text = "추가된 폴더가 없습니다. 라이브러리 헤더의 + 버튼으로 추가하세요.",
+                    text = "추가된 폴더가 없습니다.",
                     style = typography.body,
                     color = PanelyInkColors.Mute,
                 )
@@ -166,6 +167,21 @@ fun AppSettingsScreen(
                     RootRow(uri = uri, onRemove = { onRemoveRoot(uri) })
                 }
             }
+
+            Spacer(Modifier.height(spacing.space2))
+            PanelyTextButton(
+                label = "폴더 추가",
+                onClick = onAddRoot,
+                primary = roots.isEmpty(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(spacing.space1))
+            // 시스템 SAF picker는 우리가 제어 못 함 — 사용자에게 취소 방법 안내.
+            Text(
+                text = "시스템 폴더 선택기에서는 시스템 뒤로 키로 취소할 수 있습니다.",
+                style = typography.caption,
+                color = PanelyInkColors.Mute,
+            )
 
             Spacer(Modifier.height(spacing.space3))
         }

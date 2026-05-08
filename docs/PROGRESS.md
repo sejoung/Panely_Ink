@@ -279,3 +279,8 @@
 - **2026-05-08** — 버그픽스: 로딩 중 같은 폴더 행 더블 탭 시 path stack에 중복 push되어 ← back 여러 번 눌러야 탈출하던 문제. `enterFolder`에서 마지막 path documentUri 비교로 중복 push 차단
 - **2026-05-08** — 설정 전역/책별 분리. `AppPreferences`(전역: 풀리프레시 주기, 흑백 반전) + `SharedPrefsAppPreferencesRepository`. `BookSettings`에서 두 필드 제거(entity 컬럼은 orphan 유지). `AppSettingsScreen` 신규 — 라이브러리 메뉴(햄버거 → "앱 설정") 진입. 책 메뉴는 책별 옵션(맞춤/방향/트림/대비/흑백 반전 토글/지금 풀리프레시 버튼)에 집중. 흑백 반전은 어디서 토글해도 전역 저장
 - **2026-05-08** — 앱 설정 진입 단순화. 헤더 햄버거 메뉴 → 톱니바퀴(`PanelySettingsIcon`)로 교체, 한 번 클릭에 앱 설정 화면 직접 진입. `ManageRootsDialog` 삭제 — 폴더 관리는 `AppSettingsScreen` 안의 "폴더" 섹션으로 흡수. 단계 깊이 4→1 단축
+- **2026-05-08** — 헤더 폴더 추가(+) 아이콘 제거 → 4→3 아이콘(검색/정렬/설정). 폴더 추가 액션은 `AppSettingsScreen` 폴더 섹션 + `LibraryEmptyState` 첫 사용자 가이드 버튼으로 흡수. SAF picker launcher는 `LibraryScreen`에서 한 번 정의해 양쪽에 공유
+- **2026-05-08** — SAF picker 취소 안내 추가. 시스템 polder picker는 우리 앱 외부라 X/취소 UI를 추가할 수 없음 — 빈 상태와 앱 설정 폴더 섹션에 caption으로 "시스템 뒤로 키로 취소" 안내. 옛 "+ 버튼" 안내 문구는 갱신
+- **2026-05-08** — SAF picker 안내 보강. 키 없는 Meebook M7에서 picker 우상단 ←를 시스템 뒤로 키로 오인 → 폴더 위 네비게이션이라 못 빠져나옴. 안내 텍스트 구체화("화면 하단 ◁ / picker 우상단 ⋮ / 우상단 ←는 폴더 한 단계 위"). picker 호출 직전 `WindowInsetsControllerCompat.show(systemBars())` 강제로 가상 navigation bar 가시성 보장
+- **2026-05-08** — 라이브러리 화면 진입 시 `systemBarsBehavior = BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE` + `show(systemBars())` 명시. ReaderScreen에서 hide 후 라이브러리 복귀해도 시스템 바 표시 보장. 안내 텍스트에 "임의 폴더 선택 후 앱 설정에서 제거" 우회 추가 — Meebook M7처럼 OEM이 navigation bar를 hide한 디바이스 대응
+- **2026-05-08** — SAF picker 깊이 안내 + 시작 위치 hint. 사용자가 깊이 들어가면 ←를 그만큼 눌러야 빠져나오는 picker UI 한계 — 안내 텍스트에 "책 폴더 보이는 시점 즉시 선택" 가이드 추가. `pickFolder.launch(state.roots.lastOrNull())`로 마지막 추가 root를 picker 시작 위치 hint 전달, 깊이 ↓

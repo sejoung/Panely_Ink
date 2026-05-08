@@ -44,9 +44,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.DisposableEffect
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import io.github.sejoung.panelyink.core.position.BookProgress
 import io.github.sejoung.panelyink.core.position.PositionKey
 import kotlin.math.roundToInt
@@ -59,10 +65,10 @@ import io.github.sejoung.panelyink.ui.components.PanelyChevronRightIcon
 import io.github.sejoung.panelyink.ui.components.PanelyCloseIcon
 import io.github.sejoung.panelyink.ui.components.PanelyFolderIcon
 import io.github.sejoung.panelyink.ui.components.PanelyIconButton
-import io.github.sejoung.panelyink.ui.components.PanelyPlusIcon
 import io.github.sejoung.panelyink.ui.components.PanelySearchIcon
 import io.github.sejoung.panelyink.ui.components.PanelySettingsIcon
 import io.github.sejoung.panelyink.ui.components.PanelySortIcon
+import io.github.sejoung.panelyink.ui.components.PanelyTextButton
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
 import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
@@ -90,6 +96,36 @@ fun LibraryScreen(
         contract = ActivityResultContracts.OpenDocumentTree(),
     ) { uri -> if (uri != null) viewModel.addRoot(uri) }
 
+    // 라이브러리 화면이 활성인 동안 시스템 바를 명시적으로 표시 + 사용자 스와이프로
+    // 다시 부르도록 정책 설정. ReaderScreen에서 hide한 후 라이브러리로 복귀해도
+    // 보장. SAF picker(별도 Activity)에 직접 영향은 못 주지만, 같은 Window 정책이
+    // 일부 OEM 구현에서 picker에도 inherit될 수 있어 안전 장치.
+    val view = LocalView.current
+    val context = LocalContext.current
+    DisposableEffect(view, context) {
+        val activity = resolveActivity(context)
+        activity?.window?.let { window ->
+            val controller = WindowCompat.getInsetsController(window, view)
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        }
+        onDispose { /* ReaderScreen 진입 시 거기서 다시 hide */ }
+    }
+    val onAddFolder: () -> Unit = {
+        runCatching {
+            val activity = resolveActivity(context)
+            activity?.window?.let { window ->
+                WindowCompat.getInsetsController(window, view)
+                    .show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+        // 마지막 추가 root 위치를 picker 시작 위치로 hint — picker 깊이를 줄여
+        // 사용자가 ← 여러 번 안 눌러도 되게. 첫 추가 시(roots 비어있음)는 null로
+        // 시스템 default 위치 사용.
+        pickFolder.launch(state.roots.lastOrNull())
+    }
+
     // 시스템 뒤로 키 우선순위: 검색 모드 → 폴더 위로 → 시스템 처리.
     BackHandler(enabled = searchActive) {
         viewModel.setSearchQuery("")
@@ -114,7 +150,6 @@ fun LibraryScreen(
                 searchActive = false
             },
             onSearchQueryChange = viewModel::setSearchQuery,
-            onAdd = { pickFolder.launch(null) },
             onOpenSettings = { appSettingsOpen = true },
             onSort = { sortOpen = true },
             onUp = viewModel::goUp,
@@ -131,6 +166,7 @@ fun LibraryScreen(
                 inFolder = state.path.isNotEmpty(),
                 hasRoots = state.roots.isNotEmpty(),
                 scanning = state.scanning,
+                onAddFolder = onAddFolder,
             )
             visibleEntries.isEmpty() -> SearchEmptyState(query = state.searchQuery)
             else -> when (state.viewMode) {
@@ -164,6 +200,7 @@ fun LibraryScreen(
     if (appSettingsOpen) {
         AppSettingsScreen(
             roots = state.roots,
+            onAddRoot = onAddFolder,
             onRemoveRoot = viewModel::removeRoot,
             onBack = { appSettingsOpen = false },
         )
@@ -189,7 +226,6 @@ private fun LibraryHeader(
     onActivateSearch: () -> Unit,
     onCancelSearch: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
-    onAdd: () -> Unit,
     onOpenSettings: () -> Unit,
     onSort: () -> Unit,
     onUp: () -> Boolean,
@@ -253,11 +289,10 @@ private fun LibraryHeader(
             PanelyIconButton(onClick = onSort, primary = false) { tint ->
                 PanelySortIcon(tint = tint)
             }
+            // 폴더 추가는 설정 화면 / 빈 상태 가이드로 흡수(2026-05-08).
+            // 한 번 설정 후 자주 안 쓰는 액션이라 헤더에서 제거 — 헤더 3아이콘.
             PanelyIconButton(onClick = onOpenSettings, primary = false) { tint ->
                 PanelySettingsIcon(tint = tint)
-            }
-            PanelyIconButton(onClick = onAdd, primary = true) { tint ->
-                PanelyPlusIcon(tint = tint)
             }
         }
     }
@@ -723,6 +758,7 @@ private fun LibraryEmptyState(
     inFolder: Boolean,
     hasRoots: Boolean,
     scanning: Boolean,
+    onAddFolder: () -> Unit,
 ) {
     val typography = LocalPanelyInkTypography.current
     val spacing = LocalPanelyInkSpacing.current
@@ -756,6 +792,25 @@ private fun LibraryEmptyState(
                 Text(
                     text = body,
                     style = typography.body,
+                    color = PanelyInkColors.Mute,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            // 첫 사용자 가이드: root 0개 + 폴더 안 아닌 상태에서만 버튼 노출.
+            // 폴더 안에선 ← back으로 위로 가는 게 자연스러움.
+            if (!scanning && !inFolder) {
+                Spacer(Modifier.height(spacing.space3))
+                PanelyTextButton(
+                    label = "폴더 추가",
+                    onClick = onAddFolder,
+                    primary = !hasRoots,
+                )
+                // SAF picker는 시스템 화면이라 우리가 X/취소 UI를 못 추가한다.
+                // 디바이스마다 picker UI가 달라 사용자가 헷갈릴 수 있어 안내 캡션.
+                Spacer(Modifier.height(spacing.space2))
+                Text(
+                    text = stringResourceCompat(R.string.library_picker_cancel_hint),
+                    style = typography.caption,
                     color = PanelyInkColors.Mute,
                     textAlign = TextAlign.Center,
                 )
@@ -813,3 +868,14 @@ private fun formatBytes(bytes: Long): String {
     val mb = bytes / 1024.0 / 1024.0
     return if (mb >= 1.0) "%.1f MB".format(mb) else "%d KB".format(bytes / 1024)
 }
+
+/**
+ * Compose `LocalContext`는 ContextThemeWrapper로 감싸져 오기도 해 [android.app.Activity]
+ * 가 즉시 안 나올 수 있다. ContextWrapper 체인을 따라 탐색.
+ */
+private tailrec fun resolveActivity(context: android.content.Context): android.app.Activity? =
+    when (context) {
+        is android.app.Activity -> context
+        is android.content.ContextWrapper -> resolveActivity(context.baseContext)
+        else -> null
+    }
