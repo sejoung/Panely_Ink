@@ -61,6 +61,13 @@ class ReaderViewModel(
     )
     val state: StateFlow<ReaderState> = _state.asStateFlow()
 
+    /**
+     * 마지막 풀리프레시 이후 페이지 변경 횟수. [fullRefreshInterval]에 도달하면
+     * [ReaderState.fullRefreshGeneration]을 1 증가시키고 reset.
+     */
+    private var pagesSinceFullRefresh = 0
+    private var fullRefreshInterval = FULL_REFRESH_INTERVAL_DEFAULT
+
     /** 디코드 1장이 캐시에 들어왔다는 신호. 본문 View가 invalidate 트리거로 사용. */
     private val _decoded = MutableSharedFlow<Int>(extraBufferCapacity = 16)
     val decoded: SharedFlow<Int> = _decoded.asSharedFlow()
@@ -76,12 +83,31 @@ class ReaderViewModel(
 
     fun goTo(pageIndex: Int) {
         val clamped = pageIndex.coerceIn(0, pageCount - 1)
-        if (clamped == state.value.currentPage) return
-        _state.value = _state.value.copy(
+        val current = _state.value
+        if (clamped == current.currentPage) return
+
+        // 풀리프레시 정책 — N페이지마다 generation++ → ReaderView가 검정 한 프레임으로
+        // e-ink 컨트롤러를 풀리프레시 모드로 끌어내림(잔상 누적 방어선).
+        pagesSinceFullRefresh += 1
+        val triggerFull = pagesSinceFullRefresh >= fullRefreshInterval
+        if (triggerFull) pagesSinceFullRefresh = 0
+
+        _state.value = current.copy(
             currentPage = clamped,
             preloadWindow = preloadWindowFor(clamped),
+            fullRefreshGeneration = if (triggerFull) current.fullRefreshGeneration + 1
+                else current.fullRefreshGeneration,
         )
         triggerPreload()
+    }
+
+    /**
+     * 풀리프레시 주기 변경. M5 실기 테스트 결과 또는 사용자 설정에서 호출.
+     * 1 이상이어야 — 0 또는 음수는 매 페이지 풀리프레시(=깜빡임 폭주)라 의도된 사용 아님.
+     */
+    fun setFullRefreshInterval(n: Int) {
+        require(n >= 1) { "interval must be >= 1, got $n" }
+        fullRefreshInterval = n
     }
 
     fun setDirection(direction: ReadingDirection) {
@@ -129,10 +155,19 @@ class ReaderViewModel(
     companion object {
         /** PRD §6.1: ±3 프리로드. 3GB RAM·RK3566 기준 ARGB8888 8MB×7장 ≈ 56MB. */
         const val PRELOAD_RADIUS = 3
+
+        /** PRD §6.1 / PROGRESS M2: 기본 풀리프레시 주기 — N=5 페이지마다. */
+        const val FULL_REFRESH_INTERVAL_DEFAULT = 5
     }
 }
 
-/** ReaderViewModel이 외부로 노출하는 불변 상태 스냅샷. */
+/**
+ * ReaderViewModel이 외부로 노출하는 불변 상태 스냅샷.
+ *
+ * [fullRefreshGeneration]은 monotonic 증가 카운터다 — 값이 변경되면 ReaderView가
+ * 검정 한 프레임으로 e-ink 풀리프레시를 트리거. UI는 값 그 자체가 아니라 "변경됨"만
+ * 본다 (이전 값 비교는 LaunchedEffect의 key 처리에 위임).
+ */
 data class ReaderState(
     val currentPage: Int,
     val direction: ReadingDirection,
@@ -140,6 +175,7 @@ data class ReaderState(
     val preloadWindow: IntRange,
     val viewportWidth: Int = 0,
     val viewportHeight: Int = 0,
+    val fullRefreshGeneration: Int = 0,
 )
 
 private fun IntRange.byProximityTo(center: Int): List<Int> {

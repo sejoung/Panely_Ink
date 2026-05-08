@@ -28,6 +28,13 @@ class ReaderView(context: Context) : View(context) {
     private var pageIndex: Int = 0
     private var fitMode: FitMode = FitMode.FitScreen
 
+    /**
+     * true면 다음 [onDraw]에서 검정 한 프레임을 그리고 즉시 다음 invalidate를 예약한다.
+     * e-ink 컨트롤러는 큰 색차(검정 → 정상)를 풀리프레시 신호로 인식 — SDK 의존 없이
+     * 잔상 누적을 정리하는 1차 방어선.
+     */
+    private var pendingFullRefresh = false
+
     private val paint = Paint().apply {
         // e-ink + dithering 별도 단계(v1.5)에서 다룸. View 단계에선 fastest.
         isAntiAlias = false
@@ -64,11 +71,29 @@ class ReaderView(context: Context) : View(context) {
         invalidate()
     }
 
+    /**
+     * 풀리프레시 1회 트리거. 다음 onDraw에서 검정 한 프레임을 그리고 그 직후
+     * 정상 콘텐츠를 한 번 더 그려 e-ink 컨트롤러가 큰 변화로 인식하게 한다.
+     */
+    fun requestFullRefresh() {
+        pendingFullRefresh = true
+        invalidate()
+    }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         viewModel?.onViewportChanged(w, h)
     }
 
     override fun onDraw(canvas: Canvas) {
+        // 풀리프레시 트릭: 한 프레임은 검정으로 칠하고, 다음 vsync에 정상 콘텐츠로
+        // 다시 그린다. 표준 안드로이드 API에는 풀리프레시 강제가 없어, 큰 색차로
+        // 컨트롤러를 끌어내리는 게 SDK 의존 없는 1차 방어선.
+        if (pendingFullRefresh) {
+            canvas.drawColor(Color.BLACK)
+            pendingFullRefresh = false
+            postInvalidateOnAnimation()
+            return
+        }
         canvas.drawColor(Color.WHITE)
         val s = session ?: return
         if (width <= 0 || height <= 0) return

@@ -107,7 +107,12 @@
 
 ## M2 — e-ink 최적화
 
-- [ ] **풀리프레시 정책** — N페이지마다 강제 `View.invalidate` (기본 N=5)
+- [x] **풀리프레시 정책** — N페이지마다 검정 1프레임 → 정상 1프레임. e-ink 컨트롤러가 큰 색차를 풀리프레시 신호로 인식 (SDK 의존 없는 1차 방어선)
+  - `ReaderViewModel.fullRefreshInterval`(기본 5) + `pagesSinceFullRefresh` 카운터
+  - `ReaderState.fullRefreshGeneration` monotonic 증가 — `LaunchedEffect` 키로 사용
+  - `ReaderView.requestFullRefresh()` → `pendingFullRefresh` 플래그 → 다음 onDraw에서 검정 fill 후 `postInvalidateOnAnimation`으로 정상 콘텐츠 1프레임
+  - 단위 테스트 4개 추가 (총 24개)
+  - 실제 효과는 디바이스 의존 — M5 실기 테스트에서 N 조정
 - [ ] **시스템 refresh 모드 연동** (M0.5 spike 결과 반영, best-effort)
 - [ ] **자동 여백 트리밍** — 좌/우/상/하 흰 여백 감지 후 `TrimRect`로 fit
 - [ ] **흑백 변환 + Floyd–Steinberg dithering** (1종만)
@@ -214,3 +219,4 @@
 - **2026-05-08** — 폴더 자식 카운트 lazy + in-memory 캐시 (1차). `LibraryRepository.countBooks`(재귀, depth ≤ 3), `LibraryViewModel.requestFolderCount` 작업 dedup, `FolderRow`에 "N권" / "비어있음" 표시. 디스크 캐시·invalidation은 M3 Room 도입 시 통합
 - **2026-05-08** — 세로 스크롤(웹툰) 모드를 v1.5로 미룸. e-ink fling 스크롤 잔상/갱신 속도 한계. PRD §6.1·§6.2와 PROGRESS v1.5 갱신. `ReadingDirection.VerticalScroll` enum은 코드에 그대로 두되 `ReaderMenu`에서 비노출(이미 그 상태)
 - **2026-05-08** — M1.후반 입력 보강(더블탭/핀치 줌/키 리바인드)을 출시 후 피드백 의존으로 보류. 단일 탭+하드웨어 키+메뉴 슬라이더로 v1.0 핵심 사용성 확보. M2 e-ink 최적화로 진행
+- **2026-05-08** — M2 풀리프레시 정책. `ReaderViewModel`에 페이지 카운터 + `fullRefreshGeneration` state, `ReaderView`에 검정 1프레임 + `postInvalidateOnAnimation` trick. 기본 N=5, `setFullRefreshInterval`로 조정 가능. 단위 테스트 4개 추가

@@ -176,6 +176,14 @@ private fun ReaderContent(
         viewModel.decoded.collect { view?.invalidate() }
     }
 
+    // 풀리프레시 generation 변경 — N페이지마다 검정 1프레임으로 잔상 정리(M2).
+    // 첫 진입 시 generation=0 → LaunchedEffect 발화는 일어나지만 0 → 분기로 무시.
+    LaunchedEffect(state.fullRefreshGeneration, view) {
+        if (state.fullRefreshGeneration > 0) {
+            view?.requestFullRefresh()
+        }
+    }
+
     // 하드웨어 키 라우팅 — Activity의 dispatchKeyEvent에서 가로채서
     // 시스템 볼륨 변동 같은 부작용 차단. 메뉴가 열려 있으면 키 입력은 메뉴 닫기로
     // 흡수해 본문 페이지가 의도치 않게 넘어가는 걸 막는다.

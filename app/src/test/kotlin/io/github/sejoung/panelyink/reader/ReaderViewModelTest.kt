@@ -259,6 +259,54 @@ class ReaderViewModelTest {
     fun initialPageMustBeInRange() {
         ReaderViewModel("b", 5, FakePageDecoder(), initialPage = 5)
     }
+
+    @Test
+    fun fullRefreshTriggersEveryNthPage() {
+        val vm = ReaderViewModel("b", 100, FakePageDecoder())
+        // 기본 N=5. 4번까진 generation 그대로, 5번째에 1로 증가.
+        repeat(4) { vm.goNext() }
+        assertEquals(0, vm.state.value.fullRefreshGeneration)
+        vm.goNext()
+        assertEquals(1, vm.state.value.fullRefreshGeneration)
+        // 다음 5페이지에 다시 1 증가.
+        repeat(4) { vm.goNext() }
+        assertEquals(1, vm.state.value.fullRefreshGeneration)
+        vm.goNext()
+        assertEquals(2, vm.state.value.fullRefreshGeneration)
+        vm.close()
+    }
+
+    @Test
+    fun samePageGoToDoesNotIncrementFullRefresh() {
+        val vm = ReaderViewModel("b", 10, FakePageDecoder(), initialPage = 5)
+        repeat(10) { vm.goTo(5) } // 항상 같은 페이지 → no-op
+        assertEquals(0, vm.state.value.fullRefreshGeneration)
+        vm.close()
+    }
+
+    @Test
+    fun customFullRefreshInterval() {
+        val vm = ReaderViewModel("b", 100, FakePageDecoder())
+        vm.setFullRefreshInterval(2)
+        vm.goNext()
+        assertEquals(0, vm.state.value.fullRefreshGeneration)
+        vm.goNext()
+        assertEquals(1, vm.state.value.fullRefreshGeneration)
+        vm.goNext()
+        vm.goNext()
+        assertEquals(2, vm.state.value.fullRefreshGeneration)
+        vm.close()
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun fullRefreshIntervalMustBePositive() {
+        val vm = ReaderViewModel("b", 10, FakePageDecoder())
+        try {
+            vm.setFullRefreshInterval(0)
+        } finally {
+            vm.close()
+        }
+    }
 }
 
 /**
