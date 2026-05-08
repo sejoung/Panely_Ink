@@ -64,6 +64,7 @@ fun ReaderMenu(
     pageCount: Int,
     onFitModeChange: (FitMode) -> Unit,
     onDirectionChange: (ReadingDirection) -> Unit,
+    onTrimEnabledChange: (Boolean) -> Unit,
     onJumpToPage: (Int) -> Unit,
     onExitToLibrary: () -> Unit,
     onClose: () -> Unit,
@@ -131,6 +132,15 @@ fun ReaderMenu(
 
             Spacer(Modifier.height(spacing.space2))
 
+            SectionLabel("자동 여백 트리밍")
+            Spacer(Modifier.height(spacing.space1))
+            TrimSegments(
+                enabled = state.trimEnabled,
+                onSelect = onTrimEnabledChange,
+            )
+
+            Spacer(Modifier.height(spacing.space2))
+
             SectionLabel("페이지 점프")
             Spacer(Modifier.height(spacing.space1))
             PageJump(
@@ -165,6 +175,23 @@ private fun FitSegments(
     Segments(
         options = options,
         isSelected = { it == selected },
+        labelOf = { options.first { p -> p.first == it }.second },
+        onSelect = onSelect,
+    )
+}
+
+@Composable
+private fun TrimSegments(
+    enabled: Boolean,
+    onSelect: (Boolean) -> Unit,
+) {
+    val options = listOf(
+        true to "자동",
+        false to "끔",
+    )
+    Segments(
+        options = options,
+        isSelected = { it == enabled },
         labelOf = { options.first { p -> p.first == it }.second },
         onSelect = onSelect,
     )

@@ -6,11 +6,14 @@ import android.graphics.BitmapFactory
 import android.util.Log
 import io.github.sejoung.panelyink.core.archive.CbzArchive
 import io.github.sejoung.panelyink.core.archive.CbzPage
+import io.github.sejoung.panelyink.core.fit.TrimRect
 import io.github.sejoung.panelyink.core.position.PositionKey
+import io.github.sejoung.panelyink.core.trim.MarginTrimmer
 import io.github.sejoung.panelyink.library.BookEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 한 권의 책에 대한 자원 모음. ReaderScreen 라이프사이클과 1:1로 묶여 관리된다.
@@ -40,6 +43,12 @@ class CbzBookSession private constructor(
 
     @Volatile private var hintWidth: Int = 0
     @Volatile private var hintHeight: Int = 0
+
+    /**
+     * 페이지별 자동 트리밍 결과. 디코드 시 1회 계산해서 보관 — viewport나 fit이
+     * 바뀌어도 같은 비트맵에 대한 본문 좌표는 변하지 않으므로 재계산 불필요.
+     */
+    private val trimCache = ConcurrentHashMap<Int, TrimRect>()
 
     /** ReaderView가 onSizeChanged에서 갱신. 0/음수면 무시. */
     fun setViewportHint(width: Int, height: Int) {
@@ -87,11 +96,28 @@ class CbzBookSession private constructor(
         )
 
         cache.put(pageIndex, bitmap)
+        // 자동 여백 트리밍(M2) — 같은 IO 스레드에서 한 번만 계산. 1500x2000 픽셀
+        // 기준 ~수십 ms로 디코드 자체(100~500ms)에 비하면 작음. 계산이 끝나면
+        // 다음 onDraw가 trim을 사용한다.
+        if (!trimCache.containsKey(pageIndex)) {
+            trimCache[pageIndex] = computeTrim(bitmap)
+        }
         bitmap
     }
 
     /** 동기적으로 캐시 hit만 조회. View.onDraw 같은 메인스레드 핫패스용. */
     fun pageBitmap(pageIndex: Int): Bitmap? = cache.get(pageIndex)
+
+    /** 자동 트리밍 결과(없으면 null). 디코드가 끝난 페이지에 대해 즉시 hit. */
+    fun pageTrim(pageIndex: Int): TrimRect? = trimCache[pageIndex]
+
+    private fun computeTrim(bitmap: Bitmap): TrimRect {
+        val w = bitmap.width
+        val h = bitmap.height
+        val pixels = IntArray(w * h)
+        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+        return MarginTrimmer.detect(pixels, w, h)
+    }
 
     /** [ReaderViewModel] 이 사용하는 [PageDecoder] 어댑터.
      *  viewport 인자를 hint로 받아 다음 디코드부터 다운스케일에 반영한다. */
@@ -114,6 +140,7 @@ class CbzBookSession private constructor(
 
     fun close() {
         cache.clear()
+        trimCache.clear()
         archive.close()
     }
 

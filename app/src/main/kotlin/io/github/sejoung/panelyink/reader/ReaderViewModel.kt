@@ -42,6 +42,7 @@ class ReaderViewModel(
     initialPage: Int = 0,
     initialDirection: ReadingDirection = ReadingDirection.Ltr,
     initialFitMode: FitMode = FitMode.FitScreen,
+    initialTrimEnabled: Boolean = true,
 ) {
 
     init {
@@ -57,6 +58,7 @@ class ReaderViewModel(
             direction = initialDirection,
             fitMode = initialFitMode,
             preloadWindow = preloadWindowFor(initialPage),
+            trimEnabled = initialTrimEnabled,
         )
     )
     val state: StateFlow<ReaderState> = _state.asStateFlow()
@@ -121,6 +123,12 @@ class ReaderViewModel(
         triggerPreload()
     }
 
+    /** 자동 여백 트리밍 on/off. fit과 직교 — fit 계산이 trim 결과를 입력으로 받아 사용. */
+    fun setTrimEnabled(enabled: Boolean) {
+        if (enabled == state.value.trimEnabled) return
+        _state.value = _state.value.copy(trimEnabled = enabled)
+    }
+
     fun onViewportChanged(width: Int, height: Int) {
         if (width <= 0 || height <= 0) return
         val current = _state.value
@@ -176,6 +184,8 @@ data class ReaderState(
     val viewportWidth: Int = 0,
     val viewportHeight: Int = 0,
     val fullRefreshGeneration: Int = 0,
+    /** 자동 여백 트리밍(M2) 적용 여부. ReaderView가 onDraw에서 참조. */
+    val trimEnabled: Boolean = true,
 )
 
 private fun IntRange.byProximityTo(center: Int): List<Int> {

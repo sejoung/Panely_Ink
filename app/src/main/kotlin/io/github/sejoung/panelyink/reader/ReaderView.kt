@@ -27,6 +27,7 @@ class ReaderView(context: Context) : View(context) {
     private var viewModel: ReaderViewModel? = null
     private var pageIndex: Int = 0
     private var fitMode: FitMode = FitMode.FitScreen
+    private var trimEnabled: Boolean = true
 
     /**
      * true면 다음 [onDraw]에서 검정 한 프레임을 그리고 즉시 다음 invalidate를 예약한다.
@@ -47,6 +48,7 @@ class ReaderView(context: Context) : View(context) {
         this.viewModel = viewModel
         this.pageIndex = viewModel.state.value.currentPage
         this.fitMode = viewModel.state.value.fitMode
+        this.trimEnabled = viewModel.state.value.trimEnabled
         // 이미 측정된 상태였다면 바로 viewport 통지 (재바인딩 케이스).
         if (width > 0 && height > 0) {
             viewModel.onViewportChanged(width, height)
@@ -68,6 +70,12 @@ class ReaderView(context: Context) : View(context) {
     fun setFitMode(mode: FitMode) {
         if (this.fitMode == mode) return
         this.fitMode = mode
+        invalidate()
+    }
+
+    fun setTrimEnabled(enabled: Boolean) {
+        if (this.trimEnabled == enabled) return
+        this.trimEnabled = enabled
         invalidate()
     }
 
@@ -98,12 +106,14 @@ class ReaderView(context: Context) : View(context) {
         val s = session ?: return
         if (width <= 0 || height <= 0) return
         val bitmap = s.pageBitmap(pageIndex) ?: return
+        val trim = if (trimEnabled) s.pageTrim(pageIndex) else null
         val fit = FitCalculator.compute(
             pageWidth = bitmap.width,
             pageHeight = bitmap.height,
             viewportWidth = width,
             viewportHeight = height,
             mode = fitMode,
+            trim = trim,
         )
         val src = Rect(
             fit.srcX,

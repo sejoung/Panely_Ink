@@ -114,7 +114,12 @@
   - 단위 테스트 4개 추가 (총 24개)
   - 실제 효과는 디바이스 의존 — M5 실기 테스트에서 N 조정
 - [ ] **시스템 refresh 모드 연동** (M0.5 spike 결과 반영, best-effort)
-- [ ] **자동 여백 트리밍** — 좌/우/상/하 흰 여백 감지 후 `TrimRect`로 fit
+- [x] **자동 여백 트리밍** — 좌/우/상/하 흰 여백 감지 후 `TrimRect`로 fit
+  - `core/trim/MarginTrimmer` (JVM 순수 함수, 단위 테스트 7개) — IntArray + width/height 입력. 임계값(밝기 240, 흰 비율 95%, 안전가드 30%) 조정 가능
+  - `CbzBookSession` 디코드 후 IO 디스패처에서 1회 계산, `trimCache: ConcurrentHashMap<Int, TrimRect>`에 보관
+  - `FitCalculator`는 이미 `trim` 인자 처리 — 추가 변경 없이 통합
+  - `ReaderState.trimEnabled` + `setTrimEnabled` (기본 ON), `ReaderView.setTrimEnabled`
+  - `ReaderMenu`에 "자동 여백 트리밍 [자동/끔]" 세그먼트 추가
 - [ ] **흑백 변환 + Floyd–Steinberg dithering** (1종만)
 - [ ] **Contrast / Gamma** 슬라이더 + 책별 저장
 - [ ] **Invert (블랙/화이트 반전)** — macOS 다크모드 대체
@@ -220,3 +225,4 @@
 - **2026-05-08** — 세로 스크롤(웹툰) 모드를 v1.5로 미룸. e-ink fling 스크롤 잔상/갱신 속도 한계. PRD §6.1·§6.2와 PROGRESS v1.5 갱신. `ReadingDirection.VerticalScroll` enum은 코드에 그대로 두되 `ReaderMenu`에서 비노출(이미 그 상태)
 - **2026-05-08** — M1.후반 입력 보강(더블탭/핀치 줌/키 리바인드)을 출시 후 피드백 의존으로 보류. 단일 탭+하드웨어 키+메뉴 슬라이더로 v1.0 핵심 사용성 확보. M2 e-ink 최적화로 진행
 - **2026-05-08** — M2 풀리프레시 정책. `ReaderViewModel`에 페이지 카운터 + `fullRefreshGeneration` state, `ReaderView`에 검정 1프레임 + `postInvalidateOnAnimation` trick. 기본 N=5, `setFullRefreshInterval`로 조정 가능. 단위 테스트 4개 추가
+- **2026-05-08** — M2 자동 여백 트리밍. `MarginTrimmer`(JVM 순수 함수, 단위 테스트 7개), `CbzBookSession.trimCache`, `ReaderState.trimEnabled` + 메뉴 토글. 디코드 후 1회 계산되어 onDraw에서 즉시 사용. 안전가드(결과 < 30%)로 잘못 감지 방지
