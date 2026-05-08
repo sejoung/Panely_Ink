@@ -158,6 +158,13 @@ private fun ReaderContent(
     val state by viewModel.state.collectAsState()
     var view by remember { mutableStateOf<ReaderView?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
+    var settingsOpen by remember { mutableStateOf(false) }
+
+    // ← back 우선순위: settings(자체 BackHandler) → menu → ReaderScreen 최상단(라이브러리로).
+    // settingsOpen=true일 땐 ReaderSettingsScreen 안의 BackHandler가 잡으므로 여긴 비활성.
+    BackHandler(enabled = menuOpen && !settingsOpen) {
+        menuOpen = false
+    }
 
     // 상태 → View 명령형 setter
     LaunchedEffect(state.currentPage, state.fitMode, state.trimEnabled, state.contrast, view) {
@@ -186,20 +193,22 @@ private fun ReaderContent(
         }
     }
 
-    // 하드웨어 키 라우팅 — Activity의 dispatchKeyEvent에서 가로채서
-    // 시스템 볼륨 변동 같은 부작용 차단. 메뉴가 열려 있으면 키 입력은 메뉴 닫기로
-    // 흡수해 본문 페이지가 의도치 않게 넘어가는 걸 막는다.
+    // 하드웨어 키 라우팅 — 메뉴/설정 열림 시 키는 그 화면 닫기로 흡수.
     val activity = LocalContext.current.findMainActivity()
-    DisposableEffect(activity, viewModel, menuOpen) {
+    DisposableEffect(activity, viewModel, menuOpen, settingsOpen) {
         activity?.keyDispatcher = { event ->
-            if (menuOpen) {
-                ReaderInput.dispatch(
+            when {
+                settingsOpen -> ReaderInput.dispatch(
+                    event = event,
+                    onPrev = { settingsOpen = false },
+                    onNext = { settingsOpen = false },
+                )
+                menuOpen -> ReaderInput.dispatch(
                     event = event,
                     onPrev = { menuOpen = false },
                     onNext = { menuOpen = false },
                 )
-            } else {
-                ReaderInput.dispatch(
+                else -> ReaderInput.dispatch(
                     event = event,
                     onPrev = viewModel::goPrevious,
                     onNext = viewModel::goNext,
@@ -223,6 +232,7 @@ private fun ReaderContent(
                 if (view === v) view = null
             },
         )
+        // 본문 위 레이어: 메뉴 닫혔으면 탭 영역, 열렸으면 메뉴 패널.
         if (!menuOpen) {
             TapRegions(
                 directionIsRtl = state.direction == ReadingDirection.Rtl,
@@ -234,21 +244,38 @@ private fun ReaderContent(
             ReaderMenu(
                 state = state,
                 pageCount = viewModel.pageCount,
-                onFitModeChange = viewModel::setFitMode,
-                onDirectionChange = viewModel::setDirection,
-                onTrimEnabledChange = viewModel::setTrimEnabled,
-                onContrastChange = viewModel::setContrast,
-                onFullRefreshIntervalChange = viewModel::setFullRefreshInterval,
-                onTriggerFullRefresh = viewModel::triggerFullRefresh,
                 onJumpToPage = { page ->
                     viewModel.goTo(page)
                     menuOpen = false
+                },
+                onOpenSettings = {
+                    settingsOpen = true
                 },
                 onExitToLibrary = {
                     menuOpen = false
                     onExit()
                 },
                 onClose = { menuOpen = false },
+            )
+        }
+        // 풀스크린 설정 — 메뉴/탭 영역 위에 그려져 본문도 가린다.
+        // 본문 ViewModel은 그대로 살아있어 설정 변경이 즉시 state에 반영되며,
+        // 설정 닫힐 때 본문은 새 설정으로 이미 렌더돼있다.
+        if (settingsOpen) {
+            ReaderSettingsScreen(
+                state = state,
+                onFitModeChange = viewModel::setFitMode,
+                onDirectionChange = viewModel::setDirection,
+                onTrimEnabledChange = viewModel::setTrimEnabled,
+                onContrastChange = viewModel::setContrast,
+                onFullRefreshIntervalChange = viewModel::setFullRefreshInterval,
+                onTriggerFullRefresh = viewModel::triggerFullRefresh,
+                onBack = {
+                    settingsOpen = false
+                    // 메뉴는 자동으로 닫아 본문으로 바로 복귀 — 사용자가 다시 메뉴
+                    // 열고 싶으면 중앙 탭으로.
+                    menuOpen = false
+                },
             )
         }
     }

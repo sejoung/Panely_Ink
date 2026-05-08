@@ -235,3 +235,4 @@
 - **2026-05-08** — 풀리프레시 검정 hold 120ms. 한 vsync(16ms)는 LCD에서 거의 안 보여 사용자가 동작 여부를 의심. `postInvalidateOnAnimation` → `postInvalidateDelayed(120)`로 검정 유지 시간 명시. e-ink 픽셀 변환(~150ms) 시간에도 부합
 - **2026-05-08** — 풀리프레시 시퀀스 = 검정→흰→검정 (80ms × 3 = 240ms). Meebook M7 실기에서 단일 검정 프레임은 풀리프레시 waveform을 트리거하지 못했음 — 컨트롤러가 부분 갱신으로 흡수. 픽셀 다수가 두 번 반전되는 시퀀스로 해결. **Meebook M7 실기 깜빡임 확인됨**
 - **2026-05-08** — M2 Contrast 1단계(세션 한정). `ContrastMatrix` 4×5 ColorMatrix 빌더, `ColorMatrixColorFilter` 적용, 슬라이더 0.5..2.0(5% 스냅) + "원본" 버튼. 옅은 스캔본 만화 가독성용. Gamma·책별 저장은 보류
+- **2026-05-08** — 리더 메뉴를 빠른 메뉴 + 설정 화면으로 분리. 메뉴 패널 = 페이지 점프 + 라이브러리로 + "설정 ⋯"만(본문 가독성 ↑). 책당 1회 설정(맞춤/방향/트림/대비/풀리프레시)은 풀스크린 `ReaderSettingsScreen`. 공통 컨트롤은 `ReaderControls.kt`로 추출. BackHandler 우선순위(settings → menu → 라이브러리). 2차 "자주 쓰는 메뉴 핀" 옵션은 출시 후 사용 패턴 보고 SharedPrefs로 결정
