@@ -136,13 +136,17 @@
 ---
 
 ## M3 — 라이브러리 보강
-
+ㅠ
 - [ ] 표지 자동 추출 + 캐시 (자연 정렬 첫 페이지)
 - [ ] 진행률 배지 (% 또는 호선)
 - [ ] 정렬: 이름 / Last opened / Recently added
 - [ ] 검색 (파일명 / 시리즈명)
 - [ ] 시리즈 그룹핑 (폴더 = 시리즈 자동 인식)
-- [ ] Room 도입 (라이브러리/메타/진행률/북마크)
+- [~] Room 도입 (라이브러리/메타/진행률/북마크)
+  - [x] **인프라 + Position 마이그레이션** — KSP + Room 2.6.1, `data/db/PanelyDatabase` v1, `PositionEntity`/`PositionDao`, `RoomPositionRepository`(suspend). `PanelyInkApp`에서 1회 SharedPrefs → Room 이전(`PositionMigration`, 멱등). `PositionRepository` 인터페이스를 suspend로 변경, `ReaderScreen`은 `produceState`에서 비동기 로드 후 `SessionState.Ready(session, resumedPage)`로 전달
+  - [ ] BookSettings (책별 contrast/invert/fit/direction/trim) — 다음 단계
+  - [ ] CoverMeta (표지 캐시 메타) — 표지 작업과 함께
+  - [ ] Bookmark (M4 페이지 북마크용)
 - [ ] 캐시 디렉토리 LRU 정리 정책 (현재는 Android 자동 정리에만 의존)
 
 ---
@@ -242,3 +246,4 @@
 - **2026-05-08** — 리더 메뉴를 빠른 메뉴 + 설정 화면으로 분리. 메뉴 패널 = 페이지 점프 + 라이브러리로 + "설정 ⋯"만(본문 가독성 ↑). 책당 1회 설정(맞춤/방향/트림/대비/풀리프레시)은 풀스크린 `ReaderSettingsScreen`. 공통 컨트롤은 `ReaderControls.kt`로 추출. BackHandler 우선순위(settings → menu → 라이브러리). 2차 "자주 쓰는 메뉴 핀" 옵션은 출시 후 사용 패턴 보고 SharedPrefs로 결정
 - **2026-05-08** — M2 Invert. `InvertMatrix` 4×5 ColorMatrix, contrast와 결합(postConcat). 설정 화면에 [끔/켬] 세그먼트. 단위 테스트 3개 추가
 - **2026-05-08** — 설정 화면 3그룹 분리. `GroupHeader`(list+Ink) 추가, 섹션 라벨(caption+Mute)과 시각 hierarchy. 그룹: [페이지 레이아웃] / [화질] / [디스플레이]. 그룹 사이 Hairline divider + space4 spacing
+- **2026-05-08** — M3 Room 인프라 도입(KSP 2.0.20-1.0.25 + Room 2.6.1). `PanelyDatabase` v1 + `PositionEntity`/`PositionDao` + `RoomPositionRepository`. `PositionRepository` 인터페이스 suspend로 변경, `ReaderScreen.produceState`에서 비동기 로드 → `SessionState.Ready(session, resumedPage)`. SharedPreferences → Room 1회 마이그레이션(`PositionMigration`, 멱등 플래그)은 `PanelyInkApp.onCreate`에서 백그라운드 실행. `SharedPreferencesPositionRepository` 클래스 제거

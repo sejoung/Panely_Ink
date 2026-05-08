@@ -38,7 +38,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import io.github.sejoung.panelyink.MainActivity
 import io.github.sejoung.panelyink.core.position.PositionKey
 import io.github.sejoung.panelyink.core.position.PositionRepository
-import io.github.sejoung.panelyink.core.position.SharedPreferencesPositionRepository
+import io.github.sejoung.panelyink.data.db.PanelyDatabase
+import io.github.sejoung.panelyink.data.db.RoomPositionRepository
 import io.github.sejoung.panelyink.library.BookEntry
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
@@ -61,7 +62,7 @@ fun ReaderScreen(
 ) {
     val appContext = LocalContext.current.applicationContext
     val positionRepo: PositionRepository = remember(appContext) {
-        SharedPreferencesPositionRepository(appContext)
+        RoomPositionRepository(PanelyDatabase.getInstance(appContext))
     }
     BackHandler { onBack() }
 
@@ -93,10 +94,16 @@ fun ReaderScreen(
             Log.d(TAG, "ReaderScreen open: ${entry.displayName}")
             loadingStep = "페이지 목록 스캔 중…"
             val session = CbzBookSession.open(appContext, entry)
+            loadingStep = "위치 복원 중…"
+            // Room에서 마지막 페이지를 미리 로드 — ReaderViewModel 생성 시점이 동기라
+            // 여기서 비동기로 받아 Ready에 묶어서 넘긴다. 페이지 수 줄어든 책은 clamp.
+            val resumed = positionRepo.load(session.bookId)
+                ?.coerceIn(0, session.pageCount - 1)
+                ?: 0
             loadingStep = "첫 페이지 디코드 중… (${session.pageCount}쪽)"
-            session.decode(0)
-            Log.d(TAG, "ReaderScreen ready")
-            SessionState.Ready(session)
+            session.decode(resumed)
+            Log.d(TAG, "ReaderScreen ready (resume page=$resumed)")
+            SessionState.Ready(session, resumedPage = resumed)
         } catch (cancel: kotlinx.coroutines.CancellationException) {
             // 코루틴 취소는 다시 던져야 한다 — Failed로 잡으면 화면이 잘못 표시됨
             throw cancel
@@ -118,6 +125,7 @@ fun ReaderScreen(
             is SessionState.Failed -> ReaderError(message = s.message)
             is SessionState.Ready -> ReaderContent(
                 session = s.session,
+                resumedPage = s.resumedPage,
                 positionRepo = positionRepo,
                 onExit = onBack,
             )
@@ -130,21 +138,19 @@ private const val TAG = "PanelyInk.Reader"
 @Composable
 private fun ReaderContent(
     session: CbzBookSession,
+    resumedPage: Int,
     positionRepo: PositionRepository,
     onExit: () -> Unit,
 ) {
     // ViewModelStore에 캐시되지 않도록 remember(session)로 묶는다 — 책을 닫고
     // 다시 열 때 stale decoder(닫힌 ZipFile)를 잡는 문제 방지.
     val viewModel = remember(session) {
-        // PRD §6.1 Resume: 마지막 페이지 복원. 페이지 수가 줄어든 책에 대비해 clamp.
-        val resumed = positionRepo.load(session.bookId)
-            ?.coerceIn(0, session.pageCount - 1)
-            ?: 0
+        // 마지막 페이지는 produceState 안에서 이미 로드됨(Room suspend 호출).
         ReaderViewModel(
             bookId = session.bookId,
             pageCount = session.pageCount,
             decoder = session.asDecoder(),
-            initialPage = resumed,
+            initialPage = resumedPage,
         )
     }
 
@@ -365,7 +371,7 @@ private fun ReaderError(message: String) {
 
 private sealed interface SessionState {
     data object Loading : SessionState
-    data class Ready(val session: CbzBookSession) : SessionState
+    data class Ready(val session: CbzBookSession, val resumedPage: Int) : SessionState
     data class Failed(val message: String) : SessionState
 }
 
