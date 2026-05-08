@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.sejoung.panelyink.core.position.BookProgress
 import io.github.sejoung.panelyink.core.position.PositionKey
+import io.github.sejoung.panelyink.core.sort.NaturalOrderComparator
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
 import io.github.sejoung.panelyink.data.db.RoomPositionRepository
 import kotlinx.coroutines.Dispatchers
@@ -74,13 +75,31 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val savedPath = decodePath(prefs.getString(KEY_PATH, null))
             .takeIf { isPathValid(it, savedRoots) }
             .orEmpty()
-        _state.value = _state.value.copy(roots = savedRoots, path = savedPath)
+        val savedSort = SortMode.fromKey(prefs.getString(KEY_SORT, null))
+        _state.value = _state.value.copy(
+            roots = savedRoots,
+            path = savedPath,
+            sortMode = savedSort,
+        )
         if (savedPath.isNotEmpty()) {
             // 마지막 위치 복원 — pendingAutoDescend는 비활성, 직접 children 로드.
             refreshChildren(savedPath.last())
         } else {
             pendingAutoDescend = true
             refreshRoots()
+        }
+    }
+
+    /**
+     * 정렬 모드 변경. 현재 entries만 재정렬해 디스크 재스캔을 피함.
+     * 선택은 SharedPreferences에 영속, 다음 실행에서 복원.
+     */
+    fun setSortMode(mode: SortMode) {
+        if (mode == _state.value.sortMode) return
+        prefs.edit { putString(KEY_SORT, mode.name) }
+        viewModelScope.launch {
+            val sorted = applySort(_state.value.entries, mode)
+            _state.value = _state.value.copy(sortMode = mode, entries = sorted)
         }
     }
 
@@ -245,9 +264,11 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 val target = rootEntries.first()
                 setPath(listOf(target))
                 val children = repo.listChildren(target)
-                _state.value = _state.value.copy(entries = children, scanning = false)
+                val sorted = applySort(children, _state.value.sortMode)
+                _state.value = _state.value.copy(entries = sorted, scanning = false)
             } else {
                 pendingAutoDescend = false
+                // root 자체는 폴더라 sortMode와 무관하게 이름순(repo가 이미 정렬).
                 _state.value = _state.value.copy(entries = rootEntries, scanning = false)
             }
         }
@@ -258,8 +279,37 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         listJob = viewModelScope.launch {
             _state.value = _state.value.copy(scanning = true)
             val children = repo.listChildren(folder)
-            _state.value = _state.value.copy(entries = children, scanning = false)
+            val sorted = applySort(children, _state.value.sortMode)
+            _state.value = _state.value.copy(entries = sorted, scanning = false)
         }
+    }
+
+    /**
+     * 정렬 모드 적용 — 폴더는 항상 이름순 고정, 책만 모드에 따라.
+     *
+     * - [SortMode.Name]: repo가 이미 자연순으로 반환했으므로 그대로
+     * - [SortMode.LastOpened]: position 테이블 batch 쿼리로 updated_at 가져와 내림차순.
+     *   미열람 책(맵에 없음)은 0 취급되어 맨 뒤로 가고, 그 안에서는 자연순 유지.
+     */
+    private suspend fun applySort(
+        entries: List<LibraryEntry>,
+        mode: SortMode,
+    ): List<LibraryEntry> {
+        val folders = entries.filterIsInstance<FolderEntry>()
+        val books = entries.filterIsInstance<BookEntry>()
+        val sortedBooks = when (mode) {
+            SortMode.Name -> books // repo가 이미 자연순
+            SortMode.LastOpened -> {
+                val ids = books.map { PositionKey.bookIdFromUri(it.documentUri.toString()) }
+                val timestamps = positionRepo.loadUpdatedAtMap(ids)
+                books.sortedWith(
+                    compareByDescending<BookEntry> {
+                        timestamps[PositionKey.bookIdFromUri(it.documentUri.toString())] ?: 0L
+                    }.thenBy(NaturalOrderComparator) { it.displayName },
+                )
+            }
+        }
+        return folders + sortedBooks
     }
 
     /** path 변경의 단일 진입점. state 갱신 + 디스크 영속화를 한 곳에서 묶어 누락을 방지. */
@@ -322,6 +372,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         private const val PREFS_NAME = "panely_ink_prefs"
         private const val KEY_ROOTS = "library_root_uris"
         private const val KEY_PATH = "library_last_path"
+        private const val KEY_SORT = "library_sort_mode"
         private const val JSON_NAME = "name"
         private const val JSON_DOC = "doc"
         private const val JSON_ROOT = "root"
@@ -346,4 +397,6 @@ data class LibraryState(
     val covers: Map<String, ImageBitmap> = emptyMap(),
     /** bookId → 책 진행률(현재 페이지 + 전체). 미열람/모름 책은 키 없음. */
     val bookProgress: Map<String, BookProgress> = emptyMap(),
+    /** 라이브러리 정렬 모드. 영속됨. */
+    val sortMode: SortMode = SortMode.DEFAULT,
 )

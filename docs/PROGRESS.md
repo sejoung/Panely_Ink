@@ -151,7 +151,14 @@
   - `LibraryViewModel.requestProgress` lazy + dedup. `state.bookProgress: Map<bookId, BookProgress>` (미열람 책은 키 없음)
   - `BookRow` 표지 우하단에 작은 라벨 "N%" — Paper 배경 + 1dp Ink 보더, caption typography
   - 미열람/page_count=0 책은 라벨 미표시 (한 번이라도 책 열면 다음 진입에서 등장)
-- [ ] 정렬: 이름 / Last opened / Recently added
+- [~] 정렬: 이름 / Last opened / Recently added
+  - [x] **이름** (NaturalOrderComparator) / **Last opened** (`position.updated_at`) — 1차
+  - [ ] **Recently added** — SAF `DocumentFile.lastModified()` IPC 비용 검증 후 후속
+  - 폴더는 항상 이름순 고정. 책만 모드에 따라 정렬, 미열람 책은 후순위 + 자연순 tiebreaker
+  - `library/SortMode` enum + `library/SortDialog` 다이얼로그(Guidelines §6 규칙)
+  - `LibraryViewModel.setSortMode` — entries 재정렬만(디스크 재스캔 X), SharedPreferences 영속
+  - `PositionDao.loadUpdatedAtFor(bookIds)` batch 쿼리 — N권에 N쿼리 대신 1쿼리
+  - 헤더에 `PanelySortIcon` 버튼 추가 (정렬/메뉴/추가 3개 아이콘)
 - [ ] 검색 (파일명 / 시리즈명)
 - [ ] 시리즈 그룹핑 (폴더 = 시리즈 자동 인식)
 - [~] Room 도입 (라이브러리/메타/진행률/북마크)
@@ -262,3 +269,4 @@
 - **2026-05-08** — M3 BookSettings 책별 저장. Room v1→v2 마이그레이션(`book_settings` 테이블 신규). `BookSettings` 도메인 + FitMode/Direction 직렬화 헬퍼(테스트 8개), `RoomBookSettingsRepository`. `ReaderViewModel`은 `initialBookSettings: BookSettings`로 초기 상태 통합(기존 initialDirection/FitMode/TrimEnabled 인자 제거). `ReaderScreen`에서 settings 6필드 변경 시 자동 upsert
 - **2026-05-08** — M3 표지 자동 추출 + 디스크 캐시 1단계. `CoverExtractor`(첫 페이지 inSampleSize 다운스케일 ≤ 400px), `CoverCache`(filesDir/covers PNG 저장), `LibraryViewModel.requestCover` lazy + dedup, `BookRow` 80×112dp 표지 자리. 추출 실패 메타/LRU 정리는 후속
 - **2026-05-08** — M3 진행률 배지. Room v2→v3(`position.page_count` 컬럼), `BookProgress` 도메인 + 테스트 4개. `PositionRepository`가 `BookProgress?`/`save(bookId, pageIndex, pageCount)`로 변경. ReaderScreen이 페이지 변경마다 viewModel.pageCount 같이 저장. 라이브러리 표지 우하단 "N%" 라벨(미열람 책 미표시)
+- **2026-05-08** — M3 정렬 1차. `SortMode`(Name/LastOpened) + `SortDialog`. `PositionDao.loadUpdatedAtFor` batch 쿼리, `LibraryViewModel.applySort`(폴더 이름순 고정 + 책 모드별). 헤더에 `PanelySortIcon` 버튼. SharedPreferences 영속

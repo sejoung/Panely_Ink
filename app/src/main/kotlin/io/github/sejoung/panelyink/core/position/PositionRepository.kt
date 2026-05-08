@@ -21,4 +21,10 @@ interface PositionRepository {
      * `ReaderViewModel.pageCount`를 그대로 넘긴다.
      */
     suspend fun save(bookId: String, pageIndex: Int, pageCount: Int)
+
+    /**
+     * 여러 책의 마지막 열람 시각을 한 번의 쿼리로 — 라이브러리 정렬(Last opened)에 사용.
+     * 결과는 bookId → epoch ms. 미열람 책은 결과에 키 없음.
+     */
+    suspend fun loadUpdatedAtMap(bookIds: List<String>): Map<String, Long>
 }

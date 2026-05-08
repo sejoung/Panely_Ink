@@ -49,6 +49,7 @@ import io.github.sejoung.panelyink.ui.components.PanelyFolderIcon
 import io.github.sejoung.panelyink.ui.components.PanelyIconButton
 import io.github.sejoung.panelyink.ui.components.PanelyMenuIcon
 import io.github.sejoung.panelyink.ui.components.PanelyPlusIcon
+import io.github.sejoung.panelyink.ui.components.PanelySortIcon
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
 import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
@@ -69,6 +70,7 @@ fun LibraryScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var manageOpen by remember { mutableStateOf(false) }
+    var sortOpen by remember { mutableStateOf(false) }
 
     val pickFolder = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
@@ -88,6 +90,7 @@ fun LibraryScreen(
             scanning = state.scanning,
             onAdd = { pickFolder.launch(null) },
             onManage = { manageOpen = true },
+            onSort = { sortOpen = true },
             onUp = viewModel::goUp,
         )
         HairlineDivider()
@@ -119,6 +122,17 @@ fun LibraryScreen(
             onDismiss = { manageOpen = false },
         )
     }
+
+    if (sortOpen) {
+        SortDialog(
+            selected = state.sortMode,
+            onSelect = { mode ->
+                viewModel.setSortMode(mode)
+                sortOpen = false
+            },
+            onDismiss = { sortOpen = false },
+        )
+    }
 }
 
 @Composable
@@ -127,6 +141,7 @@ private fun LibraryHeader(
     scanning: Boolean,
     onAdd: () -> Unit,
     onManage: () -> Unit,
+    onSort: () -> Unit,
     onUp: () -> Boolean,
 ) {
     val typography = LocalPanelyInkTypography.current
@@ -174,6 +189,9 @@ private fun LibraryHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(spacing.space1),
         ) {
+            PanelyIconButton(onClick = onSort, primary = false) { tint ->
+                PanelySortIcon(tint = tint)
+            }
             PanelyIconButton(onClick = onManage, primary = false) { tint ->
                 PanelyMenuIcon(tint = tint)
             }

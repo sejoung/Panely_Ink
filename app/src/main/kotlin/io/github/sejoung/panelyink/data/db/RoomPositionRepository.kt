@@ -37,4 +37,11 @@ class RoomPositionRepository(
                 ),
             )
         }
+
+    override suspend fun loadUpdatedAtMap(bookIds: List<String>): Map<String, Long> {
+        if (bookIds.isEmpty()) return emptyMap()
+        return withContext(Dispatchers.IO) {
+            dao.loadUpdatedAtFor(bookIds).associate { it.bookId to it.updatedAt }
+        }
+    }
 }

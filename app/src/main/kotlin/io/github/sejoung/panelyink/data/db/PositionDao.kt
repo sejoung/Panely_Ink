@@ -29,4 +29,17 @@ interface PositionDao {
 
     @Query("SELECT COUNT(*) FROM position")
     suspend fun count(): Int
+
+    /**
+     * 라이브러리 정렬용 배치 조회 — 화면에 보일 책들의 마지막 열람 시각만.
+     * `book_id IN ()` 빈 리스트는 SQLite 에러라 호출자가 비어있지 않음을 보장.
+     */
+    @Query("SELECT book_id, updated_at FROM position WHERE book_id IN (:bookIds)")
+    suspend fun loadUpdatedAtFor(bookIds: List<String>): List<BookIdTimestamp>
 }
+
+/** [PositionDao.loadUpdatedAtFor] 결과 row. */
+data class BookIdTimestamp(
+    @androidx.room.ColumnInfo(name = "book_id") val bookId: String,
+    @androidx.room.ColumnInfo(name = "updated_at") val updatedAt: Long,
+)

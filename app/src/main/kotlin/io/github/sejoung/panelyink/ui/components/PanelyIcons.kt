@@ -155,6 +155,36 @@ fun PanelyChevronRightIcon(
     }
 }
 
+/**
+ * 정렬 아이콘 — 라인 두 줄(긴/짧)이 위/아래로 쌓인 outline.
+ * 위쪽 라인이 길어 "내림차순" 시각적 의미. 정렬 모드와 무관하게 같은 아이콘 사용.
+ */
+@Composable
+fun PanelySortIcon(
+    modifier: Modifier = Modifier,
+    tint: Color = PanelyInkColors.Ink,
+    size: Dp = IconConstants.DefaultSize,
+) {
+    Canvas(modifier = modifier.size(size)) {
+        val s = this.size
+        val stroke = IconConstants.Stroke.toPx()
+        val padX = s.width * 0.18f
+        val left = padX
+        val right = s.width - padX
+        val rows = 4
+        val padTop = s.height * 0.20f
+        val padBottom = s.height * 0.20f
+        val span = s.height - padTop - padBottom
+        // 위에서 아래로 점점 짧아지는 4줄
+        for (i in 0 until rows) {
+            val y = padTop + (span * i / (rows - 1))
+            val widthFactor = 1f - (i * 0.2f) // 1.0, 0.8, 0.6, 0.4
+            val x2 = left + (right - left) * widthFactor
+            drawLine(tint, Offset(left, y), Offset(x2, y), strokeWidth = stroke)
+        }
+    }
+}
+
 /** 좌향 화살표 — 헤더 back 액션. chevron보다 머리가 작고 본체에 라인이 있다. */
 @Composable
 fun PanelyArrowBackIcon(
