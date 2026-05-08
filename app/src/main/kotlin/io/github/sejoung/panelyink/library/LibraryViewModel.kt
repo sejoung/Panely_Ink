@@ -162,9 +162,21 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** 폴더 진입 — path에 push 후 그 폴더의 직계 로드. 검색어는 클리어. */
+    /**
+     * 폴더 진입 — path에 push 후 그 폴더의 직계 로드. 검색어는 클리어.
+     *
+     * 로딩 중 더블 탭 보호: SAF `listFiles()` IPC가 큰 폴더에서 수백 ms~초 단위로
+     * 걸리는데, 그동안 화면은 이전 entries 그대로 보인다. 사용자가 같은 폴더 행을
+     * 또 누르면 [_state.value.path]에 같은 [folder]가 쌓여 `[.., X, X, X]`처럼
+     * 중복 누적 — 탈출 시 그만큼 ← back을 여러 번 눌러야 한다.
+     *
+     * 마지막 항목의 `documentUri`가 같으면 신규 push를 무시. 같은 이름이라도
+     * `documentUri`는 SAF 내부에서 고유해 안전.
+     */
     fun enterFolder(folder: FolderEntry) {
-        val nextPath = _state.value.path + folder
+        val current = _state.value.path
+        if (current.lastOrNull()?.documentUri == folder.documentUri) return
+        val nextPath = current + folder
         setPath(nextPath)
         clearSearch()
         refreshChildren(folder)

@@ -276,3 +276,4 @@
 - **2026-05-08** — M3 정렬 1차. `SortMode`(Name/LastOpened) + `SortDialog`. `PositionDao.loadUpdatedAtFor` batch 쿼리, `LibraryViewModel.applySort`(폴더 이름순 고정 + 책 모드별). 헤더에 `PanelySortIcon` 버튼. SharedPreferences 영속
 - **2026-05-08** — M3 검색 1차(현재 폴더 in-memory). `searchQuery` state + 헤더 검색 모드 토글(돋보기 → 입력 필드 + X). `LaunchedEffect`로 자동 포커스. 폴더 이동/← back 시 자동 클리어. `PanelySearchIcon`/`PanelyCloseIcon` 추가. 전체 라이브러리/시리즈명 검색은 인덱스 테이블 필요해 후속
 - **2026-05-08** — M3 표시 모드 3종(List/Cover/Grid). `ViewMode` enum + 영속. `LibraryOptionsDialog`로 정렬+표시 통합(SortDialog 대체). List는 표지 추출 안 함(archive open 비용 0). Grid는 `LazyVerticalGrid` 3열 + 4:5.6 표지 슬롯 + 진행률 코너 라벨. 폴더 셀은 큰 폴더 아이콘 + 권수 라벨
+- **2026-05-08** — 버그픽스: 로딩 중 같은 폴더 행 더블 탭 시 path stack에 중복 push되어 ← back 여러 번 눌러야 탈출하던 문제. `enterFolder`에서 마지막 path documentUri 비교로 중복 push 차단
