@@ -4,6 +4,8 @@ import android.app.Application
 import android.util.Log
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
 import io.github.sejoung.panelyink.data.db.PositionMigration
+import io.github.sejoung.panelyink.data.db.RoomCoverMetaRepository
+import io.github.sejoung.panelyink.library.CoverPruner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,11 +26,19 @@ class PanelyInkApp : Application() {
     override fun onCreate() {
         super.onCreate()
         appScope.launch {
+            val db = PanelyDatabase.getInstance(this@PanelyInkApp)
             runCatching {
-                val db = PanelyDatabase.getInstance(this@PanelyInkApp)
                 PositionMigration.migrateFromPrefs(this@PanelyInkApp, db)
             }.onFailure {
                 Log.w(TAG, "position migration failed", it)
+            }
+            // 표지 캐시 LRU 정리(M3) — 사용자 세션 시작 시 1회. 누적 사이즈가 한도
+            // 미만이면 즉시 종료하므로 비용 작음.
+            runCatching {
+                val coverMetaRepo = RoomCoverMetaRepository(db)
+                CoverPruner.prune(this@PanelyInkApp, coverMetaRepo)
+            }.onFailure {
+                Log.w(TAG, "cover prune failed", it)
             }
         }
     }

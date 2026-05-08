@@ -168,9 +168,14 @@
 - [~] Room 도입 (라이브러리/메타/진행률/북마크)
   - [x] **인프라 + Position 마이그레이션** — KSP + Room 2.6.1, `data/db/PanelyDatabase` v1, `PositionEntity`/`PositionDao`, `RoomPositionRepository`(suspend). `PanelyInkApp`에서 1회 SharedPrefs → Room 이전(`PositionMigration`, 멱등). `PositionRepository` 인터페이스를 suspend로 변경, `ReaderScreen`은 `produceState`에서 비동기 로드 후 `SessionState.Ready(session, resumedPage)`로 전달
   - [x] **BookSettings** (책별 fit/direction/trim/contrast/invert/풀리프레시 주기) — `book_settings` 테이블 v2 마이그레이션. `BookSettings` 도메인 + 직렬화 헬퍼(JVM 단위 테스트 8개), `BookSettingsRepository` Room 구현. `ReaderViewModel.initialBookSettings`로 초기 상태 통합, settings 변경 시 `LaunchedEffect`로 자동 upsert
-  - [ ] CoverMeta (표지 캐시 메타) — 표지 작업과 함께
+  - [x] **CoverMeta** (표지 캐시 메타) — Room v3→v4 마이그레이션. `cover_meta` 테이블(book_id PK, status, source_page_index, extracted_at). `CoverStatus.OK/FAILED` enum. `RoomCoverMetaRepository`. `LibraryViewModel.requestCover` 흐름 갱신 — FAILED는 영구 skip(깨진 책 재시도 방지), OK + 디스크 hit이면 즉시, 디스크 손상 시 재추출. 사용자 명시 새로고침은 `coverMetaRepo.delete`로 재추출 가능
   - [ ] Bookmark (M4 페이지 북마크용)
-- [ ] 캐시 디렉토리 LRU 정리 정책 (현재는 Android 자동 정리에만 의존)
+- [x] 캐시 디렉토리 LRU 정리 정책
+  - `library/CoverPruner.prune` — orphan(메타 없는 디스크 파일) 정리 + LRU(80MB 초과 시 `cover_meta.extracted_at` ASC 순으로 삭제)
+  - `library/CoverPruner.clearAll` — 사용자 명시 비우기. 디스크 + 메타(FAILED 포함) 모두 삭제 → 깨진 책 재시도 가능
+  - `CoverMetaDao.loadOkOrderedByLru` / `deleteAll` 쿼리
+  - `PanelyInkApp.onCreate` 백그라운드에서 자동 prune 1회
+  - **앱 설정 → 캐시 그룹**에 "표지 캐시 비우기" 버튼 — 사용자 명시. `LibraryViewModel.clearCoverCache` (in-memory state.covers도 비움)
 
 ---
 
@@ -284,3 +289,6 @@
 - **2026-05-08** — SAF picker 안내 보강. 키 없는 Meebook M7에서 picker 우상단 ←를 시스템 뒤로 키로 오인 → 폴더 위 네비게이션이라 못 빠져나옴. 안내 텍스트 구체화("화면 하단 ◁ / picker 우상단 ⋮ / 우상단 ←는 폴더 한 단계 위"). picker 호출 직전 `WindowInsetsControllerCompat.show(systemBars())` 강제로 가상 navigation bar 가시성 보장
 - **2026-05-08** — 라이브러리 화면 진입 시 `systemBarsBehavior = BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE` + `show(systemBars())` 명시. ReaderScreen에서 hide 후 라이브러리 복귀해도 시스템 바 표시 보장. 안내 텍스트에 "임의 폴더 선택 후 앱 설정에서 제거" 우회 추가 — Meebook M7처럼 OEM이 navigation bar를 hide한 디바이스 대응
 - **2026-05-08** — SAF picker 깊이 안내 + 시작 위치 hint. 사용자가 깊이 들어가면 ←를 그만큼 눌러야 빠져나오는 picker UI 한계 — 안내 텍스트에 "책 폴더 보이는 시점 즉시 선택" 가이드 추가. `pickFolder.launch(state.roots.lastOrNull())`로 마지막 추가 root를 picker 시작 위치 hint 전달, 깊이 ↓
+- **2026-05-08** — M3 CoverMeta 도입. Room v3→v4(`cover_meta` 테이블), `CoverStatus.OK/FAILED` enum, `RoomCoverMetaRepository`. `LibraryViewModel.requestCover`가 메타 확인 후 FAILED는 영구 skip — 깨진 책에 archive open 매번 시도하던 부담 제거. 디스크 파일 손상은 재추출. 사용자 새로고침 UI는 후속(현재는 `coverMetaRepo.delete`로 재추출 가능 API만)
+- **2026-05-08** — M3 표지 캐시 LRU 정리. `CoverPruner.prune` — covers 디렉토리 사이즈 80MB 초과 시 가장 오래된 메타+파일부터 삭제. `loadOkOrderedByLru` 쿼리. `PanelyInkApp.onCreate`에서 백그라운드 1회 호출. orphan 파일은 1차 미처리
+- **2026-05-08** — 캐시 정리 보강. `CoverPruner.prune`에 orphan(메타 없는 디스크 파일) 정리 통합 + `clearAll`(전체 비우기 — FAILED 메타 포함) 신규. `LibraryViewModel.clearCoverCache` + 앱 설정 화면 캐시 그룹에 "표지 캐시 비우기" 버튼. 호환성 고려는 미배포라 X

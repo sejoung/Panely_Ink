@@ -55,6 +55,7 @@ fun AppSettingsScreen(
     roots: List<Uri>,
     onAddRoot: () -> Unit,
     onRemoveRoot: (Uri) -> Unit,
+    onClearCoverCache: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -141,6 +142,31 @@ fun AppSettingsScreen(
                     prefs = current.copy(invertEnabled = value)
                     scope.launch { repo.setInvertEnabled(value) }
                 },
+            )
+
+            Spacer(Modifier.height(spacing.space4))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(PanelyInkColors.Hairline),
+            )
+            Spacer(Modifier.height(spacing.space4))
+
+            // 캐시 — 표지 추출 디스크 캐시. 사용자가 명시 정리 가능.
+            GroupHeader("캐시")
+            Spacer(Modifier.height(spacing.space2))
+            Text(
+                text = "표지 캐시는 자동으로 80MB 이하로 정리됩니다. 깨진 책 재시도가 필요하거나 강제로 비우려면 아래 버튼을 누르세요.",
+                style = typography.body,
+                color = PanelyInkColors.Mute,
+            )
+            Spacer(Modifier.height(spacing.space2))
+            PanelyTextButton(
+                label = "표지 캐시 비우기",
+                onClick = onClearCoverCache,
+                primary = false,
+                modifier = Modifier.fillMaxWidth(),
             )
 
             Spacer(Modifier.height(spacing.space4))

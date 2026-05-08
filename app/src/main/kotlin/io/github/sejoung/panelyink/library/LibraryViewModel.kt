@@ -11,7 +11,9 @@ import androidx.lifecycle.viewModelScope
 import io.github.sejoung.panelyink.core.position.BookProgress
 import io.github.sejoung.panelyink.core.position.PositionKey
 import io.github.sejoung.panelyink.core.sort.NaturalOrderComparator
+import io.github.sejoung.panelyink.data.db.CoverStatus
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
+import io.github.sejoung.panelyink.data.db.RoomCoverMetaRepository
 import io.github.sejoung.panelyink.data.db.RoomPositionRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -40,7 +42,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     private val prefs = application.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
     private val repo = LibraryRepository(application)
-    private val positionRepo = RoomPositionRepository(PanelyDatabase.getInstance(application))
+    private val db = PanelyDatabase.getInstance(application)
+    private val positionRepo = RoomPositionRepository(db)
+    private val coverMetaRepo = RoomCoverMetaRepository(db)
 
     private val _state = MutableStateFlow(LibraryState())
     val state: StateFlow<LibraryState> = _state.asStateFlow()
@@ -89,6 +93,19 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         } else {
             pendingAutoDescend = true
             refreshRoots()
+        }
+    }
+
+    /**
+     * 사용자 명시 "표지 캐시 비우기" — 디스크 파일 + 메타(FAILED 포함) 모두 삭제.
+     * in-memory `state.covers`도 비워 다음 라이브러리 진입에서 모든 표지 재추출.
+     */
+    fun clearCoverCache() {
+        viewModelScope.launch {
+            CoverPruner.clearAll(getApplication(), coverMetaRepo)
+            // 진행 중인 추출 작업도 무효 — 이미 launch된 것은 끝나며 새 메타에 OK 기록됨.
+            // 일관성을 위해 in-memory state만 비우고, 다음 lazy 요청에서 재추출.
+            _state.value = _state.value.copy(covers = emptyMap())
         }
     }
 
@@ -258,14 +275,16 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     /**
      * 책 행이 화면에 등장할 때 호출 — 표지를 lazy 추출해 캐시에 적재.
      *
-     * 동작:
+     * 흐름 (M3 CoverMeta 도입 후):
      * 1. in-memory hit이면 즉시 반환
-     * 2. 디스크 hit이면 비트맵 디코드 → in-memory 추가
-     * 3. 둘 다 miss면 [CoverExtractor]로 첫 페이지 디코드 → 디스크 저장 → in-memory 추가
+     * 2. CoverMeta 확인 — status=FAILED면 영구 skip(깨진 책 재시도 방지)
+     * 3. 디스크 hit + 메타 OK이면 비트맵 디코드 → in-memory 추가
+     * 4. 둘 다 miss/손상이면 [CoverExtractor] 시도
+     *    - 성공 → 디스크 저장 + 메타 OK + in-memory 추가
+     *    - 실패(null) → 메타 FAILED — 다음부터 skip
      *
-     * 추출은 archive open 비용(~수백 ms)이 있어 표지 1장씩 IO에서 순차로 처리하지만,
-     * 동시 여러 책 요청은 코루틴 dispatcher에 맡긴다 — viewModelScope는 Default 디스패처
-     * 다중 처리. 화면 밖으로 나간 책 작업도 끝까지 진행해 다음 진입에서 즉시 hit.
+     * archive open은 수백 ms 비용이라 한 번 실패한 책에 매번 재시도하면 라이브러리
+     * 첫 진입이 답답해진다. 사용자 명시 새로고침으로만 재추출(`coverMetaRepo.delete`).
      */
     fun requestCover(book: BookEntry) {
         val bookId = PositionKey.bookIdFromUri(book.documentUri.toString())
@@ -274,11 +293,25 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val app = getApplication<Application>()
         val job = viewModelScope.launch {
             val image = withContext(Dispatchers.IO) {
+                val meta = coverMetaRepo.load(bookId)
+                // 영구 실패 — 깨진 책에 매번 archive open 비용 부담 X
+                if (meta?.status == CoverStatus.FAILED) return@withContext null
+
                 val file = CoverCache.cacheFile(app, bookId)
-                CoverCache.loadBitmap(file)
-                    ?: CoverExtractor.extract(app, book.documentUri)?.also { extracted ->
-                        CoverCache.saveBitmap(file, extracted)
-                    }
+                // 메타 OK + 디스크 파일 hit → 즉시 사용
+                if (meta?.status == CoverStatus.OK) {
+                    CoverCache.loadBitmap(file)?.let { return@withContext it }
+                    // 메타는 OK인데 파일 손상/사라짐 — 재추출로 falls through
+                }
+                // 추출 시도
+                val extracted = CoverExtractor.extract(app, book.documentUri)
+                if (extracted != null) {
+                    CoverCache.saveBitmap(file, extracted)
+                    coverMetaRepo.save(bookId, CoverStatus.OK)
+                } else {
+                    coverMetaRepo.save(bookId, CoverStatus.FAILED)
+                }
+                extracted
             }?.asImageBitmap()
             if (image != null) {
                 _state.value = _state.value.copy(
