@@ -45,6 +45,8 @@ import io.github.sejoung.panelyink.data.db.RoomBookSettingsRepository
 import io.github.sejoung.panelyink.data.db.RoomPositionRepository
 import io.github.sejoung.panelyink.data.preferences.SharedPrefsAppPreferencesRepository
 import io.github.sejoung.panelyink.library.BookEntry
+import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
+import io.github.sejoung.panelyink.ui.components.PanelyIconButton
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
 import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
@@ -143,6 +145,7 @@ fun ReaderScreen(
             is SessionState.Failed -> ReaderError(message = s.message)
             is SessionState.Ready -> ReaderContent(
                 session = s.session,
+                bookTitle = entry.displayName,
                 resumedPage = s.resumedPage,
                 initialBookSettings = s.bookSettings,
                 initialAppPreferences = s.appPreferences,
@@ -160,6 +163,7 @@ private const val TAG = "PanelyInk.Reader"
 @Composable
 private fun ReaderContent(
     session: CbzBookSession,
+    bookTitle: String,
     resumedPage: Int,
     initialBookSettings: BookSettings,
     initialAppPreferences: AppPreferences,
@@ -318,6 +322,7 @@ private fun ReaderContent(
         } else {
             ReaderMenu(
                 state = state,
+                bookTitle = bookTitle,
                 pageCount = viewModel.pageCount,
                 onJumpToPage = { page ->
                     viewModel.goTo(page)

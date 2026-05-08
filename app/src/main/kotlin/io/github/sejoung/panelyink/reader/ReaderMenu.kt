@@ -30,6 +30,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
+import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
+import io.github.sejoung.panelyink.ui.components.PanelyIconButton
 import io.github.sejoung.panelyink.ui.components.PanelyTextButton
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
@@ -60,6 +63,7 @@ import kotlin.math.roundToInt
 @Composable
 fun ReaderMenu(
     state: ReaderState,
+    bookTitle: String,
     pageCount: Int,
     onJumpToPage: (Int) -> Unit,
     onOpenSettings: () -> Unit,
@@ -82,6 +86,41 @@ fun ReaderMenu(
                 ),
         )
 
+        // 상단 헤더 — ← 라이브러리 / 책 제목 / 페이지 인디케이터.
+        // 라이브러리/설정 화면과 같은 ← 좌상단 패턴으로 일관성. 메뉴 호출 전엔 본문
+        // 풀스크린(Guidelines §12) — 헤더는 메뉴 호출 시에만 등장.
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .background(PanelyInkColors.Paper)
+                .border(2.dp, PanelyInkColors.Ink)
+                .pointerInput(Unit) { detectTapGestures { } }
+                .padding(horizontal = spacing.space2, vertical = spacing.space1),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(
+                spacing.space2,
+            ),
+        ) {
+            PanelyIconButton(onClick = onExitToLibrary, primary = false) { tint ->
+                PanelyArrowBackIcon(tint = tint)
+            }
+            Text(
+                text = bookTitle,
+                style = typography.title,
+                color = PanelyInkColors.Ink,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "${state.currentPage + 1} / $pageCount",
+                style = typography.caption,
+                color = PanelyInkColors.Mute,
+            )
+        }
+
+        // 하단 패널 — 페이지 점프 + 설정 진입.
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -93,24 +132,6 @@ fun ReaderMenu(
                 .pointerInput(Unit) { detectTapGestures { } }
                 .padding(horizontal = spacing.space3, vertical = spacing.space2),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "메뉴",
-                    style = typography.title,
-                    color = PanelyInkColors.Ink,
-                    modifier = Modifier.weight(1f),
-                )
-                PanelyTextButton(
-                    label = "라이브러리로",
-                    onClick = onExitToLibrary,
-                    primary = false,
-                )
-            }
-            Spacer(Modifier.height(spacing.space2))
-
             SectionLabel("페이지 점프")
             Spacer(Modifier.height(spacing.space1))
             PageJump(
