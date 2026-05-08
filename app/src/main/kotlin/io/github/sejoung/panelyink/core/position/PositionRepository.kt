@@ -27,4 +27,7 @@ interface PositionRepository {
      * 결과는 bookId → epoch ms. 미열람 책은 결과에 키 없음.
      */
     suspend fun loadUpdatedAtMap(bookIds: List<String>): Map<String, Long>
+
+    /** 진행률 라벨용 batch — bookId → BookProgress. 미열람 책은 키 없음. */
+    suspend fun loadProgressMap(bookIds: List<String>): Map<String, BookProgress>
 }

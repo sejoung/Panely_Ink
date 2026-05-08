@@ -36,6 +36,13 @@ interface PositionDao {
      */
     @Query("SELECT book_id, updated_at FROM position WHERE book_id IN (:bookIds)")
     suspend fun loadUpdatedAtFor(bookIds: List<String>): List<BookIdTimestamp>
+
+    /**
+     * 진행률 라벨용 배치 조회 — 폴더 진입 시 책들의 (pageIndex, pageCount)를 한 번에.
+     * N권에 N쿼리 → 1쿼리.
+     */
+    @Query("SELECT * FROM position WHERE book_id IN (:bookIds)")
+    suspend fun loadAllByIds(bookIds: List<String>): List<PositionEntity>
 }
 
 /** [PositionDao.loadUpdatedAtFor] 결과 row. */

@@ -27,4 +27,8 @@ interface CoverMetaDao {
     /** 사용자 명시 "표지 캐시 비우기" 시 호출. FAILED 메타도 함께 삭제 → 깨진 책 재시도 가능. */
     @Query("DELETE FROM cover_meta")
     suspend fun deleteAll()
+
+    /** 폴더 진입 시 화면에 보일 책들의 메타를 batch — N개 쿼리 → 1쿼리. */
+    @Query("SELECT * FROM cover_meta WHERE book_id IN (:bookIds)")
+    suspend fun loadAllByIds(bookIds: List<String>): List<CoverMetaEntity>
 }

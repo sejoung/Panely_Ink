@@ -18,10 +18,13 @@ import io.github.sejoung.panelyink.data.db.RoomCoverMetaRepository
 import io.github.sejoung.panelyink.data.db.RoomPositionRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -67,6 +70,24 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     /** 폴더의 첫 책(시리즈 표지) 찾기 진행 중인 작업. dedup. */
     private val folderCoverJobs = mutableMapOf<Uri, Job>()
+
+    /**
+     * 표지 추출 동시 실행 수 제한 — archive open(수백 ms)이 비싸 화면에 책 30권이
+     * 동시에 등장할 때 모두 launch하면 IO 풀이 직렬화되며 첫 화면 채워지는 시간이 ↑.
+     * Permit 2로 두면 화면 상단부터 보이는 행의 표지가 우선 빨리 채워짐.
+     */
+    private val coverSemaphore = Semaphore(permits = 2)
+
+    /**
+     * 표지/메타 갱신 debounce 버퍼 — 추출 1장씩 도착할 때마다 [_state] copy + recompose
+     * 시작하면 외장 SD에서 30번 stutter. 100ms 동안 도착한 것을 모아 한 번에 flush.
+     *
+     * Main 스레드 단일 컨텍스트에서만 접근(viewModelScope = Dispatchers.Main.immediate
+     * + 모든 호출자가 launch 본문 마지막의 Main 복귀 시점) — plain MutableMap.
+     */
+    private val pendingCovers = mutableMapOf<String, ImageBitmap>()
+    private val pendingCoverStatus = mutableMapOf<String, io.github.sejoung.panelyink.data.db.CoverStatus>()
+    private var coverFlushJob: Job? = null
 
     /**
      * 다음 [refreshRoots] 시 자동으로 단일 root 안으로 한 단계 진입할지.
@@ -117,8 +138,12 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             progressJobs.clear()
             folderCoverJobs.values.forEach { it.cancel() }
             folderCoverJobs.clear()
+            coverFlushJob?.cancel()
+            pendingCovers.clear()
+            pendingCoverStatus.clear()
 
             AppDataResetter.resetAll(getApplication(), db)
+            repo.invalidateCache()
             pendingAutoDescend = false
             _state.value = LibraryState()
         }
@@ -132,8 +157,14 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             CoverPruner.clearAll(getApplication(), coverMetaRepo)
             // 진행 중인 추출 작업도 무효 — 이미 launch된 것은 끝나며 새 메타에 OK 기록됨.
-            // 일관성을 위해 in-memory state만 비우고, 다음 lazy 요청에서 재추출.
-            _state.value = _state.value.copy(covers = emptyMap())
+            // 일관성을 위해 in-memory state + debounce 버퍼 모두 비우고 다음 lazy 요청에서 재추출.
+            coverFlushJob?.cancel()
+            pendingCovers.clear()
+            pendingCoverStatus.clear()
+            _state.value = _state.value.copy(
+                covers = emptyMap(),
+                coverStatus = emptyMap(),
+            )
         }
     }
 
@@ -253,8 +284,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** 명시적 새로고침 — 같은 위치 다시 스캔. */
+    /** 명시적 새로고침 — listChildren in-memory 캐시 비우고 같은 위치 다시 스캔. */
     fun refresh() {
+        repo.invalidateCache()
         val current = _state.value.path.lastOrNull()
         if (current == null) refreshRoots() else refreshChildren(current)
     }
@@ -268,11 +300,14 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         if (_state.value.folderCounts.containsKey(key)) return
         if (countingJobs.containsKey(key)) return
         val job = viewModelScope.launch {
-            val count = repo.countBooks(folder)
-            _state.value = _state.value.copy(
-                folderCounts = _state.value.folderCounts + (key to count),
-            )
-            countingJobs.remove(key)
+            try {
+                val count = repo.countBooks(folder)
+                _state.value = _state.value.copy(
+                    folderCounts = _state.value.folderCounts + (key to count),
+                )
+            } finally {
+                countingJobs.remove(key)
+            }
         }
         countingJobs[key] = job
     }
@@ -290,16 +325,19 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         if (_state.value.folderFirstBook.containsKey(key)) return
         if (folderCoverJobs.containsKey(key)) return
         val job = viewModelScope.launch {
-            val firstBook = repo.firstBookIn(folder)
-            if (firstBook != null) {
-                val bookId = PositionKey.bookIdFromUri(firstBook.documentUri.toString())
-                _state.value = _state.value.copy(
-                    folderFirstBook = _state.value.folderFirstBook + (key to bookId),
-                )
-                // 그 책의 표지 추출 — covers map 공유. 책 행과 폴더 행이 같은 비트맵 사용.
-                requestCover(firstBook)
+            try {
+                val firstBook = repo.firstBookIn(folder)
+                if (firstBook != null) {
+                    val bookId = PositionKey.bookIdFromUri(firstBook.documentUri.toString())
+                    _state.value = _state.value.copy(
+                        folderFirstBook = _state.value.folderFirstBook + (key to bookId),
+                    )
+                    // 그 책의 표지 추출 — covers map 공유. 책 행과 폴더 행이 같은 비트맵 사용.
+                    requestCover(firstBook)
+                }
+            } finally {
+                folderCoverJobs.remove(key)
             }
-            folderCoverJobs.remove(key)
         }
         folderCoverJobs[key] = job
     }
@@ -316,13 +354,16 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         if (_state.value.bookProgress.containsKey(bookId)) return
         if (progressJobs.containsKey(bookId)) return
         val job = viewModelScope.launch {
-            val progress = positionRepo.load(bookId)
-            if (progress != null && progress.isKnown) {
-                _state.value = _state.value.copy(
-                    bookProgress = _state.value.bookProgress + (bookId to progress),
-                )
+            try {
+                val progress = positionRepo.load(bookId)
+                if (progress != null && progress.isKnown) {
+                    _state.value = _state.value.copy(
+                        bookProgress = _state.value.bookProgress + (bookId to progress),
+                    )
+                }
+            } finally {
+                progressJobs.remove(bookId)
             }
-            progressJobs.remove(bookId)
         }
         progressJobs[bookId] = job
     }
@@ -345,35 +386,52 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val bookId = PositionKey.bookIdFromUri(book.documentUri.toString())
         if (_state.value.covers.containsKey(bookId)) return
         if (coverJobs.containsKey(bookId)) return
+        // batch 캐시 hit: status=FAILED면 즉시 종료, 추가 Room query 없음.
+        if (_state.value.coverStatus[bookId] == CoverStatus.FAILED) return
         val app = getApplication<Application>()
         val job = viewModelScope.launch {
-            val image = withContext(Dispatchers.IO) {
-                val meta = coverMetaRepo.load(bookId)
-                // 영구 실패 — 깨진 책에 매번 archive open 비용 부담 X
-                if (meta?.status == CoverStatus.FAILED) return@withContext null
-
-                val file = CoverCache.cacheFile(app, bookId)
-                // 메타 OK + 디스크 파일 hit → 즉시 사용
-                if (meta?.status == CoverStatus.OK) {
-                    CoverCache.loadBitmap(file)?.let { return@withContext it }
-                    // 메타는 OK인데 파일 손상/사라짐 — 재추출로 falls through
+            try {
+                val cachedStatus = _state.value.coverStatus[bookId]
+                val cached = withContext(Dispatchers.IO) {
+                    // batch 캐시에 OK가 있으면 단건 메타 query 생략 → 디스크 read만.
+                    val meta = if (cachedStatus != null) {
+                        cachedStatus
+                    } else {
+                        val loaded = coverMetaRepo.load(bookId)?.status
+                        if (loaded == CoverStatus.FAILED) return@withContext null to true
+                        loaded
+                    }
+                    val file = CoverCache.cacheFile(app, bookId)
+                    if (meta == CoverStatus.OK) {
+                        CoverCache.loadBitmap(file)?.let { return@withContext it to true }
+                    }
+                    null to false  // 추출 필요
                 }
-                // 추출 시도
-                val extracted = CoverExtractor.extract(app, book.documentUri)
-                if (extracted != null) {
-                    CoverCache.saveBitmap(file, extracted)
-                    coverMetaRepo.save(bookId, CoverStatus.OK)
+                val (cachedBitmap, done) = cached
+                val image = if (done) {
+                    cachedBitmap
                 } else {
-                    coverMetaRepo.save(bookId, CoverStatus.FAILED)
-                }
-                extracted
-            }?.asImageBitmap()
-            if (image != null) {
-                _state.value = _state.value.copy(
-                    covers = _state.value.covers + (bookId to image),
-                )
+                    // 추출은 archive open이 비싸 동시 N개 제한 (전역 semaphore).
+                    coverSemaphore.withPermit {
+                        withContext(Dispatchers.IO) {
+                            val file = CoverCache.cacheFile(app, bookId)
+                            val extracted = CoverExtractor.extract(app, book.documentUri)
+                            if (extracted != null) {
+                                CoverCache.saveBitmap(file, extracted)
+                                coverMetaRepo.save(bookId, CoverStatus.OK)
+                            } else {
+                                coverMetaRepo.save(bookId, CoverStatus.FAILED)
+                            }
+                            extracted
+                        }
+                    }
+                }?.asImageBitmap()
+                val newStatus = if (image != null) CoverStatus.OK else CoverStatus.FAILED
+                queueCoverUpdate(bookId, image, newStatus)
+            } finally {
+                // cancel/예외 케이스에도 dedup map 정리 — 다음 요청에서 재시도 가능.
+                coverJobs.remove(bookId)
             }
-            coverJobs.remove(bookId)
         }
         coverJobs[bookId] = job
     }
@@ -393,6 +451,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 val children = repo.listChildren(target)
                 val sorted = applySort(children, _state.value.sortMode)
                 _state.value = _state.value.copy(entries = sorted, scanning = false)
+                prefetchBookData(sorted)
             } else {
                 pendingAutoDescend = false
                 // root 자체는 폴더라 sortMode와 무관하게 이름순(repo가 이미 정렬).
@@ -408,6 +467,64 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             val children = repo.listChildren(folder)
             val sorted = applySort(children, _state.value.sortMode)
             _state.value = _state.value.copy(entries = sorted, scanning = false)
+            prefetchBookData(sorted)
+        }
+    }
+
+    /**
+     * 표지/메타 갱신을 debounce 버퍼에 추가. 100ms 동안 도착한 것들이 한 번의 state
+     * copy로 합쳐져 recompose 횟수가 30번 → 1~2번 수준으로 줄어든다.
+     *
+     * 첫 도착 시 flush 코루틴 launch — 이미 진행 중이면 buffer에만 추가하고 그 코루틴이
+     * 다음 flush에서 같이 처리.
+     */
+    private fun queueCoverUpdate(
+        bookId: String,
+        image: ImageBitmap?,
+        status: io.github.sejoung.panelyink.data.db.CoverStatus,
+    ) {
+        if (image != null) pendingCovers[bookId] = image
+        pendingCoverStatus[bookId] = status
+        if (coverFlushJob?.isActive == true) return
+        coverFlushJob = viewModelScope.launch {
+            delay(COVER_FLUSH_DEBOUNCE_MS)
+            flushCoverUpdates()
+        }
+    }
+
+    private fun flushCoverUpdates() {
+        if (pendingCovers.isEmpty() && pendingCoverStatus.isEmpty()) return
+        val covers = pendingCovers.toMap()
+        val status = pendingCoverStatus.toMap()
+        pendingCovers.clear()
+        pendingCoverStatus.clear()
+        _state.value = _state.value.copy(
+            covers = if (covers.isNotEmpty()) _state.value.covers + covers else _state.value.covers,
+            coverStatus = if (status.isNotEmpty()) _state.value.coverStatus + status else _state.value.coverStatus,
+        )
+    }
+
+    /**
+     * 폴더 진입 시 책들의 진행률 + 표지 메타를 batch로 한 번에 채움 — 책 N권 화면이면
+     * 이전엔 (N progress query) + (N cover meta query) = 2N개. 이제 2 query.
+     * BookRow의 [requestProgress]/[requestCover]는 캐시 hit으로 추가 query 없음.
+     */
+    private suspend fun prefetchBookData(entries: List<LibraryEntry>) {
+        val books = entries.filterIsInstance<BookEntry>()
+        if (books.isEmpty()) return
+        val bookIds = books.map { PositionKey.bookIdFromUri(it.documentUri.toString()) }
+        // 두 batch query 동시 실행 — async/await로 더 줄일 수 있지만 IO 디스패처 한계라
+        // 큰 차이 X. 순차 호출로 단순 유지.
+        val progressMap = positionRepo.loadProgressMap(bookIds)
+        val coverMetaMap = coverMetaRepo.loadMap(bookIds)
+
+        val knownProgress = progressMap.filterValues { it.isKnown }
+        val statusMap = coverMetaMap.mapValues { it.value.status }
+        if (knownProgress.isNotEmpty() || statusMap.isNotEmpty()) {
+            _state.value = _state.value.copy(
+                bookProgress = _state.value.bookProgress + knownProgress,
+                coverStatus = _state.value.coverStatus + statusMap,
+            )
         }
     }
 
@@ -496,6 +613,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     companion object {
+        private const val COVER_FLUSH_DEBOUNCE_MS = 100L
         private const val PREFS_NAME = "panely_ink_prefs"
         private const val KEY_ROOTS = "library_root_uris"
         private const val KEY_PATH = "library_last_path"
@@ -530,6 +648,12 @@ data class LibraryState(
     val folderFirstBook: Map<Uri, String> = emptyMap(),
     /** bookId → 책 진행률(현재 페이지 + 전체). 미열람/모름 책은 키 없음. */
     val bookProgress: Map<String, BookProgress> = emptyMap(),
+    /**
+     * bookId → CoverMeta 상태 캐시. `prefetchBookData`에서 폴더 진입 시 batch로 한 번에
+     * 채움 → `requestCover`는 캐시 우선 확인해 책당 추가 Room query 안 일어남.
+     * 키 없음 = 메타 미존재(첫 추출 필요).
+     */
+    val coverStatus: Map<String, io.github.sejoung.panelyink.data.db.CoverStatus> = emptyMap(),
     /** 라이브러리 정렬 모드. 영속됨. */
     val sortMode: SortMode = SortMode.DEFAULT,
     /** 라이브러리 표시 모드(List/Cover/Grid). 영속됨. */

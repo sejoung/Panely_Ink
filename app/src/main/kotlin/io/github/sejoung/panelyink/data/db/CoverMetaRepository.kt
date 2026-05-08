@@ -28,6 +28,9 @@ interface CoverMetaRepository {
 
     /** 사용자 명시 "표지 캐시 비우기" — FAILED 메타도 함께 삭제. */
     suspend fun deleteAll()
+
+    /** 폴더 진입 시 화면 책들의 메타를 batch — bookId → CoverMeta 매핑. */
+    suspend fun loadMap(bookIds: List<String>): Map<String, CoverMeta>
 }
 
 /** 도메인 — Entity의 status String을 enum으로 변환. */
@@ -74,6 +77,13 @@ class RoomCoverMetaRepository(
 
     override suspend fun deleteAll() = withContext(Dispatchers.IO) {
         dao.deleteAll()
+    }
+
+    override suspend fun loadMap(bookIds: List<String>): Map<String, CoverMeta> {
+        if (bookIds.isEmpty()) return emptyMap()
+        return withContext(Dispatchers.IO) {
+            dao.loadAllByIds(bookIds).associate { it.bookId to it.toDomain() }
+        }
     }
 }
 

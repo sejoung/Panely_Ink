@@ -44,4 +44,13 @@ class RoomPositionRepository(
             dao.loadUpdatedAtFor(bookIds).associate { it.bookId to it.updatedAt }
         }
     }
+
+    override suspend fun loadProgressMap(bookIds: List<String>): Map<String, BookProgress> {
+        if (bookIds.isEmpty()) return emptyMap()
+        return withContext(Dispatchers.IO) {
+            dao.loadAllByIds(bookIds).associate {
+                it.bookId to BookProgress(it.pageIndex, it.pageCount)
+            }
+        }
+    }
 }
