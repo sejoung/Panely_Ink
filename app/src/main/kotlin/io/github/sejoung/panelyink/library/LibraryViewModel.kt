@@ -3,14 +3,19 @@ package io.github.sejoung.panelyink.library
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.sejoung.panelyink.core.position.PositionKey
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -43,6 +48,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
      * 화면 밖으로 나가도 작업은 그대로 끝까지 — 결과가 캐시에 들어가야 다음에 빠르다.
      */
     private val countingJobs = mutableMapOf<Uri, Job>()
+
+    /** 표지 추출 진행 중인 작업. 동일 책에 대한 중복 요청 dedup. */
+    private val coverJobs = mutableMapOf<String, Job>()
 
     /**
      * 다음 [refreshRoots] 시 자동으로 단일 root 안으로 한 단계 진입할지.
@@ -159,6 +167,41 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         countingJobs[key] = job
     }
 
+    /**
+     * 책 행이 화면에 등장할 때 호출 — 표지를 lazy 추출해 캐시에 적재.
+     *
+     * 동작:
+     * 1. in-memory hit이면 즉시 반환
+     * 2. 디스크 hit이면 비트맵 디코드 → in-memory 추가
+     * 3. 둘 다 miss면 [CoverExtractor]로 첫 페이지 디코드 → 디스크 저장 → in-memory 추가
+     *
+     * 추출은 archive open 비용(~수백 ms)이 있어 표지 1장씩 IO에서 순차로 처리하지만,
+     * 동시 여러 책 요청은 코루틴 dispatcher에 맡긴다 — viewModelScope는 Default 디스패처
+     * 다중 처리. 화면 밖으로 나간 책 작업도 끝까지 진행해 다음 진입에서 즉시 hit.
+     */
+    fun requestCover(book: BookEntry) {
+        val bookId = PositionKey.bookIdFromUri(book.documentUri.toString())
+        if (_state.value.covers.containsKey(bookId)) return
+        if (coverJobs.containsKey(bookId)) return
+        val app = getApplication<Application>()
+        val job = viewModelScope.launch {
+            val image = withContext(Dispatchers.IO) {
+                val file = CoverCache.cacheFile(app, bookId)
+                CoverCache.loadBitmap(file)
+                    ?: CoverExtractor.extract(app, book.documentUri)?.also { extracted ->
+                        CoverCache.saveBitmap(file, extracted)
+                    }
+            }?.asImageBitmap()
+            if (image != null) {
+                _state.value = _state.value.copy(
+                    covers = _state.value.covers + (bookId to image),
+                )
+            }
+            coverJobs.remove(bookId)
+        }
+        coverJobs[bookId] = job
+    }
+
     private fun refreshRoots() {
         listJob?.cancel()
         listJob = viewModelScope.launch {
@@ -269,4 +312,6 @@ data class LibraryState(
     val scanning: Boolean = false,
     /** 폴더 documentUri → 재귀 책 권수 (in-memory 캐시). 미계산 폴더는 키 없음. */
     val folderCounts: Map<Uri, Int> = emptyMap(),
+    /** bookId(SHA-1 hex) → 표지 썸네일 ImageBitmap. 미추출 책은 키 없음. */
+    val covers: Map<String, ImageBitmap> = emptyMap(),
 )

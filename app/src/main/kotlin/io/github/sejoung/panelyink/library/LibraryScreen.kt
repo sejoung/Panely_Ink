@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,9 +30,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.github.sejoung.panelyink.core.position.PositionKey
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.sejoung.panelyink.R
@@ -93,9 +98,11 @@ fun LibraryScreen(
             LibraryList(
                 entries = state.entries,
                 folderCounts = state.folderCounts,
+                covers = state.covers,
                 onEnterFolder = viewModel::enterFolder,
                 onOpenBook = onOpenBook,
                 onRequestCount = viewModel::requestFolderCount,
+                onRequestCover = viewModel::requestCover,
             )
         }
     }
@@ -192,9 +199,11 @@ private fun BreadcrumbLine(path: List<FolderEntry>) {
 private fun LibraryList(
     entries: List<LibraryEntry>,
     folderCounts: Map<android.net.Uri, Int>,
+    covers: Map<String, ImageBitmap>,
     onEnterFolder: (FolderEntry) -> Unit,
     onOpenBook: (BookEntry) -> Unit,
     onRequestCount: (FolderEntry) -> Unit,
+    onRequestCover: (BookEntry) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         items(items = entries, key = { it.documentUri.toString() }) { entry ->
@@ -205,7 +214,17 @@ private fun LibraryList(
                     onClick = { onEnterFolder(entry) },
                     onRequestCount = onRequestCount,
                 )
-                is BookEntry -> BookRow(entry = entry, onClick = { onOpenBook(entry) })
+                is BookEntry -> {
+                    val bookId = remember(entry.documentUri) {
+                        PositionKey.bookIdFromUri(entry.documentUri.toString())
+                    }
+                    BookRow(
+                        entry = entry,
+                        cover = covers[bookId],
+                        onClick = { onOpenBook(entry) },
+                        onRequestCover = onRequestCover,
+                    )
+                }
             }
             HairlineDivider()
         }
@@ -255,9 +274,18 @@ private fun FolderRow(
 }
 
 @Composable
-private fun BookRow(entry: BookEntry, onClick: () -> Unit) {
+private fun BookRow(
+    entry: BookEntry,
+    cover: ImageBitmap?,
+    onClick: () -> Unit,
+    onRequestCover: (BookEntry) -> Unit,
+) {
     val typography = LocalPanelyInkTypography.current
     val spacing = LocalPanelyInkSpacing.current
+
+    // 행이 처음 컴포지션될 때 lazy 표지 요청. 캐시 hit이면 ViewModel이 즉시 반환.
+    LaunchedEffect(entry.documentUri) { onRequestCover(entry) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -266,13 +294,30 @@ private fun BookRow(entry: BookEntry, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(spacing.space2),
     ) {
-        PanelyBookIcon()
+        // 표지 자리 — 만화 비율 4:5.6에 가깝게 80×112dp. 미추출 시 책 아이콘 placeholder.
+        Box(
+            modifier = Modifier
+                .size(width = 80.dp, height = 112.dp)
+                .background(PanelyInkColors.Paper),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (cover != null) {
+                Image(
+                    bitmap = cover,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                PanelyBookIcon()
+            }
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = entry.displayName,
                 style = typography.list,
                 color = PanelyInkColors.Ink,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(2.dp))

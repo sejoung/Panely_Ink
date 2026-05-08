@@ -136,8 +136,14 @@
 ---
 
 ## M3 — 라이브러리 보강
-ㅠ
-- [ ] 표지 자동 추출 + 캐시 (자연 정렬 첫 페이지)
+
+- [x] 표지 자동 추출 + 캐시 (자연 정렬 첫 페이지)
+  - `library/CoverExtractor` — `CbzArchive.openPage(0)` + `inSampleSize` 다운스케일(한 변 ≤ 400px). archive open 자체가 무거워(수백 ms) 화면에 보이는 책만 lazy 추출
+  - `library/CoverCache` — `filesDir/covers/<bookId>.png`(SHA-1 hex) PNG 무손실 저장. `cacheDir`은 OS가 비울 수 있어 사용자 데이터로 두고 `filesDir` 사용
+  - `LibraryViewModel.requestCover(book)` — folderCount 패턴(작업 dedup). `state.covers: Map<bookId, ImageBitmap>`. 디스크 hit → 즉시, miss → extract → save → in-memory
+  - `BookRow`에 80×112dp 표지 자리. 미추출 시 `PanelyBookIcon` placeholder, 도착 시 `Image(ContentScale.Fit)`. 행에 `LaunchedEffect`로 등장 시 1회 요청
+  - 표지 메타(`CoverMeta` Room 테이블)는 다음 단계 — 추출 실패 책 재시도 방지/표지 페이지 변경 옵션에 사용
+  - LRU 정리 정책은 별도 항목으로 추후
 - [ ] 진행률 배지 (% 또는 호선)
 - [ ] 정렬: 이름 / Last opened / Recently added
 - [ ] 검색 (파일명 / 시리즈명)
@@ -248,3 +254,4 @@
 - **2026-05-08** — 설정 화면 3그룹 분리. `GroupHeader`(list+Ink) 추가, 섹션 라벨(caption+Mute)과 시각 hierarchy. 그룹: [페이지 레이아웃] / [화질] / [디스플레이]. 그룹 사이 Hairline divider + space4 spacing
 - **2026-05-08** — M3 Room 인프라 도입(KSP 2.0.20-1.0.25 + Room 2.6.1). `PanelyDatabase` v1 + `PositionEntity`/`PositionDao` + `RoomPositionRepository`. `PositionRepository` 인터페이스 suspend로 변경, `ReaderScreen.produceState`에서 비동기 로드 → `SessionState.Ready(session, resumedPage)`. SharedPreferences → Room 1회 마이그레이션(`PositionMigration`, 멱등 플래그)은 `PanelyInkApp.onCreate`에서 백그라운드 실행. `SharedPreferencesPositionRepository` 클래스 제거
 - **2026-05-08** — M3 BookSettings 책별 저장. Room v1→v2 마이그레이션(`book_settings` 테이블 신규). `BookSettings` 도메인 + FitMode/Direction 직렬화 헬퍼(테스트 8개), `RoomBookSettingsRepository`. `ReaderViewModel`은 `initialBookSettings: BookSettings`로 초기 상태 통합(기존 initialDirection/FitMode/TrimEnabled 인자 제거). `ReaderScreen`에서 settings 6필드 변경 시 자동 upsert
+- **2026-05-08** — M3 표지 자동 추출 + 디스크 캐시 1단계. `CoverExtractor`(첫 페이지 inSampleSize 다운스케일 ≤ 400px), `CoverCache`(filesDir/covers PNG 저장), `LibraryViewModel.requestCover` lazy + dedup, `BookRow` 80×112dp 표지 자리. 추출 실패 메타/LRU 정리는 후속
