@@ -12,6 +12,7 @@ import android.view.View
 import io.github.sejoung.panelyink.core.fit.FitCalculator
 import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.core.render.ContrastMatrix
+import io.github.sejoung.panelyink.core.render.InvertMatrix
 
 /**
  * 본문 페이지 1장을 그리는 커스텀 View. PRD §8 — 뷰어 핫패스는 Compose가 아닌
@@ -44,6 +45,7 @@ class ReaderView(context: Context) : View(context) {
     private var fitMode: FitMode = FitMode.FitScreen
     private var trimEnabled: Boolean = true
     private var contrast: Float = ContrastMatrix.IDENTITY
+    private var invertEnabled: Boolean = false
 
     /**
      * 풀리프레시 시퀀스. [requestFullRefresh] 호출 시 채워지고, 매 onDraw에서
@@ -69,8 +71,10 @@ class ReaderView(context: Context) : View(context) {
         this.pageIndex = s.currentPage
         this.fitMode = s.fitMode
         this.trimEnabled = s.trimEnabled
-        // contrast 변경에 따른 colorFilter 적용은 setContrast가 담당 — 같은 경로 재사용.
-        setContrast(s.contrast)
+        this.contrast = s.contrast
+        this.invertEnabled = s.invertEnabled
+        // contrast/invert 결합 colorFilter 적용은 applyColorAdjust 한 곳에서.
+        applyColorAdjust()
         // 이미 측정된 상태였다면 바로 viewport 통지 (재바인딩 케이스).
         if (width > 0 && height > 0) {
             viewModel.onViewportChanged(width, height)
@@ -104,11 +108,36 @@ class ReaderView(context: Context) : View(context) {
     fun setContrast(value: Float) {
         if (this.contrast == value) return
         this.contrast = value
-        // 1.0(원본)이면 colorFilter 제거 — 비트맵 그릴 때 추가 변환 비용 0.
-        paint.colorFilter = if (value == ContrastMatrix.IDENTITY) {
-            null
-        } else {
-            ColorMatrixColorFilter(ColorMatrix(ContrastMatrix.build(value)))
+        applyColorAdjust()
+    }
+
+    fun setInvertEnabled(enabled: Boolean) {
+        if (this.invertEnabled == enabled) return
+        this.invertEnabled = enabled
+        applyColorAdjust()
+    }
+
+    /**
+     * contrast와 invert를 결합한 ColorMatrixColorFilter를 paint에 적용.
+     *
+     * 결합 순서: contrast 먼저 적용 → 그 결과를 invert. ColorMatrix는 row-major 4×5
+     * 행렬이고, [ColorMatrix.postConcat]은 `this = other × this` — 즉 postConcat에 넘긴
+     * 행렬이 *나중에* 적용된다. 그래서 contrast 행렬에 invert를 postConcat.
+     *
+     * 둘 다 비활성이면 colorFilter=null로 비용 0.
+     */
+    private fun applyColorAdjust() {
+        val needsContrast = contrast != ContrastMatrix.IDENTITY
+        val needsInvert = invertEnabled
+        paint.colorFilter = when {
+            !needsContrast && !needsInvert -> null
+            !needsContrast -> ColorMatrixColorFilter(InvertMatrix.build())
+            !needsInvert -> ColorMatrixColorFilter(ContrastMatrix.build(contrast))
+            else -> {
+                val cm = ColorMatrix(ContrastMatrix.build(contrast))
+                cm.postConcat(ColorMatrix(InvertMatrix.build()))
+                ColorMatrixColorFilter(cm)
+            }
         }
         invalidate()
     }

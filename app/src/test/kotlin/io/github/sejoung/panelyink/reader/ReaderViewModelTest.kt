@@ -397,6 +397,24 @@ class ReaderViewModelTest {
             vm.close()
         }
     }
+
+    @Test
+    fun setInvertEnabledUpdatesState() {
+        val vm = ReaderViewModel("b", 10, FakePageDecoder())
+        assertEquals(false, vm.state.value.invertEnabled)
+        vm.setInvertEnabled(true)
+        assertEquals(true, vm.state.value.invertEnabled)
+        vm.close()
+    }
+
+    @Test
+    fun setInvertEnabledSameValueIsNoOp() {
+        val vm = ReaderViewModel("b", 10, FakePageDecoder())
+        val before = vm.state.value
+        vm.setInvertEnabled(false)
+        assertSame(before, vm.state.value)
+        vm.close()
+    }
 }
 
 /**

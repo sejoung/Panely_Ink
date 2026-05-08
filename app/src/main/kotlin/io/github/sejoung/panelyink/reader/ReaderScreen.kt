@@ -167,11 +167,19 @@ private fun ReaderContent(
     }
 
     // 상태 → View 명령형 setter
-    LaunchedEffect(state.currentPage, state.fitMode, state.trimEnabled, state.contrast, view) {
+    LaunchedEffect(
+        state.currentPage,
+        state.fitMode,
+        state.trimEnabled,
+        state.contrast,
+        state.invertEnabled,
+        view,
+    ) {
         view?.setPageIndex(state.currentPage)
         view?.setFitMode(state.fitMode)
         view?.setTrimEnabled(state.trimEnabled)
         view?.setContrast(state.contrast)
+        view?.setInvertEnabled(state.invertEnabled)
     }
 
     // PRD §6.1 Resume — 페이지 변경 시 저장. SharedPreferences.apply는 비동기
@@ -268,6 +276,7 @@ private fun ReaderContent(
                 onDirectionChange = viewModel::setDirection,
                 onTrimEnabledChange = viewModel::setTrimEnabled,
                 onContrastChange = viewModel::setContrast,
+                onInvertEnabledChange = viewModel::setInvertEnabled,
                 onFullRefreshIntervalChange = viewModel::setFullRefreshInterval,
                 onTriggerFullRefresh = viewModel::triggerFullRefresh,
                 onBack = {

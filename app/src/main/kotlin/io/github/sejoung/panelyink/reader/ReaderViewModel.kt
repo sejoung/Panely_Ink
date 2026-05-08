@@ -164,6 +164,12 @@ class ReaderViewModel(
         _state.value = _state.value.copy(contrast = value)
     }
 
+    /** 흑백 반전 on/off. ReaderView가 ColorMatrixColorFilter로 contrast와 결합 적용. */
+    fun setInvertEnabled(enabled: Boolean) {
+        if (enabled == _state.value.invertEnabled) return
+        _state.value = _state.value.copy(invertEnabled = enabled)
+    }
+
     fun onViewportChanged(width: Int, height: Int) {
         if (width <= 0 || height <= 0) return
         val current = _state.value
@@ -225,6 +231,8 @@ data class ReaderState(
     val fullRefreshInterval: Int = ReaderViewModel.FULL_REFRESH_INTERVAL_DEFAULT,
     /** 대비 배율(0.5..2.0). 1.0=원본. ReaderView가 ColorMatrixColorFilter로 적용. */
     val contrast: Float = ContrastMatrix.IDENTITY,
+    /** 흑백 반전(macOS 다크모드 대체). contrast와 함께 적용 시 contrast → invert 순. */
+    val invertEnabled: Boolean = false,
 )
 
 private fun IntRange.byProximityTo(center: Int): List<Int> {

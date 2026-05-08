@@ -113,6 +113,23 @@ internal fun TrimSegments(
 }
 
 @Composable
+internal fun InvertSegments(
+    enabled: Boolean,
+    onSelect: (Boolean) -> Unit,
+) {
+    val options = listOf(
+        false to "끔",
+        true to "켬",
+    )
+    Segments(
+        options = options,
+        isSelected = { it == enabled },
+        labelOf = { options.first { p -> p.first == it }.second },
+        onSelect = onSelect,
+    )
+}
+
+@Composable
 internal fun FullRefreshIntervalSegments(
     interval: Int,
     onSelect: (Int) -> Unit,

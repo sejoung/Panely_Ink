@@ -46,6 +46,7 @@ fun ReaderSettingsScreen(
     onDirectionChange: (ReadingDirection) -> Unit,
     onTrimEnabledChange: (Boolean) -> Unit,
     onContrastChange: (Float) -> Unit,
+    onInvertEnabledChange: (Boolean) -> Unit,
     onFullRefreshIntervalChange: (Int) -> Unit,
     onTriggerFullRefresh: () -> Unit,
     onBack: () -> Unit,
@@ -125,6 +126,15 @@ fun ReaderSettingsScreen(
                 contrast = state.contrast,
                 onCommit = onContrastChange,
                 onReset = { onContrastChange(ContrastMatrix.IDENTITY) },
+            )
+
+            Spacer(Modifier.height(spacing.space3))
+
+            SectionLabel("흑백 반전")
+            Spacer(Modifier.height(spacing.space1))
+            InvertSegments(
+                enabled = state.invertEnabled,
+                onSelect = onInvertEnabledChange,
             )
 
             Spacer(Modifier.height(spacing.space3))
