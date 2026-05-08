@@ -65,6 +65,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     /** 진행률 로드 진행 중인 작업. 동일 책에 대한 중복 요청 dedup. */
     private val progressJobs = mutableMapOf<String, Job>()
 
+    /** 폴더의 첫 책(시리즈 표지) 찾기 진행 중인 작업. dedup. */
+    private val folderCoverJobs = mutableMapOf<Uri, Job>()
+
     /**
      * 다음 [refreshRoots] 시 자동으로 단일 root 안으로 한 단계 진입할지.
      *
@@ -112,6 +115,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             coverJobs.clear()
             progressJobs.values.forEach { it.cancel() }
             progressJobs.clear()
+            folderCoverJobs.values.forEach { it.cancel() }
+            folderCoverJobs.clear()
 
             AppDataResetter.resetAll(getApplication(), db)
             pendingAutoDescend = false
@@ -270,6 +275,33 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             countingJobs.remove(key)
         }
         countingJobs[key] = job
+    }
+
+    /**
+     * 폴더 행이 화면에 등장할 때 호출 — 시리즈 그룹핑(폴더=시리즈) 표시용으로 폴더
+     * 안 첫 책을 찾고 그 책의 표지를 추출. 결과는 [LibraryState.folderFirstBook]
+     * (folder.uri → bookId)에 저장하고, 표지 자체는 일반 [requestCover] 흐름을 재사용해
+     * `state.covers[bookId]`에 들어간다 — 책 행이 같은 책일 때 비트맵 1개만 메모리.
+     *
+     * 빈 폴더(또는 폴더만 있는 폴더)는 firstBook=null이라 매핑 안 함 → 폴더 아이콘 fallback.
+     */
+    fun requestFolderCover(folder: FolderEntry) {
+        val key = folder.documentUri
+        if (_state.value.folderFirstBook.containsKey(key)) return
+        if (folderCoverJobs.containsKey(key)) return
+        val job = viewModelScope.launch {
+            val firstBook = repo.firstBookIn(folder)
+            if (firstBook != null) {
+                val bookId = PositionKey.bookIdFromUri(firstBook.documentUri.toString())
+                _state.value = _state.value.copy(
+                    folderFirstBook = _state.value.folderFirstBook + (key to bookId),
+                )
+                // 그 책의 표지 추출 — covers map 공유. 책 행과 폴더 행이 같은 비트맵 사용.
+                requestCover(firstBook)
+            }
+            folderCoverJobs.remove(key)
+        }
+        folderCoverJobs[key] = job
     }
 
     /**
@@ -491,6 +523,11 @@ data class LibraryState(
     val folderCounts: Map<Uri, Int> = emptyMap(),
     /** bookId(SHA-1 hex) → 표지 썸네일 ImageBitmap. 미추출 책은 키 없음. */
     val covers: Map<String, ImageBitmap> = emptyMap(),
+    /**
+     * 시리즈 그룹핑 — folder.documentUri → 그 폴더 안 첫 책의 bookId. 책 표지는
+     * [covers]에서 같은 bookId로 lookup해 재사용(메모리 중복 X). 빈 폴더는 키 없음.
+     */
+    val folderFirstBook: Map<Uri, String> = emptyMap(),
     /** bookId → 책 진행률(현재 페이지 + 전체). 미열람/모름 책은 키 없음. */
     val bookProgress: Map<String, BookProgress> = emptyMap(),
     /** 라이브러리 정렬 모드. 영속됨. */

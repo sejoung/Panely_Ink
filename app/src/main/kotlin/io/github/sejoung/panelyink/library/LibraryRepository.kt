@@ -105,6 +105,15 @@ class LibraryRepository(private val context: Context) {
     }
 
     /**
+     * [folder] 안 첫 책(자연 정렬) — 시리즈 그룹핑(폴더=시리즈)에서 폴더 행에 첫 권의
+     * 표지를 보여주기 위해 사용. depth 1만 본다. 폴더가 비었거나 폴더만 있으면 null.
+     */
+    suspend fun firstBookIn(folder: FolderEntry): BookEntry? = withContext(Dispatchers.IO) {
+        // listChildren는 폴더(이름순) → 책(이름순) 순으로 반환. 책 중 첫 항목.
+        listChildren(folder).firstOrNull { it is BookEntry } as? BookEntry
+    }
+
+    /**
      * [folder] 안의 책(.cbz/.zip) 갯수를 재귀적으로 센다 — 폴더 행에 "N권"을
      * 미리 보여주기 위함. PRD §6.1 "중첩 아카이브 추출 최대 3단계" 그대로 [maxDepth] 제한.
      *

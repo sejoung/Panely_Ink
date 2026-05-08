@@ -164,7 +164,11 @@
   - 폴더 이동 시 검색어 자동 클리어. ← back 우선순위(검색 → 폴더 위로 → 시스템)
   - [ ] **전체 라이브러리 검색** — 책 인덱스 테이블이 필요해 후속(BookMeta 또는 Room FTS)
   - [ ] **시리즈명** 검색 — ComicInfo.xml 파싱(v1.5)이 전제
-- [ ] 시리즈 그룹핑 (폴더 = 시리즈 자동 인식)
+- [x] 시리즈 그룹핑 (폴더 = 시리즈 자동 인식)
+  - 1차는 M1.4.5 폴더 트리 탐색이 곧 시리즈 단위(폴더 진입 = 시리즈 진입)
+  - 보강: 폴더 행에 첫 책 표지를 시리즈 thumbnail로 표시 — `LibraryRepository.firstBookIn`(depth 1) → `LibraryViewModel.requestFolderCover` (folder.uri → bookId 매핑) → 책 cover 추출은 기존 흐름 재사용
+  - 같은 비트맵 1개만 메모리(state.covers + state.folderFirstBook 두 단계 lookup)
+  - Cover 모드 / Grid 모드에 표시. List 모드는 컴팩트 유지
 - [~] Room 도입 (라이브러리/메타/진행률/북마크)
   - [x] **인프라 + Position 마이그레이션** — KSP + Room 2.6.1, `data/db/PanelyDatabase` v1, `PositionEntity`/`PositionDao`, `RoomPositionRepository`(suspend). `PanelyInkApp`에서 1회 SharedPrefs → Room 이전(`PositionMigration`, 멱등). `PositionRepository` 인터페이스를 suspend로 변경, `ReaderScreen`은 `produceState`에서 비동기 로드 후 `SessionState.Ready(session, resumedPage)`로 전달
   - [x] **BookSettings** (책별 fit/direction/trim/contrast/invert/풀리프레시 주기) — `book_settings` 테이블 v2 마이그레이션. `BookSettings` 도메인 + 직렬화 헬퍼(JVM 단위 테스트 8개), `BookSettingsRepository` Room 구현. `ReaderViewModel.initialBookSettings`로 초기 상태 통합, settings 변경 시 `LaunchedEffect`로 자동 upsert
@@ -294,3 +298,4 @@
 - **2026-05-08** — 캐시 정리 보강. `CoverPruner.prune`에 orphan(메타 없는 디스크 파일) 정리 통합 + `clearAll`(전체 비우기 — FAILED 메타 포함) 신규. `LibraryViewModel.clearCoverCache` + 앱 설정 화면 캐시 그룹에 "표지 캐시 비우기" 버튼. 호환성 고려는 미배포라 X
 - **2026-05-09** — Contrast 책별 저장은 M3 BookSettings 도입 시 이미 통합되어 동작 중. PROGRESS.md M2 메모만 갱신(코드 변경 없음)
 - **2026-05-09** — 전체 초기화 기능. `data/AppDataResetter` — Room clearAllTables + SharedPreferences 3종 + SAF 권한 release(prefs 비우기 전 root 읽기) + covers 디렉토리 삭제. `LibraryViewModel.resetAllData` (진행 중 작업 cancel + state 초기화). `ConfirmResetDialog`(취소 primary, 초기화 secondary). 앱 설정 화면 끝에 "초기화" 그룹 + 버튼. 디버깅/기기 양도 시 신규 사용자 상태 복귀
+- **2026-05-09** — 시리즈 그룹핑 보강. 폴더 행에 첫 책 표지를 thumbnail로(폴더=시리즈). `LibraryRepository.firstBookIn`(depth 1), `LibraryViewModel.requestFolderCover` lazy + dedup, `state.folderFirstBook`(folder.uri→bookId) 매핑. 책 cover 흐름 재사용으로 비트맵 1개만 메모리. Cover/Grid 모드에 적용, List는 컴팩트 유지

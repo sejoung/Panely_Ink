@@ -169,30 +169,45 @@ fun LibraryScreen(
                 onAddFolder = onAddFolder,
             )
             visibleEntries.isEmpty() -> SearchEmptyState(query = state.searchQuery)
-            else -> when (state.viewMode) {
-                ViewMode.List, ViewMode.Cover -> LibraryList(
-                    entries = visibleEntries,
-                    viewMode = state.viewMode,
-                    folderCounts = state.folderCounts,
-                    covers = state.covers,
-                    bookProgress = state.bookProgress,
-                    onEnterFolder = viewModel::enterFolder,
-                    onOpenBook = onOpenBook,
-                    onRequestCount = viewModel::requestFolderCount,
-                    onRequestCover = viewModel::requestCover,
-                    onRequestProgress = viewModel::requestProgress,
-                )
-                ViewMode.Grid -> LibraryGrid(
-                    entries = visibleEntries,
-                    folderCounts = state.folderCounts,
-                    covers = state.covers,
-                    bookProgress = state.bookProgress,
-                    onEnterFolder = viewModel::enterFolder,
-                    onOpenBook = onOpenBook,
-                    onRequestCount = viewModel::requestFolderCount,
-                    onRequestCover = viewModel::requestCover,
-                    onRequestProgress = viewModel::requestProgress,
-                )
+            else -> {
+                // 시리즈 그룹핑 — 폴더 행에 첫 책의 표지를 lookup. folderFirstBook + covers
+                // 두 단계로 같은 비트맵 재사용(메모리 중복 X). 빈 폴더는 매핑 없음.
+                val folderCovers = remember(state.folderFirstBook, state.covers) {
+                    buildMap<android.net.Uri, ImageBitmap> {
+                        state.folderFirstBook.forEach { (folderUri, bookId) ->
+                            state.covers[bookId]?.let { put(folderUri, it) }
+                        }
+                    }
+                }
+                when (state.viewMode) {
+                    ViewMode.List, ViewMode.Cover -> LibraryList(
+                        entries = visibleEntries,
+                        viewMode = state.viewMode,
+                        folderCounts = state.folderCounts,
+                        folderCovers = folderCovers,
+                        covers = state.covers,
+                        bookProgress = state.bookProgress,
+                        onEnterFolder = viewModel::enterFolder,
+                        onOpenBook = onOpenBook,
+                        onRequestCount = viewModel::requestFolderCount,
+                        onRequestCover = viewModel::requestCover,
+                        onRequestFolderCover = viewModel::requestFolderCover,
+                        onRequestProgress = viewModel::requestProgress,
+                    )
+                    ViewMode.Grid -> LibraryGrid(
+                        entries = visibleEntries,
+                        folderCounts = state.folderCounts,
+                        folderCovers = folderCovers,
+                        covers = state.covers,
+                        bookProgress = state.bookProgress,
+                        onEnterFolder = viewModel::enterFolder,
+                        onOpenBook = onOpenBook,
+                        onRequestCount = viewModel::requestFolderCount,
+                        onRequestCover = viewModel::requestCover,
+                        onRequestFolderCover = viewModel::requestFolderCover,
+                        onRequestProgress = viewModel::requestProgress,
+                    )
+                }
             }
         }
     }
@@ -388,12 +403,14 @@ private fun LibraryList(
     entries: List<LibraryEntry>,
     viewMode: ViewMode,
     folderCounts: Map<android.net.Uri, Int>,
+    folderCovers: Map<android.net.Uri, ImageBitmap>,
     covers: Map<String, ImageBitmap>,
     bookProgress: Map<String, BookProgress>,
     onEnterFolder: (FolderEntry) -> Unit,
     onOpenBook: (BookEntry) -> Unit,
     onRequestCount: (FolderEntry) -> Unit,
     onRequestCover: (BookEntry) -> Unit,
+    onRequestFolderCover: (FolderEntry) -> Unit,
     onRequestProgress: (BookEntry) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -402,8 +419,11 @@ private fun LibraryList(
                 is FolderEntry -> FolderRow(
                     entry = entry,
                     count = folderCounts[entry.documentUri],
+                    cover = folderCovers[entry.documentUri],
+                    showCover = viewMode == ViewMode.Cover,
                     onClick = { onEnterFolder(entry) },
                     onRequestCount = onRequestCount,
+                    onRequestCover = onRequestFolderCover,
                 )
                 is BookEntry -> {
                     val bookId = remember(entry.documentUri) {
@@ -481,12 +501,14 @@ private fun BookRowCompact(
 private fun LibraryGrid(
     entries: List<LibraryEntry>,
     folderCounts: Map<android.net.Uri, Int>,
+    folderCovers: Map<android.net.Uri, ImageBitmap>,
     covers: Map<String, ImageBitmap>,
     bookProgress: Map<String, BookProgress>,
     onEnterFolder: (FolderEntry) -> Unit,
     onOpenBook: (BookEntry) -> Unit,
     onRequestCount: (FolderEntry) -> Unit,
     onRequestCover: (BookEntry) -> Unit,
+    onRequestFolderCover: (FolderEntry) -> Unit,
     onRequestProgress: (BookEntry) -> Unit,
 ) {
     val spacing = LocalPanelyInkSpacing.current
@@ -503,8 +525,10 @@ private fun LibraryGrid(
                 is FolderEntry -> FolderGridCell(
                     entry = entry,
                     count = folderCounts[entry.documentUri],
+                    cover = folderCovers[entry.documentUri],
                     onClick = { onEnterFolder(entry) },
                     onRequestCount = onRequestCount,
+                    onRequestCover = onRequestFolderCover,
                 )
                 is BookEntry -> {
                     val bookId = remember(entry.documentUri) {
@@ -592,11 +616,16 @@ private fun BookGridCell(
 private fun FolderGridCell(
     entry: FolderEntry,
     count: Int?,
+    cover: ImageBitmap?,
     onClick: () -> Unit,
     onRequestCount: (FolderEntry) -> Unit,
+    onRequestCover: (FolderEntry) -> Unit,
 ) {
     val typography = LocalPanelyInkTypography.current
-    LaunchedEffect(entry.documentUri) { onRequestCount(entry) }
+    LaunchedEffect(entry.documentUri) {
+        onRequestCount(entry)
+        onRequestCover(entry)
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -610,7 +639,17 @@ private fun FolderGridCell(
                 .border(1.dp, PanelyInkColors.Hairline),
             contentAlignment = Alignment.Center,
         ) {
-            PanelyFolderIcon(size = 64.dp)
+            // 시리즈 표지가 있으면 첫 책 표지, 없으면 폴더 아이콘(빈 폴더 / 미추출).
+            if (cover != null) {
+                Image(
+                    bitmap = cover,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                PanelyFolderIcon(size = 64.dp)
+            }
             if (count != null) {
                 Box(
                     modifier = Modifier
@@ -642,14 +681,20 @@ private fun FolderGridCell(
 private fun FolderRow(
     entry: FolderEntry,
     count: Int?,
+    cover: ImageBitmap?,
+    showCover: Boolean,
     onClick: () -> Unit,
     onRequestCount: (FolderEntry) -> Unit,
+    onRequestCover: (FolderEntry) -> Unit,
 ) {
     val typography = LocalPanelyInkTypography.current
     val spacing = LocalPanelyInkSpacing.current
 
     // 행이 처음 컴포지션될 때 lazy 카운트 요청. 캐시 hit이면 ViewModel 쪽에서 즉시 반환.
-    LaunchedEffect(entry.documentUri) { onRequestCount(entry) }
+    LaunchedEffect(entry.documentUri) {
+        onRequestCount(entry)
+        if (showCover) onRequestCover(entry)
+    }
 
     Row(
         modifier = Modifier
@@ -659,13 +704,35 @@ private fun FolderRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(spacing.space2),
     ) {
-        PanelyFolderIcon()
+        if (showCover) {
+            // Cover 모드 — 책 행과 같은 80×112 슬롯. 첫 책 표지 / 폴더 아이콘 fallback.
+            Box(
+                modifier = Modifier
+                    .size(width = 80.dp, height = 112.dp)
+                    .background(PanelyInkColors.Paper),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (cover != null) {
+                    Image(
+                        bitmap = cover,
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    PanelyFolderIcon()
+                }
+            }
+        } else {
+            // List 모드 — 컴팩트 24dp 폴더 아이콘
+            PanelyFolderIcon()
+        }
         Text(
             text = entry.displayName,
             style = typography.list,
             color = PanelyInkColors.Ink,
             modifier = Modifier.weight(1f),
-            maxLines = 1,
+            maxLines = if (showCover) 2 else 1,
             overflow = TextOverflow.Ellipsis,
         )
         if (count != null) {
