@@ -3,12 +3,15 @@ package io.github.sejoung.panelyink.reader
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.Rect
 import android.util.Log
 import android.view.View
 import io.github.sejoung.panelyink.core.fit.FitCalculator
 import io.github.sejoung.panelyink.core.fit.FitMode
+import io.github.sejoung.panelyink.core.render.ContrastMatrix
 
 /**
  * 본문 페이지 1장을 그리는 커스텀 View. PRD §8 — 뷰어 핫패스는 Compose가 아닌
@@ -40,6 +43,7 @@ class ReaderView(context: Context) : View(context) {
     private var pageIndex: Int = 0
     private var fitMode: FitMode = FitMode.FitScreen
     private var trimEnabled: Boolean = true
+    private var contrast: Float = ContrastMatrix.IDENTITY
 
     /**
      * 풀리프레시 시퀀스. [requestFullRefresh] 호출 시 채워지고, 매 onDraw에서
@@ -61,9 +65,12 @@ class ReaderView(context: Context) : View(context) {
     fun attach(session: CbzBookSession, viewModel: ReaderViewModel) {
         this.session = session
         this.viewModel = viewModel
-        this.pageIndex = viewModel.state.value.currentPage
-        this.fitMode = viewModel.state.value.fitMode
-        this.trimEnabled = viewModel.state.value.trimEnabled
+        val s = viewModel.state.value
+        this.pageIndex = s.currentPage
+        this.fitMode = s.fitMode
+        this.trimEnabled = s.trimEnabled
+        // contrast 변경에 따른 colorFilter 적용은 setContrast가 담당 — 같은 경로 재사용.
+        setContrast(s.contrast)
         // 이미 측정된 상태였다면 바로 viewport 통지 (재바인딩 케이스).
         if (width > 0 && height > 0) {
             viewModel.onViewportChanged(width, height)
@@ -91,6 +98,18 @@ class ReaderView(context: Context) : View(context) {
     fun setTrimEnabled(enabled: Boolean) {
         if (this.trimEnabled == enabled) return
         this.trimEnabled = enabled
+        invalidate()
+    }
+
+    fun setContrast(value: Float) {
+        if (this.contrast == value) return
+        this.contrast = value
+        // 1.0(원본)이면 colorFilter 제거 — 비트맵 그릴 때 추가 변환 비용 0.
+        paint.colorFilter = if (value == ContrastMatrix.IDENTITY) {
+            null
+        } else {
+            ColorMatrixColorFilter(ColorMatrix(ContrastMatrix.build(value)))
+        }
         invalidate()
     }
 

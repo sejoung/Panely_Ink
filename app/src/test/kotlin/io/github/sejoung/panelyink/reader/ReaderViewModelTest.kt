@@ -359,6 +359,44 @@ class ReaderViewModelTest {
         assertEquals(3, vm.state.value.fullRefreshInterval)
         vm.close()
     }
+
+    @Test
+    fun setContrastUpdatesState() {
+        val vm = ReaderViewModel("b", 10, FakePageDecoder())
+        assertEquals(1.0f, vm.state.value.contrast, 0.0001f)
+        vm.setContrast(1.5f)
+        assertEquals(1.5f, vm.state.value.contrast, 0.0001f)
+        vm.close()
+    }
+
+    @Test
+    fun setContrastSameValueIsNoOp() {
+        val vm = ReaderViewModel("b", 10, FakePageDecoder())
+        val before = vm.state.value
+        vm.setContrast(1.0f)
+        assertSame(before, vm.state.value)
+        vm.close()
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun setContrastBelowMinIsRejected() {
+        val vm = ReaderViewModel("b", 10, FakePageDecoder())
+        try {
+            vm.setContrast(0.4f)
+        } finally {
+            vm.close()
+        }
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun setContrastAboveMaxIsRejected() {
+        val vm = ReaderViewModel("b", 10, FakePageDecoder())
+        try {
+            vm.setContrast(2.1f)
+        } finally {
+            vm.close()
+        }
+    }
 }
 
 /**

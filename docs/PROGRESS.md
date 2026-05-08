@@ -123,7 +123,10 @@
   - `ReaderState.trimEnabled` + `setTrimEnabled` (기본 ON), `ReaderView.setTrimEnabled`
   - `ReaderMenu`에 "자동 여백 트리밍 [자동/끔]" 세그먼트 추가
 - [ ] **흑백 변환 + Floyd–Steinberg dithering** (1종만)
-- [ ] **Contrast / Gamma** 슬라이더 + 책별 저장
+- [~] **Contrast / Gamma** 슬라이더 + 책별 저장
+  - [x] **Contrast** 세션 한정 — `core/render/ContrastMatrix` (JVM 순수 함수, 단위 테스트 6개), `ReaderState.contrast`, `ReaderView.setContrast`로 `ColorMatrixColorFilter` 토글, 메뉴 슬라이더(0.5..2.0, 5% 스냅) + "원본" 버튼
+  - [ ] **Gamma** — ColorMatrix는 선형이라 비선형 gamma는 비트맵 LUT 변환 필요. minSdk 30에선 RuntimeShader 미사용, Bitmap pixel manipulation. 비용 큼 → 다음 단계
+  - [ ] **책별 저장** — `BookSettingsRepository` 추가 필요 (PositionRepository 패턴). M3 Room 도입과 묶어도 OK
 - [ ] **Invert (블랙/화이트 반전)** — macOS 다크모드 대체
 
 ---
@@ -231,3 +234,4 @@
 - **2026-05-08** — 풀리프레시 정책 사용자 가시화. 메뉴에 주기 세그먼트(1/3/5/10/끔) + "지금 풀리프레시" 버튼. `triggerFullRefresh()`/`setFullRefreshInterval(0)` API. `ReaderView`에 logcat 한 줄. 단위 테스트 4개 추가
 - **2026-05-08** — 풀리프레시 검정 hold 120ms. 한 vsync(16ms)는 LCD에서 거의 안 보여 사용자가 동작 여부를 의심. `postInvalidateOnAnimation` → `postInvalidateDelayed(120)`로 검정 유지 시간 명시. e-ink 픽셀 변환(~150ms) 시간에도 부합
 - **2026-05-08** — 풀리프레시 시퀀스 = 검정→흰→검정 (80ms × 3 = 240ms). Meebook M7 실기에서 단일 검정 프레임은 풀리프레시 waveform을 트리거하지 못했음 — 컨트롤러가 부분 갱신으로 흡수. 픽셀 다수가 두 번 반전되는 시퀀스로 해결. **Meebook M7 실기 깜빡임 확인됨**
+- **2026-05-08** — M2 Contrast 1단계(세션 한정). `ContrastMatrix` 4×5 ColorMatrix 빌더, `ColorMatrixColorFilter` 적용, 슬라이더 0.5..2.0(5% 스냅) + "원본" 버튼. 옅은 스캔본 만화 가독성용. Gamma·책별 저장은 보류

@@ -2,6 +2,7 @@ package io.github.sejoung.panelyink.reader
 
 import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.core.position.PositionKey
+import io.github.sejoung.panelyink.core.render.ContrastMatrix
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -151,6 +152,18 @@ class ReaderViewModel(
         _state.value = _state.value.copy(trimEnabled = enabled)
     }
 
+    /**
+     * 대비 배율 변경 — 0.5(50%)~2.0(200%). 1.0이면 원본.
+     * 책별 저장은 다음 단계(M2-2). 지금은 세션 한정.
+     */
+    fun setContrast(value: Float) {
+        require(value in ContrastMatrix.MIN..ContrastMatrix.MAX) {
+            "contrast must be in [${ContrastMatrix.MIN}, ${ContrastMatrix.MAX}], got $value"
+        }
+        if (value == _state.value.contrast) return
+        _state.value = _state.value.copy(contrast = value)
+    }
+
     fun onViewportChanged(width: Int, height: Int) {
         if (width <= 0 || height <= 0) return
         val current = _state.value
@@ -210,6 +223,8 @@ data class ReaderState(
     val trimEnabled: Boolean = true,
     /** 자동 풀리프레시 주기(페이지 수). 0이면 자동 비활성. UI 토글이 변경. */
     val fullRefreshInterval: Int = ReaderViewModel.FULL_REFRESH_INTERVAL_DEFAULT,
+    /** 대비 배율(0.5..2.0). 1.0=원본. ReaderView가 ColorMatrixColorFilter로 적용. */
+    val contrast: Float = ContrastMatrix.IDENTITY,
 )
 
 private fun IntRange.byProximityTo(center: Int): List<Int> {

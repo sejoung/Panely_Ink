@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Text
 import io.github.sejoung.panelyink.core.fit.FitMode
+import io.github.sejoung.panelyink.core.render.ContrastMatrix
 import io.github.sejoung.panelyink.ui.components.PanelyTextButton
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
@@ -65,6 +66,7 @@ fun ReaderMenu(
     onFitModeChange: (FitMode) -> Unit,
     onDirectionChange: (ReadingDirection) -> Unit,
     onTrimEnabledChange: (Boolean) -> Unit,
+    onContrastChange: (Float) -> Unit,
     onFullRefreshIntervalChange: (Int) -> Unit,
     onTriggerFullRefresh: () -> Unit,
     onJumpToPage: (Int) -> Unit,
@@ -139,6 +141,16 @@ fun ReaderMenu(
             TrimSegments(
                 enabled = state.trimEnabled,
                 onSelect = onTrimEnabledChange,
+            )
+
+            Spacer(Modifier.height(spacing.space2))
+
+            SectionLabel("대비")
+            Spacer(Modifier.height(spacing.space1))
+            ContrastSlider(
+                contrast = state.contrast,
+                onCommit = onContrastChange,
+                onReset = { onContrastChange(ContrastMatrix.IDENTITY) },
             )
 
             Spacer(Modifier.height(spacing.space2))
@@ -416,5 +428,124 @@ private fun PageJump(
             style = typography.caption,
             color = PanelyInkColors.Ink,
         )
+    }
+}
+
+/**
+ * 대비 슬라이더 — Float 값(0.5..2.0)을 받는 점만 [PageJump]와 다르고 시각 규칙 동일.
+ *
+ * - 드래그 중 본문은 변하지 않음(Guidelines §6) — 손 떼야 [onCommit]
+ * - 라벨에 드래그 중 미리보기 % 표시 (e-ink에 큰 부담 X — 한 줄 텍스트만)
+ * - "원본" 버튼 — 1.0으로 즉시 리셋
+ */
+@Composable
+private fun ContrastSlider(
+    contrast: Float,
+    onCommit: (Float) -> Unit,
+    onReset: () -> Unit,
+) {
+    val typography = LocalPanelyInkTypography.current
+    val density = LocalDensity.current
+
+    val handleDp = 24.dp
+    val handlePx = with(density) { handleDp.toPx() }
+    val trackDp = 4.dp
+    val totalDp = 48.dp
+
+    var widthPx by remember { mutableStateOf(0) }
+    var dragX by remember(contrast) { mutableStateOf<Float?>(null) }
+
+    val maxThumbPx = (widthPx - handlePx).coerceAtLeast(0f)
+    val range = ContrastMatrix.MAX - ContrastMatrix.MIN
+    val baseRatio = ((contrast - ContrastMatrix.MIN) / range).coerceIn(0f, 1f)
+    val baseThumbPx = baseRatio * maxThumbPx
+
+    fun pointerToThumbPx(pointerX: Float): Float =
+        (pointerX - handlePx / 2f).coerceIn(0f, maxThumbPx)
+
+    fun pointerToContrast(pointerX: Float): Float {
+        if (maxThumbPx <= 0f) return ContrastMatrix.IDENTITY
+        val anchor = pointerToThumbPx(pointerX)
+        val raw = ContrastMatrix.MIN + (anchor / maxThumbPx) * range
+        // 5% 단위로 스냅 — Guidelines의 "단계적" 정신과도 부합. 잔상 줄임.
+        return (Math.round(raw * 20f) / 20f).coerceIn(ContrastMatrix.MIN, ContrastMatrix.MAX)
+    }
+
+    val thumbPx = dragX?.let(::pointerToThumbPx) ?: baseThumbPx
+    val thumbDp = with(density) { thumbPx.toDp() }
+    val previewContrast = dragX?.let(::pointerToContrast) ?: contrast
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(totalDp)
+                .onSizeChanged { widthPx = it.width }
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { offset -> dragX = offset.x },
+                        onDragEnd = {
+                            val finalX = dragX
+                            dragX = null
+                            if (finalX != null) {
+                                val v = pointerToContrast(finalX)
+                                if (v != contrast) onCommit(v)
+                            }
+                        },
+                        onDragCancel = { dragX = null },
+                        onHorizontalDrag = { change, _ -> dragX = change.position.x },
+                    )
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = { offset ->
+                            val v = pointerToContrast(offset.x)
+                            if (v != contrast) onCommit(v)
+                        },
+                    )
+                },
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .fillMaxWidth()
+                    .padding(horizontal = handleDp / 2)
+                    .height(trackDp)
+                    .offset(y = (totalDp - trackDp) / 2)
+                    .background(PanelyInkColors.Hairline),
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = handleDp / 2)
+                    .width(thumbDp)
+                    .height(trackDp)
+                    .background(PanelyInkColors.Ink),
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .offset(x = thumbDp)
+                    .size(handleDp)
+                    .background(PanelyInkColors.Ink),
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "${(previewContrast * 100).roundToInt()}%",
+                style = typography.caption,
+                color = PanelyInkColors.Ink,
+                modifier = Modifier.weight(1f),
+            )
+            PanelyTextButton(
+                label = "원본",
+                onClick = onReset,
+                primary = false,
+            )
+        }
     }
 }
