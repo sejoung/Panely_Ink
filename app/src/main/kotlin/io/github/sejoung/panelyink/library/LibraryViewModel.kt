@@ -57,6 +57,18 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     private var listJob: Job? = null
 
     /**
+     * ZIP-of-CBZ batch inspect 진행 중인 작업. 폴더 위/아래 이동 시 cancel하고 새로 시작.
+     *
+     * 화면에 보이는 .zip 책들을 백그라운드로 차례차례 검사 → 시리즈면 entries에서 BookEntry
+     * 자리에 FolderEntry로 swap → 사용자에게 일관된 폴더 표시(권수/표지). 결과는
+     * `LibraryRepository.seriesCache`에 영속(in-memory)되어 같은 폴더 재진입에서 즉시 응답.
+     */
+    private var inspectJob: Job? = null
+
+    /** 시리즈 검사 동시 실행 수 — ZIP open(수백 ms) 비용. coverSemaphore와 별개. */
+    private val inspectSemaphore = Semaphore(permits = 2)
+
+    /**
      * 폴더 권수 카운트 진행 중인 작업. 동일 폴더에 대한 중복 요청을 dedup.
      * 화면 밖으로 나가도 작업은 그대로 끝까지 — 결과가 캐시에 들어가야 다음에 빠르다.
      */
@@ -130,6 +142,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             // 진행 중인 작업 모두 취소 — 이후 빈 state에 누락된 결과가 반영되지 않게.
             listJob?.cancel()
+            inspectJob?.cancel()
             countingJobs.values.forEach { it.cancel() }
             countingJobs.clear()
             coverJobs.values.forEach { it.cancel() }
@@ -328,6 +341,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     fun requestFolderCount(folder: FolderEntry) {
         val key = folder.documentUri
         if (_state.value.folderCounts.containsKey(key)) return
+        // ZIP-of-CBZ 가상 폴더 — nestedBooks.size 그대로(검사 시점에 이미 결정). countBooks 호출 X.
+        if (folder.nestedBooks != null) {
+            _state.value = _state.value.copy(
+                folderCounts = _state.value.folderCounts + (key to folder.nestedBooks.size),
+            )
+            return
+        }
         if (countingJobs.containsKey(key)) return
         val job = viewModelScope.launch {
             try {
@@ -356,7 +376,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         if (folderCoverJobs.containsKey(key)) return
         val job = viewModelScope.launch {
             try {
-                val firstBook = repo.firstBookIn(folder)
+                // 가상 폴더면 첫 nested 책이 곧 표지 source — repo.firstBookIn(SAF query) 생략.
+                val firstBook = folder.nestedBooks?.firstOrNull() ?: repo.firstBookIn(folder)
                 if (firstBook != null) {
                     val bookId = PositionKey.bookIdFromUri(firstBook.bookIdSource)
                     _state.value = _state.value.copy(
@@ -446,16 +467,18 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                         withContext(Dispatchers.IO) {
                             val file = CoverCache.cacheFile(app, bookId)
                             val extracted = if (book.nestedEntryName != null) {
-                                // ZIP-of-CBZ 자식 — reader에서 한 번 열려 추출 캐시가 있을 때만 표지 추출.
-                                // 캐시 없으면 라이브러리 첫 진입에서 모든 nested cbz를 추출하는 비용이 너무 커서
-                                // skip(다음 라이브러리 진입에서 재시도 가능, FAILED 영구 저장 X).
+                                // ZIP-of-CBZ 자식 표지 — 1순위 reader 추출 캐시(빠름),
+                                // 2순위 부모 ZIP에서 nested cbz를 streaming으로 첫 image bytes만
+                                // 메모리 디코드. 디스크 추출 없이 라이브러리에서도 표지 가능.
                                 val nestedFile = NestedZipExtractor.cacheFile(
                                     app, book.documentUri, book.nestedEntryName,
                                 )
                                 if (nestedFile.exists() && nestedFile.length() > 0) {
                                     CoverExtractor.extract(nestedFile)
                                 } else {
-                                    null
+                                    CoverExtractor.extractNestedCover(
+                                        app, book.documentUri, book.nestedEntryName,
+                                    )
                                 }
                             } else {
                                 CoverExtractor.extract(app, book.documentUri)
@@ -463,24 +486,17 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                             if (extracted != null) {
                                 CoverCache.saveBitmap(file, extracted)
                                 coverMetaRepo.save(bookId, CoverStatus.OK)
-                            } else if (book.nestedEntryName == null) {
-                                // nested 책은 캐시가 없을 뿐이지 깨진 게 아니므로 FAILED 영구 저장 안 함.
+                            } else {
+                                // 추출 실패 → FAILED 메타 영구 저장. nested 책도 stream 추출까지 실패한 거라
+                                // 깨진 책으로 간주해 다음 진입에서 재시도 안 함.
                                 coverMetaRepo.save(bookId, CoverStatus.FAILED)
                             }
                             extracted
                         }
                     }
                 }?.asImageBitmap()
-                // nested 책이 추출 캐시 없어 image=null로 끝난 케이스는 status를 FAILED로 박지 않음
-                // — 사용자가 reader에서 한 번 열어 캐시가 생기면 다음 라이브러리 진입에서 다시 추출 가능.
-                val newStatus = when {
-                    image != null -> CoverStatus.OK
-                    book.nestedEntryName != null -> null  // skip
-                    else -> CoverStatus.FAILED
-                }
-                if (image != null || newStatus != null) {
-                    queueCoverUpdate(bookId, image, newStatus ?: CoverStatus.FAILED)
-                }
+                val newStatus = if (image != null) CoverStatus.OK else CoverStatus.FAILED
+                queueCoverUpdate(bookId, image, newStatus)
             } finally {
                 // cancel/예외 케이스에도 dedup map 정리 — 다음 요청에서 재시도 가능.
                 coverJobs.remove(bookId)
@@ -505,6 +521,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 val sorted = applySort(children, _state.value.sortMode)
                 _state.value = _state.value.copy(entries = sorted, scanning = false)
                 prefetchBookData(sorted)
+                batchInspectSeries()
             } else {
                 pendingAutoDescend = false
                 // root 자체는 폴더라 sortMode와 무관하게 이름순(repo가 이미 정렬).
@@ -521,6 +538,47 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             val sorted = applySort(children, _state.value.sortMode)
             _state.value = _state.value.copy(entries = sorted, scanning = false)
             prefetchBookData(sorted)
+            batchInspectSeries()
+        }
+    }
+
+    /**
+     * 현재 entries의 .zip BookEntry들을 백그라운드로 시리즈 검사. 시리즈면 entries 안에서
+     * 같은 자리에 FolderEntry로 swap — 권수/표지가 일반 폴더와 동일한 흐름으로 표시.
+     *
+     * .cbz는 일반적으로 단일 책이라 검사 대상에서 제외(첫 진입 비용 절감). 사용자가 .cbz
+     * 시리즈를 만든 케이스는 클릭 시 [openBook] 분기에서 검사.
+     *
+     * 점진적 표시: 결과 도착할 때마다 entries 갱신 → 화면 상단 zip부터 폴더로 변신.
+     */
+    private fun batchInspectSeries() {
+        inspectJob?.cancel()
+        val candidates = _state.value.entries
+            .filterIsInstance<BookEntry>()
+            .filter {
+                it.nestedEntryName == null &&
+                    it.displayName.endsWith(".zip", ignoreCase = true)
+            }
+        if (candidates.isEmpty()) return
+        inspectJob = viewModelScope.launch {
+            for (book in candidates) {
+                val result = inspectSemaphore.withPermit { repo.inspectZipForSeries(book) }
+                if (result == null) continue
+                // 결과 도착 시점의 최신 entries에서 swap — 그 사이 사용자가 폴더 이동했으면
+                // entries가 다른 목록이라 swap이 일치하지 않을 수 있는데, listJob.cancel +
+                // inspectJob.cancel로 새 폴더에선 새 inspect가 시작되므로 이전 결과는 무시 OK.
+                val current = _state.value.entries
+                val updated = current.map { e ->
+                    if (
+                        e is BookEntry &&
+                        e.nestedEntryName == null &&
+                        e.documentUri == book.documentUri
+                    ) result else e
+                }
+                if (updated !== current) {
+                    _state.value = _state.value.copy(entries = updated)
+                }
+            }
         }
     }
 

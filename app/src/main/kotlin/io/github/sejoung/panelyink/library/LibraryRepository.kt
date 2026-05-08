@@ -47,9 +47,17 @@ class LibraryRepository(private val context: Context) {
      */
     private val childrenCache = mutableMapOf<Uri, List<LibraryEntry>>()
 
+    /**
+     * zip의 `documentUri` → ZIP-of-CBZ 가상 폴더 변환 결과 캐시. 시리즈가 아닌 zip은 null로
+     * 명시 캐시(`containsKey`로 hit/miss 구분). 한 번 ZIP을 열어 검사하면 프로세스 살아있는
+     * 동안 재검사 없이 즉시 응답 → 라이브러리 폴더 위/아래 이동에서 매번 ZIP을 다시 안 연다.
+     */
+    private val seriesCache = mutableMapOf<Uri, FolderEntry?>()
+
     /** 사용자 명시 새로고침 시 캐시 비우기. */
     fun invalidateCache() {
         childrenCache.clear()
+        seriesCache.clear()
     }
 
     /** 사용자가 추가한 SAF 트리 [Uri]들을 첫 화면용 root 폴더 행으로 변환. */
@@ -147,32 +155,41 @@ class LibraryRepository(private val context: Context) {
     suspend fun inspectZipForSeries(book: BookEntry): FolderEntry? = withContext(Dispatchers.IO) {
         // 이미 nested entry인 책은 ZIP-of-CBZ 자식이라 다시 검사 안 함.
         if (book.nestedEntryName != null) return@withContext null
+        if (seriesCache.containsKey(book.documentUri)) {
+            return@withContext seriesCache[book.documentUri]
+        }
         val archive = runCatching { CbzArchive.open(context, book.documentUri) }.getOrElse {
             Log.w("PanelyInk.Library", "inspect open failed: ${book.documentUri}", it)
+            seriesCache[book.documentUri] = null
             return@withContext null
         }
-        try {
-            if (!archive.isSeriesArchive) return@withContext null
-            val nestedBooks = archive.nestedArchives.map { entry ->
-                BookEntry(
-                    documentUri = book.documentUri, // 부모 ZIP URI 그대로 — open 시 nestedEntryName으로 분기
-                    displayName = entry.displayName,
-                    sizeBytes = entry.size,
-                    mimeType = null,
+        val result = try {
+            if (!archive.isSeriesArchive) {
+                null
+            } else {
+                val nestedBooks = archive.nestedArchives.map { entry ->
+                    BookEntry(
+                        documentUri = book.documentUri,
+                        displayName = entry.displayName,
+                        sizeBytes = entry.size,
+                        mimeType = null,
+                        rootUri = book.rootUri,
+                        nestedEntryName = entry.entryName,
+                    )
+                }
+                FolderEntry(
+                    documentUri = book.documentUri,
+                    displayName = book.displayName,
                     rootUri = book.rootUri,
-                    nestedEntryName = entry.entryName,
+                    isRoot = false,
+                    nestedBooks = nestedBooks,
                 )
             }
-            FolderEntry(
-                documentUri = book.documentUri,
-                displayName = book.displayName,
-                rootUri = book.rootUri,
-                isRoot = false,
-                nestedBooks = nestedBooks,
-            )
         } finally {
             archive.close()
         }
+        seriesCache[book.documentUri] = result
+        result
     }
 
     /**

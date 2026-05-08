@@ -75,6 +75,55 @@ object CoverExtractor {
         }
     }
 
+    /**
+     * ZIP-of-CBZ 가상 폴더 표지용 — 부모 ZIP을 한 번 열고, 그 안의 nested cbz를 streaming
+     * 으로 읽어 첫 image entry의 bytes를 메모리에서 디코드. 디스크 추출 0.
+     *
+     * @param parentZipUri 부모 ZIP의 SAF URI
+     * @param nestedEntryName 부모 ZIP 안의 nested cbz/zip entry 이름(보통 첫 nested)
+     */
+    suspend fun extractNestedCover(
+        context: Context,
+        parentZipUri: Uri,
+        nestedEntryName: String,
+        targetMaxPx: Int = DEFAULT_TARGET_MAX_PX,
+    ): Bitmap? = withContext(Dispatchers.IO) {
+        val archive = runCatching {
+            CbzArchive.open(context, parentZipUri)
+        }.getOrElse {
+            Log.w(TAG, "nested cover open failed: $parentZipUri", it)
+            return@withContext null
+        }
+        try {
+            val bytes = archive.firstImageBytesInNested(nestedEntryName)
+                ?: return@withContext null
+            decodeBytes(bytes, targetMaxPx)
+        } catch (t: Throwable) {
+            Log.w(TAG, "nested cover decode failed: $parentZipUri / $nestedEntryName", t)
+            null
+        } finally {
+            archive.close()
+        }
+    }
+
+    private fun decodeBytes(bytes: ByteArray, targetMaxPx: Int): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        var sample = 1
+        while (
+            bounds.outWidth / (sample * 2) >= targetMaxPx ||
+            bounds.outHeight / (sample * 2) >= targetMaxPx
+        ) {
+            sample *= 2
+        }
+        val opts = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+    }
+
     private fun decodeFirstPage(archive: CbzArchive, targetMaxPx: Int): Bitmap? {
         // 1. 헤더만 읽어 원본 크기 파악
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }

@@ -8,6 +8,7 @@ import io.github.sejoung.panelyink.core.sort.NaturalOrderComparator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
+import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream
 import org.apache.commons.compress.archivers.zip.ZipFile
 import java.io.Closeable
 import java.io.FileInputStream
@@ -60,6 +61,34 @@ class CbzArchive private constructor(
     fun openNestedEntry(entryName: String): InputStream {
         val entry = entriesByName[entryName] ?: throw IOException("entry not found: $entryName")
         return zipFile.getInputStream(entry)
+    }
+
+    /**
+     * ZIP-of-CBZ 시리즈의 가상 폴더 표지용 — 부모 ZIP에서 nested cbz를 디스크 추출 없이
+     * 메모리에서 streaming으로 열고, 첫 image entry의 bytes를 반환. [NestedZipExtractor]
+     * 디스크 캐시 없이도 라이브러리에서 즉시 표지 표시 가능.
+     *
+     * 비용: nested cbz의 첫 image entry까지 stream을 read. cbz 안 첫 entry가 image면
+     * 빠르고(압축 안 된 cbz는 첫 KB), 마지막이면 stream 전체 read. 평균 200~800ms.
+     *
+     * 표지 추출 후 결과는 호출자가 [BitmapFactory.decodeByteArray]로 디코드 + sample.
+     */
+    fun firstImageBytesInNested(entryName: String): ByteArray? {
+        val nestedEntry = entriesByName[entryName] ?: return null
+        return zipFile.getInputStream(nestedEntry).use { nestedStream ->
+            ZipArchiveInputStream(nestedStream).use { zis ->
+                var bytes: ByteArray? = null
+                while (true) {
+                    @Suppress("DEPRECATION")
+                    val zipEntry: ZipArchiveEntry = zis.nextZipEntry ?: break
+                    if (zipEntry.isDirectory) continue
+                    if (!zipEntry.name.isImageEntry()) continue
+                    bytes = zis.readBytes()
+                    break
+                }
+                bytes
+            }
+        }
     }
 
     override fun close() {
