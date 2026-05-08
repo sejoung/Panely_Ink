@@ -104,6 +104,33 @@ class LibraryRepository(private val context: Context) {
         return null
     }
 
+    /**
+     * [folder] 안의 책(.cbz/.zip) 갯수를 재귀적으로 센다 — 폴더 행에 "N권"을
+     * 미리 보여주기 위함. PRD §6.1 "중첩 아카이브 추출 최대 3단계" 그대로 [maxDepth] 제한.
+     *
+     * 비용: SAF `listFiles()`는 매 호출이 IPC라 깊은 트리에서 비싸다. 호출자(ViewModel)는
+     * 화면에 보이는 폴더만, 결과는 in-memory 캐시에 저장해 중복 호출을 막아야 한다.
+     */
+    suspend fun countBooks(folder: FolderEntry, maxDepth: Int = 3): Int =
+        withContext(Dispatchers.IO) {
+            val parent = resolveFolder(folder) ?: return@withContext 0
+            countBooksRecursive(parent, depth = 0, maxDepth = maxDepth)
+        }
+
+    private fun countBooksRecursive(node: DocumentFile, depth: Int, maxDepth: Int): Int {
+        if (depth > maxDepth) return 0
+        var count = 0
+        for (child in node.listFiles()) {
+            if (!child.isAcceptable()) continue
+            if (child.isDirectory) {
+                count += countBooksRecursive(child, depth + 1, maxDepth)
+            } else if (child.isCbzOrZip()) {
+                count += 1
+            }
+        }
+        return count
+    }
+
     private fun DocumentFile.isAcceptable(): Boolean {
         val n = name ?: return false
         // macOS AppleDouble (._book.cbz) / 닷파일(.DS_Store) 제외 — FAT/exFAT/SMB로

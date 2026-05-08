@@ -212,3 +212,4 @@
 - **2026-05-08** — M1.4: Resume / 위치 기억. `PositionRepository`(SharedPrefs 구현), 세션 오픈 시 `initialPage` 복원, 페이지 변경마다 `apply()`로 저장
 - **2026-05-08** — 라이브러리 single-root 자동 진입. root 1개면 첫 화면 한 프레임도 노출하지 않고 그 안으로 한 단계 진입. `pendingAutoDescend` 플래그로 init/add/remove에서만 트리거하고 `goUp`(사용자 의도)에선 끔. 폴더 안에서도 +/관리 버튼 노출
 - **2026-05-08** — 라이브러리 last-visited path 영속화 + 복원 (JSON in SharedPrefs). `setPath` 단일 진입점에서 state 갱신과 영속화를 묶음. root가 사라진/path가 root 밖 인 경우 무시
+- **2026-05-08** — 폴더 자식 카운트 lazy + in-memory 캐시 (1차). `LibraryRepository.countBooks`(재귀, depth ≤ 3), `LibraryViewModel.requestFolderCount` 작업 dedup, `FolderRow`에 "N권" / "비어있음" 표시. 디스크 캐시·invalidation은 M3 Room 도입 시 통합

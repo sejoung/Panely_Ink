@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,8 +92,10 @@ fun LibraryScreen(
         } else {
             LibraryList(
                 entries = state.entries,
+                folderCounts = state.folderCounts,
                 onEnterFolder = viewModel::enterFolder,
                 onOpenBook = onOpenBook,
+                onRequestCount = viewModel::requestFolderCount,
             )
         }
     }
@@ -188,13 +191,20 @@ private fun BreadcrumbLine(path: List<FolderEntry>) {
 @Composable
 private fun LibraryList(
     entries: List<LibraryEntry>,
+    folderCounts: Map<android.net.Uri, Int>,
     onEnterFolder: (FolderEntry) -> Unit,
     onOpenBook: (BookEntry) -> Unit,
+    onRequestCount: (FolderEntry) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         items(items = entries, key = { it.documentUri.toString() }) { entry ->
             when (entry) {
-                is FolderEntry -> FolderRow(entry = entry, onClick = { onEnterFolder(entry) })
+                is FolderEntry -> FolderRow(
+                    entry = entry,
+                    count = folderCounts[entry.documentUri],
+                    onClick = { onEnterFolder(entry) },
+                    onRequestCount = onRequestCount,
+                )
                 is BookEntry -> BookRow(entry = entry, onClick = { onOpenBook(entry) })
             }
             HairlineDivider()
@@ -203,9 +213,18 @@ private fun LibraryList(
 }
 
 @Composable
-private fun FolderRow(entry: FolderEntry, onClick: () -> Unit) {
+private fun FolderRow(
+    entry: FolderEntry,
+    count: Int?,
+    onClick: () -> Unit,
+    onRequestCount: (FolderEntry) -> Unit,
+) {
     val typography = LocalPanelyInkTypography.current
     val spacing = LocalPanelyInkSpacing.current
+
+    // 행이 처음 컴포지션될 때 lazy 카운트 요청. 캐시 hit이면 ViewModel 쪽에서 즉시 반환.
+    LaunchedEffect(entry.documentUri) { onRequestCount(entry) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -223,6 +242,14 @@ private fun FolderRow(entry: FolderEntry, onClick: () -> Unit) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        if (count != null) {
+            // 미계산 동안은 텍스트 자체를 그리지 않음(잔상 최소화). 도착하면 한 번만 표시.
+            Text(
+                text = if (count == 0) "비어있음" else "${count}권",
+                style = typography.caption,
+                color = PanelyInkColors.Mute,
+            )
+        }
         PanelyChevronRightIcon()
     }
 }

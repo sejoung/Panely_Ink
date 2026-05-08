@@ -39,6 +39,12 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     private var listJob: Job? = null
 
     /**
+     * 폴더 권수 카운트 진행 중인 작업. 동일 폴더에 대한 중복 요청을 dedup.
+     * 화면 밖으로 나가도 작업은 그대로 끝까지 — 결과가 캐시에 들어가야 다음에 빠르다.
+     */
+    private val countingJobs = mutableMapOf<Uri, Job>()
+
+    /**
      * 다음 [refreshRoots] 시 자동으로 단일 root 안으로 한 단계 진입할지.
      *
      * - init / addRoot / removeRoot 직후에 켠다(사용자가 추가/제거한 결과 root가 1개로
@@ -133,6 +139,24 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     fun refresh() {
         val current = _state.value.path.lastOrNull()
         if (current == null) refreshRoots() else refreshChildren(current)
+    }
+
+    /**
+     * 폴더 행이 화면에 등장할 때 호출 — [folder]의 책 권수를 lazy 계산해 캐시에 적재.
+     * 이미 캐시에 있거나 계산 중이면 즉시 반환. 결과는 [LibraryState.folderCounts] 갱신.
+     */
+    fun requestFolderCount(folder: FolderEntry) {
+        val key = folder.documentUri
+        if (_state.value.folderCounts.containsKey(key)) return
+        if (countingJobs.containsKey(key)) return
+        val job = viewModelScope.launch {
+            val count = repo.countBooks(folder)
+            _state.value = _state.value.copy(
+                folderCounts = _state.value.folderCounts + (key to count),
+            )
+            countingJobs.remove(key)
+        }
+        countingJobs[key] = job
     }
 
     private fun refreshRoots() {
@@ -243,4 +267,6 @@ data class LibraryState(
     val path: List<FolderEntry> = emptyList(),
     val entries: List<LibraryEntry> = emptyList(),
     val scanning: Boolean = false,
+    /** 폴더 documentUri → 재귀 책 권수 (in-memory 캐시). 미계산 폴더는 키 없음. */
+    val folderCounts: Map<Uri, Int> = emptyMap(),
 )
