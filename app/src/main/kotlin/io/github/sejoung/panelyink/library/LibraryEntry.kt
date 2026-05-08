@@ -14,6 +14,13 @@ sealed interface LibraryEntry {
     val documentUri: Uri
     val displayName: String
     val rootUri: Uri
+
+    /**
+     * LazyColumn/LazyVerticalGrid의 stable key. ZIP-of-CBZ 자식 [BookEntry]들은 부모 ZIP의
+     * `documentUri`를 공유하므로 documentUri만으로는 키가 중복돼 Compose가 IllegalArgumentException.
+     * nested 책은 `<uri>#<entry>`로 unique. 가상 폴더(부모 ZIP을 폴더로 보여주는 행)는 documentUri만.
+     */
+    val stableKey: String
 }
 
 /**
@@ -30,7 +37,18 @@ data class BookEntry(
     override val rootUri: Uri,
     /** ZIP-of-CBZ의 자식이면 부모 ZIP 안 entry name. null이면 SAF 직속 책. */
     val nestedEntryName: String? = null,
-) : LibraryEntry
+) : LibraryEntry {
+    /**
+     * Reader/CoverMeta/Position에 사용되는 책의 식별자 source. nested 책은 부모 URI에 entry name을
+     * 합쳐서 부모 ZIP과 충돌하지 않게 unique. [io.github.sejoung.panelyink.reader.CbzBookSession.open]
+     * 과 일치.
+     */
+    val bookIdSource: String
+        get() = if (nestedEntryName != null) "$documentUri#$nestedEntryName" else documentUri.toString()
+
+    override val stableKey: String
+        get() = bookIdSource
+}
 
 /**
  * 폴더 1개. [isRoot]이면 사용자가 직접 추가한 SAF 트리(루트), 아니면 그 안의 하위 폴더.
@@ -45,4 +63,7 @@ data class FolderEntry(
     val isRoot: Boolean,
     /** ZIP-of-CBZ의 가상 폴더이면 자식 책 목록. SAF 폴더면 null. */
     val nestedBooks: List<BookEntry>? = null,
-) : LibraryEntry
+) : LibraryEntry {
+    override val stableKey: String
+        get() = documentUri.toString()
+}

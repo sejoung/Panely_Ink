@@ -358,7 +358,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             try {
                 val firstBook = repo.firstBookIn(folder)
                 if (firstBook != null) {
-                    val bookId = PositionKey.bookIdFromUri(firstBook.documentUri.toString())
+                    val bookId = PositionKey.bookIdFromUri(firstBook.bookIdSource)
                     _state.value = _state.value.copy(
                         folderFirstBook = _state.value.folderFirstBook + (key to bookId),
                     )
@@ -380,7 +380,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
      * 라이브러리 진입에서 % 라벨이 등장.
      */
     fun requestProgress(book: BookEntry) {
-        val bookId = PositionKey.bookIdFromUri(book.documentUri.toString())
+        val bookId = PositionKey.bookIdFromUri(book.bookIdSource)
         if (_state.value.bookProgress.containsKey(bookId)) return
         if (progressJobs.containsKey(bookId)) return
         val job = viewModelScope.launch {
@@ -413,7 +413,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
      * 첫 진입이 답답해진다. 사용자 명시 새로고침으로만 재추출(`coverMetaRepo.delete`).
      */
     fun requestCover(book: BookEntry) {
-        val bookId = PositionKey.bookIdFromUri(book.documentUri.toString())
+        val bookId = PositionKey.bookIdFromUri(book.bookIdSource)
         if (_state.value.covers.containsKey(bookId)) return
         if (coverJobs.containsKey(bookId)) return
         // batch 캐시 hit: status=FAILED면 즉시 종료, 추가 Room query 없음.
@@ -445,19 +445,42 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     coverSemaphore.withPermit {
                         withContext(Dispatchers.IO) {
                             val file = CoverCache.cacheFile(app, bookId)
-                            val extracted = CoverExtractor.extract(app, book.documentUri)
+                            val extracted = if (book.nestedEntryName != null) {
+                                // ZIP-of-CBZ 자식 — reader에서 한 번 열려 추출 캐시가 있을 때만 표지 추출.
+                                // 캐시 없으면 라이브러리 첫 진입에서 모든 nested cbz를 추출하는 비용이 너무 커서
+                                // skip(다음 라이브러리 진입에서 재시도 가능, FAILED 영구 저장 X).
+                                val nestedFile = NestedZipExtractor.cacheFile(
+                                    app, book.documentUri, book.nestedEntryName,
+                                )
+                                if (nestedFile.exists() && nestedFile.length() > 0) {
+                                    CoverExtractor.extract(nestedFile)
+                                } else {
+                                    null
+                                }
+                            } else {
+                                CoverExtractor.extract(app, book.documentUri)
+                            }
                             if (extracted != null) {
                                 CoverCache.saveBitmap(file, extracted)
                                 coverMetaRepo.save(bookId, CoverStatus.OK)
-                            } else {
+                            } else if (book.nestedEntryName == null) {
+                                // nested 책은 캐시가 없을 뿐이지 깨진 게 아니므로 FAILED 영구 저장 안 함.
                                 coverMetaRepo.save(bookId, CoverStatus.FAILED)
                             }
                             extracted
                         }
                     }
                 }?.asImageBitmap()
-                val newStatus = if (image != null) CoverStatus.OK else CoverStatus.FAILED
-                queueCoverUpdate(bookId, image, newStatus)
+                // nested 책이 추출 캐시 없어 image=null로 끝난 케이스는 status를 FAILED로 박지 않음
+                // — 사용자가 reader에서 한 번 열어 캐시가 생기면 다음 라이브러리 진입에서 다시 추출 가능.
+                val newStatus = when {
+                    image != null -> CoverStatus.OK
+                    book.nestedEntryName != null -> null  // skip
+                    else -> CoverStatus.FAILED
+                }
+                if (image != null || newStatus != null) {
+                    queueCoverUpdate(bookId, image, newStatus ?: CoverStatus.FAILED)
+                }
             } finally {
                 // cancel/예외 케이스에도 dedup map 정리 — 다음 요청에서 재시도 가능.
                 coverJobs.remove(bookId)
@@ -542,7 +565,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     private suspend fun prefetchBookData(entries: List<LibraryEntry>) {
         val books = entries.filterIsInstance<BookEntry>()
         if (books.isEmpty()) return
-        val bookIds = books.map { PositionKey.bookIdFromUri(it.documentUri.toString()) }
+        val bookIds = books.map { PositionKey.bookIdFromUri(it.bookIdSource) }
         // 두 batch query 동시 실행 — async/await로 더 줄일 수 있지만 IO 디스패처 한계라
         // 큰 차이 X. 순차 호출로 단순 유지.
         val progressMap = positionRepo.loadProgressMap(bookIds)
@@ -574,11 +597,11 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val sortedBooks = when (mode) {
             SortMode.Name -> books // repo가 이미 자연순
             SortMode.LastOpened -> {
-                val ids = books.map { PositionKey.bookIdFromUri(it.documentUri.toString()) }
+                val ids = books.map { PositionKey.bookIdFromUri(it.bookIdSource) }
                 val timestamps = positionRepo.loadUpdatedAtMap(ids)
                 books.sortedWith(
                     compareByDescending<BookEntry> {
-                        timestamps[PositionKey.bookIdFromUri(it.documentUri.toString())] ?: 0L
+                        timestamps[PositionKey.bookIdFromUri(it.bookIdSource)] ?: 0L
                     }.thenBy(NaturalOrderComparator) { it.displayName },
                 )
             }

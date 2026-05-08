@@ -49,6 +49,32 @@ object CoverExtractor {
         }
     }
 
+    /**
+     * ZIP-of-CBZ nested 책용 — 이미 추출된 cbz [file]에서 첫 페이지를 디코드. nested 책이
+     * reader에서 한 번 열린 적이 있어 [NestedZipExtractor]가 cacheDir에 추출해 둔 경우만
+     * 이 경로가 의미있다.
+     */
+    suspend fun extract(
+        file: java.io.File,
+        targetMaxPx: Int = DEFAULT_TARGET_MAX_PX,
+    ): Bitmap? = withContext(Dispatchers.IO) {
+        val archive = runCatching {
+            CbzArchive.open(file)
+        }.getOrElse {
+            Log.w(TAG, "open(file) failed: ${file.name}", it)
+            return@withContext null
+        }
+        try {
+            if (archive.pages.isEmpty()) return@withContext null
+            decodeFirstPage(archive, targetMaxPx)
+        } catch (t: Throwable) {
+            Log.w(TAG, "decode(file) failed: ${file.name}", t)
+            null
+        } finally {
+            archive.close()
+        }
+    }
+
     private fun decodeFirstPage(archive: CbzArchive, targetMaxPx: Int): Bitmap? {
         // 1. 헤더만 읽어 원본 크기 파악
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }

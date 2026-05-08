@@ -420,7 +420,7 @@ private fun LibraryList(
     onRequestProgress: (BookEntry) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        items(items = entries, key = { it.documentUri.toString() }) { entry ->
+        items(items = entries, key = { it.stableKey }) { entry ->
             when (entry) {
                 is FolderEntry -> FolderRow(
                     entry = entry,
@@ -432,8 +432,8 @@ private fun LibraryList(
                     onRequestCover = onRequestFolderCover,
                 )
                 is BookEntry -> {
-                    val bookId = remember(entry.documentUri) {
-                        PositionKey.bookIdFromUri(entry.documentUri.toString())
+                    val bookId = remember(entry.bookIdSource) {
+                        PositionKey.bookIdFromUri(entry.bookIdSource)
                     }
                     when (viewMode) {
                         ViewMode.Cover -> BookRow(
@@ -526,7 +526,7 @@ private fun LibraryGrid(
         verticalArrangement = Arrangement.spacedBy(spacing.space2),
         horizontalArrangement = Arrangement.spacedBy(spacing.space2),
     ) {
-        items(items = entries, key = { it.documentUri.toString() }) { entry ->
+        items(items = entries, key = { it.stableKey }) { entry ->
             when (entry) {
                 is FolderEntry -> FolderGridCell(
                     entry = entry,
@@ -537,8 +537,8 @@ private fun LibraryGrid(
                     onRequestCover = onRequestFolderCover,
                 )
                 is BookEntry -> {
-                    val bookId = remember(entry.documentUri) {
-                        PositionKey.bookIdFromUri(entry.documentUri.toString())
+                    val bookId = remember(entry.bookIdSource) {
+                        PositionKey.bookIdFromUri(entry.bookIdSource)
                     }
                     BookGridCell(
                         entry = entry,
