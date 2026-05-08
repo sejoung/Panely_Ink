@@ -159,7 +159,11 @@
   - `LibraryViewModel.setSortMode` — entries 재정렬만(디스크 재스캔 X), SharedPreferences 영속
   - `PositionDao.loadUpdatedAtFor(bookIds)` batch 쿼리 — N권에 N쿼리 대신 1쿼리
   - 헤더에 `PanelySortIcon` 버튼 추가 (정렬/메뉴/추가 3개 아이콘)
-- [ ] 검색 (파일명 / 시리즈명)
+- [~] 검색 (파일명 / 시리즈명)
+  - [x] **현재 폴더 in-memory 검색** — `LibraryViewModel.searchQuery` + `LibraryHeader` 검색 모드(돋보기 → BasicTextField + 자동 포커스). 폴더 + 책 displayName `contains(ignoreCase)` 필터. 검색 결과 빈 상태 메시지
+  - 폴더 이동 시 검색어 자동 클리어. ← back 우선순위(검색 → 폴더 위로 → 시스템)
+  - [ ] **전체 라이브러리 검색** — 책 인덱스 테이블이 필요해 후속(BookMeta 또는 Room FTS)
+  - [ ] **시리즈명** 검색 — ComicInfo.xml 파싱(v1.5)이 전제
 - [ ] 시리즈 그룹핑 (폴더 = 시리즈 자동 인식)
 - [~] Room 도입 (라이브러리/메타/진행률/북마크)
   - [x] **인프라 + Position 마이그레이션** — KSP + Room 2.6.1, `data/db/PanelyDatabase` v1, `PositionEntity`/`PositionDao`, `RoomPositionRepository`(suspend). `PanelyInkApp`에서 1회 SharedPrefs → Room 이전(`PositionMigration`, 멱등). `PositionRepository` 인터페이스를 suspend로 변경, `ReaderScreen`은 `produceState`에서 비동기 로드 후 `SessionState.Ready(session, resumedPage)`로 전달
@@ -270,3 +274,4 @@
 - **2026-05-08** — M3 표지 자동 추출 + 디스크 캐시 1단계. `CoverExtractor`(첫 페이지 inSampleSize 다운스케일 ≤ 400px), `CoverCache`(filesDir/covers PNG 저장), `LibraryViewModel.requestCover` lazy + dedup, `BookRow` 80×112dp 표지 자리. 추출 실패 메타/LRU 정리는 후속
 - **2026-05-08** — M3 진행률 배지. Room v2→v3(`position.page_count` 컬럼), `BookProgress` 도메인 + 테스트 4개. `PositionRepository`가 `BookProgress?`/`save(bookId, pageIndex, pageCount)`로 변경. ReaderScreen이 페이지 변경마다 viewModel.pageCount 같이 저장. 라이브러리 표지 우하단 "N%" 라벨(미열람 책 미표시)
 - **2026-05-08** — M3 정렬 1차. `SortMode`(Name/LastOpened) + `SortDialog`. `PositionDao.loadUpdatedAtFor` batch 쿼리, `LibraryViewModel.applySort`(폴더 이름순 고정 + 책 모드별). 헤더에 `PanelySortIcon` 버튼. SharedPreferences 영속
+- **2026-05-08** — M3 검색 1차(현재 폴더 in-memory). `searchQuery` state + 헤더 검색 모드 토글(돋보기 → 입력 필드 + X). `LaunchedEffect`로 자동 포커스. 폴더 이동/← back 시 자동 클리어. `PanelySearchIcon`/`PanelyCloseIcon` 추가. 전체 라이브러리/시리즈명 검색은 인덱스 테이블 필요해 후속

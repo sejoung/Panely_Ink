@@ -155,6 +155,59 @@ fun PanelyChevronRightIcon(
     }
 }
 
+/** 돋보기 — 라이브러리 헤더 검색 진입. */
+@Composable
+fun PanelySearchIcon(
+    modifier: Modifier = Modifier,
+    tint: Color = PanelyInkColors.Ink,
+    size: Dp = IconConstants.DefaultSize,
+) {
+    Canvas(modifier = modifier.size(size)) {
+        val s = this.size
+        val stroke = IconConstants.Stroke.toPx()
+        val r = s.minDimension * 0.26f
+        val cx = s.width * 0.42f
+        val cy = s.height * 0.42f
+        // 원
+        drawCircle(
+            color = tint,
+            radius = r,
+            center = Offset(cx, cy),
+            style = Stroke(width = stroke),
+        )
+        // 손잡이 — 원 우하단부터 캔버스 우하단 방향
+        val handleStart = Offset(cx + r * 0.7f, cy + r * 0.7f)
+        val handleEnd = Offset(s.width - s.width * 0.16f, s.height - s.height * 0.16f)
+        drawLine(tint, handleStart, handleEnd, strokeWidth = stroke)
+    }
+}
+
+/** X — 닫기/취소 액션. */
+@Composable
+fun PanelyCloseIcon(
+    modifier: Modifier = Modifier,
+    tint: Color = PanelyInkColors.Ink,
+    size: Dp = IconConstants.DefaultSize,
+) {
+    Canvas(modifier = modifier.size(size)) {
+        val s = this.size
+        val stroke = IconConstants.Stroke.toPx()
+        val pad = s.minDimension * 0.22f
+        drawLine(
+            tint,
+            Offset(pad, pad),
+            Offset(s.width - pad, s.height - pad),
+            strokeWidth = stroke,
+        )
+        drawLine(
+            tint,
+            Offset(s.width - pad, pad),
+            Offset(pad, s.height - pad),
+            strokeWidth = stroke,
+        )
+    }
+}
+
 /**
  * 정렬 아이콘 — 라인 두 줄(긴/짧)이 위/아래로 쌓인 outline.
  * 위쪽 라인이 길어 "내림차순" 시각적 의미. 정렬 모드와 무관하게 같은 아이콘 사용.

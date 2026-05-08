@@ -22,6 +22,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,10 +52,12 @@ import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
 import io.github.sejoung.panelyink.ui.components.PanelyBookIcon
 import io.github.sejoung.panelyink.ui.components.PanelyChevronRightIcon
+import io.github.sejoung.panelyink.ui.components.PanelyCloseIcon
 import io.github.sejoung.panelyink.ui.components.PanelyFolderIcon
 import io.github.sejoung.panelyink.ui.components.PanelyIconButton
 import io.github.sejoung.panelyink.ui.components.PanelyMenuIcon
 import io.github.sejoung.panelyink.ui.components.PanelyPlusIcon
+import io.github.sejoung.panelyink.ui.components.PanelySearchIcon
 import io.github.sejoung.panelyink.ui.components.PanelySortIcon
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
@@ -71,13 +80,18 @@ fun LibraryScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var manageOpen by remember { mutableStateOf(false) }
     var sortOpen by remember { mutableStateOf(false) }
+    var searchActive by remember { mutableStateOf(false) }
 
     val pickFolder = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
     ) { uri -> if (uri != null) viewModel.addRoot(uri) }
 
-    // 폴더 안에 들어와 있을 땐 시스템 뒤로 키를 한 단계 위 이동에 쓴다.
-    BackHandler(enabled = state.path.isNotEmpty()) { viewModel.goUp() }
+    // 시스템 뒤로 키 우선순위: 검색 모드 → 폴더 위로 → 시스템 처리.
+    BackHandler(enabled = searchActive) {
+        viewModel.setSearchQuery("")
+        searchActive = false
+    }
+    BackHandler(enabled = !searchActive && state.path.isNotEmpty()) { viewModel.goUp() }
 
     Column(
         modifier = Modifier
@@ -88,21 +102,35 @@ fun LibraryScreen(
         LibraryHeader(
             path = state.path,
             scanning = state.scanning,
+            searchActive = searchActive,
+            searchQuery = state.searchQuery,
+            onActivateSearch = { searchActive = true },
+            onCancelSearch = {
+                viewModel.setSearchQuery("")
+                searchActive = false
+            },
+            onSearchQueryChange = viewModel::setSearchQuery,
             onAdd = { pickFolder.launch(null) },
             onManage = { manageOpen = true },
             onSort = { sortOpen = true },
             onUp = viewModel::goUp,
         )
         HairlineDivider()
-        if (state.entries.isEmpty()) {
-            LibraryEmptyState(
+        // 검색어 적용 후 보이는 항목. 빈 검색어면 raw entries 그대로.
+        val visibleEntries = remember(state.entries, state.searchQuery) {
+            val q = state.searchQuery.trim()
+            if (q.isEmpty()) state.entries
+            else state.entries.filter { it.displayName.contains(q, ignoreCase = true) }
+        }
+        when {
+            state.entries.isEmpty() -> LibraryEmptyState(
                 inFolder = state.path.isNotEmpty(),
                 hasRoots = state.roots.isNotEmpty(),
                 scanning = state.scanning,
             )
-        } else {
-            LibraryList(
-                entries = state.entries,
+            visibleEntries.isEmpty() -> SearchEmptyState(query = state.searchQuery)
+            else -> LibraryList(
+                entries = visibleEntries,
                 folderCounts = state.folderCounts,
                 covers = state.covers,
                 bookProgress = state.bookProgress,
@@ -139,6 +167,11 @@ fun LibraryScreen(
 private fun LibraryHeader(
     path: List<FolderEntry>,
     scanning: Boolean,
+    searchActive: Boolean,
+    searchQuery: String,
+    onActivateSearch: () -> Unit,
+    onCancelSearch: () -> Unit,
+    onSearchQueryChange: (String) -> Unit,
     onAdd: () -> Unit,
     onManage: () -> Unit,
     onSort: () -> Unit,
@@ -146,6 +179,14 @@ private fun LibraryHeader(
 ) {
     val typography = LocalPanelyInkTypography.current
     val spacing = LocalPanelyInkSpacing.current
+    if (searchActive) {
+        SearchHeader(
+            query = searchQuery,
+            onQueryChange = onSearchQueryChange,
+            onCancel = onCancelSearch,
+        )
+        return
+    }
     val inFolder = path.isNotEmpty()
     Row(
         modifier = Modifier
@@ -189,6 +230,9 @@ private fun LibraryHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(spacing.space1),
         ) {
+            PanelyIconButton(onClick = onActivateSearch, primary = false) { tint ->
+                PanelySearchIcon(tint = tint)
+            }
             PanelyIconButton(onClick = onSort, primary = false) { tint ->
                 PanelySortIcon(tint = tint)
             }
@@ -197,6 +241,70 @@ private fun LibraryHeader(
             }
             PanelyIconButton(onClick = onAdd, primary = true) { tint ->
                 PanelyPlusIcon(tint = tint)
+            }
+        }
+    }
+}
+
+/**
+ * 검색 모드 헤더 — [← 닫기] [검색 입력 필드 ____] [X 클리어].
+ *
+ * 자동 포커스 + 키보드 자동 표시. 검색 중엔 정렬/메뉴/추가 버튼은 숨겨 입력 영역 확보.
+ * 입력 필드 외곽선은 1dp Hairline(Card 규칙) — 입력 자체가 명시 액션이라 강조 불필요.
+ */
+@Composable
+private fun SearchHeader(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onCancel: () -> Unit,
+) {
+    val typography = LocalPanelyInkTypography.current
+    val spacing = LocalPanelyInkSpacing.current
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = spacing.space4, vertical = spacing.space2),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spacing.space2),
+    ) {
+        PanelyIconButton(onClick = onCancel, primary = false) { tint ->
+            PanelyCloseIcon(tint = tint)
+        }
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(48.dp)
+                .background(PanelyInkColors.Paper)
+                .border(1.dp, PanelyInkColors.Hairline)
+                .padding(horizontal = spacing.space2),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                cursorBrush = SolidColor(PanelyInkColors.Ink),
+                textStyle = typography.body.copy(color = PanelyInkColors.Ink),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { /* 그대로 — 입력 변경 시 즉시 필터 */ }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester),
+            )
+            if (query.isEmpty()) {
+                Text(
+                    text = "이름으로 검색",
+                    style = typography.body,
+                    color = PanelyInkColors.Mute,
+                )
+            }
+        }
+        if (query.isNotEmpty()) {
+            PanelyIconButton(onClick = { onQueryChange("") }, primary = false) { tint ->
+                PanelyCloseIcon(tint = tint)
             }
         }
     }
@@ -415,6 +523,36 @@ private fun LibraryEmptyState(
                 Spacer(Modifier.height(spacing.space2))
                 Text(
                     text = body,
+                    style = typography.body,
+                    color = PanelyInkColors.Mute,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchEmptyState(query: String) {
+    val typography = LocalPanelyInkTypography.current
+    val spacing = LocalPanelyInkSpacing.current
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = spacing.space5),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "검색 결과가 없습니다",
+                style = typography.display,
+                color = PanelyInkColors.Ink,
+                textAlign = TextAlign.Center,
+            )
+            if (query.isNotBlank()) {
+                Spacer(Modifier.height(spacing.space2))
+                Text(
+                    text = "'$query' 와 일치하는 항목이 이 폴더에 없음",
                     style = typography.body,
                     color = PanelyInkColors.Mute,
                     textAlign = TextAlign.Center,

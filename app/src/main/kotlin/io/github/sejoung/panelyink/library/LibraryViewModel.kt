@@ -91,6 +91,15 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /**
+     * 검색어 변경 — 영속화하지 않음(검색 의도는 화면 단위 임시 상태).
+     * 폴더 이동 시 자동으로 클리어되도록 [enterFolder]/[goUp]에서 비움.
+     */
+    fun setSearchQuery(query: String) {
+        if (query == _state.value.searchQuery) return
+        _state.value = _state.value.copy(searchQuery = query)
+    }
+
+    /**
      * 정렬 모드 변경. 현재 entries만 재정렬해 디스크 재스캔을 피함.
      * 선택은 SharedPreferences에 영속, 다음 실행에서 복원.
      */
@@ -144,21 +153,24 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** 폴더 진입 — path에 push 후 그 폴더의 직계 로드. */
+    /** 폴더 진입 — path에 push 후 그 폴더의 직계 로드. 검색어는 클리어. */
     fun enterFolder(folder: FolderEntry) {
         val nextPath = _state.value.path + folder
         setPath(nextPath)
+        clearSearch()
         refreshChildren(folder)
     }
 
     /**
      * 한 단계 위로. 이미 root 목록이면 false 반환(상위가 없음 — caller가 시스템 뒤로 처리).
+     * 검색어는 클리어 — 위/아래 이동은 컨텍스트 변경.
      */
     fun goUp(): Boolean {
         val current = _state.value.path
         if (current.isEmpty()) return false
         val nextPath = current.dropLast(1)
         setPath(nextPath)
+        clearSearch()
         if (nextPath.isEmpty()) {
             // 사용자 의도로 root 목록까지 올라온 경우 — 자동 진입 X
             pendingAutoDescend = false
@@ -167,6 +179,12 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             refreshChildren(nextPath.last())
         }
         return true
+    }
+
+    private fun clearSearch() {
+        if (_state.value.searchQuery.isNotEmpty()) {
+            _state.value = _state.value.copy(searchQuery = "")
+        }
     }
 
     /** 명시적 새로고침 — 같은 위치 다시 스캔. */
@@ -399,4 +417,6 @@ data class LibraryState(
     val bookProgress: Map<String, BookProgress> = emptyMap(),
     /** 라이브러리 정렬 모드. 영속됨. */
     val sortMode: SortMode = SortMode.DEFAULT,
+    /** 현재 폴더 in-memory 검색어. 빈 문자열이면 필터 적용 X. 폴더 이동 시 자동 클리어. */
+    val searchQuery: String = "",
 )
