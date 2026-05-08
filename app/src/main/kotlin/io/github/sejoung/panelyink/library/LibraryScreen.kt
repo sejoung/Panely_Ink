@@ -17,7 +17,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
@@ -129,17 +133,31 @@ fun LibraryScreen(
                 scanning = state.scanning,
             )
             visibleEntries.isEmpty() -> SearchEmptyState(query = state.searchQuery)
-            else -> LibraryList(
-                entries = visibleEntries,
-                folderCounts = state.folderCounts,
-                covers = state.covers,
-                bookProgress = state.bookProgress,
-                onEnterFolder = viewModel::enterFolder,
-                onOpenBook = onOpenBook,
-                onRequestCount = viewModel::requestFolderCount,
-                onRequestCover = viewModel::requestCover,
-                onRequestProgress = viewModel::requestProgress,
-            )
+            else -> when (state.viewMode) {
+                ViewMode.List, ViewMode.Cover -> LibraryList(
+                    entries = visibleEntries,
+                    viewMode = state.viewMode,
+                    folderCounts = state.folderCounts,
+                    covers = state.covers,
+                    bookProgress = state.bookProgress,
+                    onEnterFolder = viewModel::enterFolder,
+                    onOpenBook = onOpenBook,
+                    onRequestCount = viewModel::requestFolderCount,
+                    onRequestCover = viewModel::requestCover,
+                    onRequestProgress = viewModel::requestProgress,
+                )
+                ViewMode.Grid -> LibraryGrid(
+                    entries = visibleEntries,
+                    folderCounts = state.folderCounts,
+                    covers = state.covers,
+                    bookProgress = state.bookProgress,
+                    onEnterFolder = viewModel::enterFolder,
+                    onOpenBook = onOpenBook,
+                    onRequestCount = viewModel::requestFolderCount,
+                    onRequestCover = viewModel::requestCover,
+                    onRequestProgress = viewModel::requestProgress,
+                )
+            }
         }
     }
 
@@ -152,12 +170,11 @@ fun LibraryScreen(
     }
 
     if (sortOpen) {
-        SortDialog(
-            selected = state.sortMode,
-            onSelect = { mode ->
-                viewModel.setSortMode(mode)
-                sortOpen = false
-            },
+        LibraryOptionsDialog(
+            selectedSort = state.sortMode,
+            selectedView = state.viewMode,
+            onSortChange = viewModel::setSortMode,
+            onViewChange = viewModel::setViewMode,
             onDismiss = { sortOpen = false },
         )
     }
@@ -329,6 +346,7 @@ private fun BreadcrumbLine(path: List<FolderEntry>) {
 @Composable
 private fun LibraryList(
     entries: List<LibraryEntry>,
+    viewMode: ViewMode,
     folderCounts: Map<android.net.Uri, Int>,
     covers: Map<String, ImageBitmap>,
     bookProgress: Map<String, BookProgress>,
@@ -351,7 +369,108 @@ private fun LibraryList(
                     val bookId = remember(entry.documentUri) {
                         PositionKey.bookIdFromUri(entry.documentUri.toString())
                     }
-                    BookRow(
+                    when (viewMode) {
+                        ViewMode.Cover -> BookRow(
+                            entry = entry,
+                            cover = covers[bookId],
+                            progress = bookProgress[bookId],
+                            onClick = { onOpenBook(entry) },
+                            onRequestCover = onRequestCover,
+                            onRequestProgress = onRequestProgress,
+                        )
+                        ViewMode.List -> BookRowCompact(
+                            entry = entry,
+                            progress = bookProgress[bookId],
+                            onClick = { onOpenBook(entry) },
+                            onRequestProgress = onRequestProgress,
+                        )
+                        // Grid는 LibraryGrid에서 처리. 여기 분기는 도달 X.
+                        ViewMode.Grid -> Unit
+                    }
+                }
+            }
+            HairlineDivider()
+        }
+    }
+}
+
+/**
+ * 텍스트 위주 한 줄 행 — [ViewMode.List]. 표지 추출 안 하므로 archive open 비용 0.
+ * 진행률은 작은 우측 텍스트(% Mute)로만.
+ */
+@Composable
+private fun BookRowCompact(
+    entry: BookEntry,
+    progress: BookProgress?,
+    onClick: () -> Unit,
+    onRequestProgress: (BookEntry) -> Unit,
+) {
+    val typography = LocalPanelyInkTypography.current
+    val spacing = LocalPanelyInkSpacing.current
+
+    LaunchedEffect(entry.documentUri) { onRequestProgress(entry) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = spacing.space4, vertical = spacing.space2),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spacing.space2),
+    ) {
+        PanelyBookIcon()
+        Text(
+            text = entry.displayName,
+            style = typography.list,
+            color = PanelyInkColors.Ink,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (progress != null && progress.isKnown) {
+            Text(
+                text = "${(progress.percent * 100).roundToInt()}%",
+                style = typography.caption,
+                color = PanelyInkColors.Mute,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LibraryGrid(
+    entries: List<LibraryEntry>,
+    folderCounts: Map<android.net.Uri, Int>,
+    covers: Map<String, ImageBitmap>,
+    bookProgress: Map<String, BookProgress>,
+    onEnterFolder: (FolderEntry) -> Unit,
+    onOpenBook: (BookEntry) -> Unit,
+    onRequestCount: (FolderEntry) -> Unit,
+    onRequestCover: (BookEntry) -> Unit,
+    onRequestProgress: (BookEntry) -> Unit,
+) {
+    val spacing = LocalPanelyInkSpacing.current
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(spacing.space2),
+        verticalArrangement = Arrangement.spacedBy(spacing.space2),
+        horizontalArrangement = Arrangement.spacedBy(spacing.space2),
+    ) {
+        items(items = entries, key = { it.documentUri.toString() }) { entry ->
+            when (entry) {
+                is FolderEntry -> FolderGridCell(
+                    entry = entry,
+                    count = folderCounts[entry.documentUri],
+                    onClick = { onEnterFolder(entry) },
+                    onRequestCount = onRequestCount,
+                )
+                is BookEntry -> {
+                    val bookId = remember(entry.documentUri) {
+                        PositionKey.bookIdFromUri(entry.documentUri.toString())
+                    }
+                    BookGridCell(
                         entry = entry,
                         cover = covers[bookId],
                         progress = bookProgress[bookId],
@@ -361,8 +480,121 @@ private fun LibraryList(
                     )
                 }
             }
-            HairlineDivider()
         }
+    }
+}
+
+@Composable
+private fun BookGridCell(
+    entry: BookEntry,
+    cover: ImageBitmap?,
+    progress: BookProgress?,
+    onClick: () -> Unit,
+    onRequestCover: (BookEntry) -> Unit,
+    onRequestProgress: (BookEntry) -> Unit,
+) {
+    val typography = LocalPanelyInkTypography.current
+    LaunchedEffect(entry.documentUri) {
+        onRequestCover(entry)
+        onRequestProgress(entry)
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.71f) // 만화 표지 4:5.6
+                .background(PanelyInkColors.Paper)
+                .border(1.dp, PanelyInkColors.Hairline),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (cover != null) {
+                Image(
+                    bitmap = cover,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                PanelyBookIcon()
+            }
+            if (progress != null && progress.isKnown) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .background(PanelyInkColors.Paper)
+                        .border(1.dp, PanelyInkColors.Ink)
+                        .padding(horizontal = 4.dp, vertical = 1.dp),
+                ) {
+                    Text(
+                        text = "${(progress.percent * 100).roundToInt()}%",
+                        style = typography.caption,
+                        color = PanelyInkColors.Ink,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = entry.displayName,
+            style = typography.body,
+            color = PanelyInkColors.Ink,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun FolderGridCell(
+    entry: FolderEntry,
+    count: Int?,
+    onClick: () -> Unit,
+    onRequestCount: (FolderEntry) -> Unit,
+) {
+    val typography = LocalPanelyInkTypography.current
+    LaunchedEffect(entry.documentUri) { onRequestCount(entry) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.71f)
+                .background(PanelyInkColors.Paper)
+                .border(1.dp, PanelyInkColors.Hairline),
+            contentAlignment = Alignment.Center,
+        ) {
+            PanelyFolderIcon(size = 64.dp)
+            if (count != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .background(PanelyInkColors.Paper)
+                        .border(1.dp, PanelyInkColors.Ink)
+                        .padding(horizontal = 4.dp, vertical = 1.dp),
+                ) {
+                    Text(
+                        text = if (count == 0) "비어있음" else "${count}권",
+                        style = typography.caption,
+                        color = PanelyInkColors.Ink,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = entry.displayName,
+            style = typography.body,
+            color = PanelyInkColors.Ink,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

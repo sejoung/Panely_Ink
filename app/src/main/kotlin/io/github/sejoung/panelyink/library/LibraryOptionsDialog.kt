@@ -26,15 +26,21 @@ import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
 import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
 
 /**
- * 정렬 모드 선택 다이얼로그 — Guidelines §6 Dialog 규칙(좌우 32dp 마진, 2dp Ink 보더,
- * 백드롭 dim 없음). 옵션 행 하나가 [SortMode] 하나에 1:1 매핑.
+ * 라이브러리 보기 옵션 다이얼로그 — 정렬과 표시 모드를 한 화면에서 조정.
  *
- * 선택된 옵션은 fill 반전(§7) — Ink 배경 + Paper 텍스트.
+ * 두 차원을 분리하지 않고 묶은 이유:
+ * - 사용자 인지: "라이브러리 보기 방식"으로 통합 인지가 자연스럽다
+ * - 헤더 아이콘 폭주 방지(정렬/표시 두 아이콘 → 한 아이콘)
+ * - 정렬 변경과 표시 변경이 종종 같이 일어남(예: 그리드 + 최근 본 책)
+ *
+ * Guidelines §6 다이얼로그 규칙: Paper 배경 + 2dp Ink 보더, 백드롭 dim 없음.
  */
 @Composable
-fun SortDialog(
-    selected: SortMode,
-    onSelect: (SortMode) -> Unit,
+fun LibraryOptionsDialog(
+    selectedSort: SortMode,
+    selectedView: ViewMode,
+    onSortChange: (SortMode) -> Unit,
+    onViewChange: (ViewMode) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val typography = LocalPanelyInkTypography.current
@@ -53,22 +59,49 @@ fun SortDialog(
         ) {
             Column {
                 Text(
-                    text = "정렬",
+                    text = "보기 옵션",
                     style = typography.title,
                     color = PanelyInkColors.Ink,
                 )
+
                 Spacer(Modifier.height(spacing.space2))
-                SortOption(
+
+                SectionLabel("정렬")
+                Spacer(Modifier.height(spacing.space1))
+                OptionRow(
                     label = "이름순",
-                    isSelected = selected == SortMode.Name,
-                    onClick = { onSelect(SortMode.Name) },
+                    isSelected = selectedSort == SortMode.Name,
+                    onClick = { onSortChange(SortMode.Name) },
                 )
                 Spacer(Modifier.height(spacing.space1))
-                SortOption(
+                OptionRow(
                     label = "최근 본 책",
-                    isSelected = selected == SortMode.LastOpened,
-                    onClick = { onSelect(SortMode.LastOpened) },
+                    isSelected = selectedSort == SortMode.LastOpened,
+                    onClick = { onSortChange(SortMode.LastOpened) },
                 )
+
+                Spacer(Modifier.height(spacing.space2))
+
+                SectionLabel("표시")
+                Spacer(Modifier.height(spacing.space1))
+                OptionRow(
+                    label = "목록",
+                    isSelected = selectedView == ViewMode.List,
+                    onClick = { onViewChange(ViewMode.List) },
+                )
+                Spacer(Modifier.height(spacing.space1))
+                OptionRow(
+                    label = "표지",
+                    isSelected = selectedView == ViewMode.Cover,
+                    onClick = { onViewChange(ViewMode.Cover) },
+                )
+                Spacer(Modifier.height(spacing.space1))
+                OptionRow(
+                    label = "그리드",
+                    isSelected = selectedView == ViewMode.Grid,
+                    onClick = { onViewChange(ViewMode.Grid) },
+                )
+
                 Spacer(Modifier.height(spacing.space2))
                 Row(
                     horizontalArrangement = Arrangement.End,
@@ -82,7 +115,17 @@ fun SortDialog(
 }
 
 @Composable
-private fun SortOption(
+private fun SectionLabel(text: String) {
+    val typography = LocalPanelyInkTypography.current
+    Text(
+        text = text,
+        style = typography.caption,
+        color = PanelyInkColors.Mute,
+    )
+}
+
+@Composable
+private fun OptionRow(
     label: String,
     isSelected: Boolean,
     onClick: () -> Unit,

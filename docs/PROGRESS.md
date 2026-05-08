@@ -275,3 +275,4 @@
 - **2026-05-08** — M3 진행률 배지. Room v2→v3(`position.page_count` 컬럼), `BookProgress` 도메인 + 테스트 4개. `PositionRepository`가 `BookProgress?`/`save(bookId, pageIndex, pageCount)`로 변경. ReaderScreen이 페이지 변경마다 viewModel.pageCount 같이 저장. 라이브러리 표지 우하단 "N%" 라벨(미열람 책 미표시)
 - **2026-05-08** — M3 정렬 1차. `SortMode`(Name/LastOpened) + `SortDialog`. `PositionDao.loadUpdatedAtFor` batch 쿼리, `LibraryViewModel.applySort`(폴더 이름순 고정 + 책 모드별). 헤더에 `PanelySortIcon` 버튼. SharedPreferences 영속
 - **2026-05-08** — M3 검색 1차(현재 폴더 in-memory). `searchQuery` state + 헤더 검색 모드 토글(돋보기 → 입력 필드 + X). `LaunchedEffect`로 자동 포커스. 폴더 이동/← back 시 자동 클리어. `PanelySearchIcon`/`PanelyCloseIcon` 추가. 전체 라이브러리/시리즈명 검색은 인덱스 테이블 필요해 후속
+- **2026-05-08** — M3 표시 모드 3종(List/Cover/Grid). `ViewMode` enum + 영속. `LibraryOptionsDialog`로 정렬+표시 통합(SortDialog 대체). List는 표지 추출 안 함(archive open 비용 0). Grid는 `LazyVerticalGrid` 3열 + 4:5.6 표지 슬롯 + 진행률 코너 라벨. 폴더 셀은 큰 폴더 아이콘 + 권수 라벨

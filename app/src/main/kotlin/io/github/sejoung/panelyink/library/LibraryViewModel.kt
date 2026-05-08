@@ -76,10 +76,12 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             .takeIf { isPathValid(it, savedRoots) }
             .orEmpty()
         val savedSort = SortMode.fromKey(prefs.getString(KEY_SORT, null))
+        val savedView = ViewMode.fromKey(prefs.getString(KEY_VIEW, null))
         _state.value = _state.value.copy(
             roots = savedRoots,
             path = savedPath,
             sortMode = savedSort,
+            viewMode = savedView,
         )
         if (savedPath.isNotEmpty()) {
             // 마지막 위치 복원 — pendingAutoDescend는 비활성, 직접 children 로드.
@@ -88,6 +90,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             pendingAutoDescend = true
             refreshRoots()
         }
+    }
+
+    /** 표시 모드 변경 — entries 재정렬/재계산 없음, UI에서 분기. SharedPrefs 영속. */
+    fun setViewMode(mode: ViewMode) {
+        if (mode == _state.value.viewMode) return
+        prefs.edit { putString(KEY_VIEW, mode.name) }
+        _state.value = _state.value.copy(viewMode = mode)
     }
 
     /**
@@ -391,6 +400,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         private const val KEY_ROOTS = "library_root_uris"
         private const val KEY_PATH = "library_last_path"
         private const val KEY_SORT = "library_sort_mode"
+        private const val KEY_VIEW = "library_view_mode"
         private const val JSON_NAME = "name"
         private const val JSON_DOC = "doc"
         private const val JSON_ROOT = "root"
@@ -417,6 +427,8 @@ data class LibraryState(
     val bookProgress: Map<String, BookProgress> = emptyMap(),
     /** 라이브러리 정렬 모드. 영속됨. */
     val sortMode: SortMode = SortMode.DEFAULT,
+    /** 라이브러리 표시 모드(List/Cover/Grid). 영속됨. */
+    val viewMode: ViewMode = ViewMode.DEFAULT,
     /** 현재 폴더 in-memory 검색어. 빈 문자열이면 필터 적용 X. 폴더 이동 시 자동 클리어. */
     val searchQuery: String = "",
 )
