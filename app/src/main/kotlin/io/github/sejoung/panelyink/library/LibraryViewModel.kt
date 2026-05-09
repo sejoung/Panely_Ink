@@ -402,7 +402,6 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
      */
     fun requestProgress(book: BookEntry) {
         val bookId = PositionKey.bookIdFromUri(book.bookIdSource)
-        if (_state.value.bookProgress.containsKey(bookId)) return
         if (progressJobs.containsKey(bookId)) return
         val job = viewModelScope.launch {
             try {

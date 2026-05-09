@@ -22,6 +22,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -50,6 +51,7 @@ import io.github.sejoung.panelyink.data.db.RoomBookSettingsRepository
 import io.github.sejoung.panelyink.data.db.RoomPositionRepository
 import io.github.sejoung.panelyink.data.preferences.SharedPrefsAppPreferencesRepository
 import io.github.sejoung.panelyink.library.BookEntry
+import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
 import io.github.sejoung.panelyink.ui.components.PanelyArrowForwardIcon
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
@@ -303,7 +305,15 @@ private fun ReaderContent(
 
     // 하드웨어 키 라우팅 — 메뉴/설정 열림 시 키는 그 화면 닫기로 흡수.
     val activity = LocalContext.current.findMainActivity()
-    DisposableEffect(activity, viewModel, menuOpen, settingsOpen) {
+    DisposableEffect(
+        activity,
+        viewModel,
+        menuOpen,
+        settingsOpen,
+        state.currentPage,
+        context.previousBook,
+        context.nextBook,
+    ) {
         activity?.keyDispatcher = { event ->
             when {
                 settingsOpen -> ReaderInput.dispatch(
@@ -318,8 +328,22 @@ private fun ReaderContent(
                 )
                 else -> ReaderInput.dispatch(
                     event = event,
-                    onPrev = viewModel::goPrevious,
-                    onNext = viewModel::goNext,
+                    onPrev = {
+                        val previousBook = context.previousBook
+                        if (state.currentPage == 0 && previousBook != null) {
+                            onNavigate(previousBook, state.toBookSettings())
+                        } else {
+                            viewModel.goPrevious()
+                        }
+                    },
+                    onNext = {
+                        val nextBook = context.nextBook
+                        if (state.currentPage == viewModel.pageCount - 1 && nextBook != null) {
+                            onNavigate(nextBook, state.toBookSettings())
+                        } else {
+                            viewModel.goNext()
+                        }
+                    },
                 )
             }
         }
@@ -327,19 +351,21 @@ private fun ReaderContent(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { ctx ->
-                ReaderView(ctx).also {
-                    it.attach(session, viewModel)
-                    view = it
-                }
-            },
-            onRelease = { v ->
-                v.detach()
-                if (view === v) view = null
-            },
-        )
+        key(session) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { ctx ->
+                    ReaderView(ctx).also {
+                        it.attach(session, viewModel)
+                        view = it
+                    }
+                },
+                onRelease = { v ->
+                    v.detach()
+                    if (view === v) view = null
+                },
+            )
+        }
         // 본문 위 레이어: 메뉴 닫혔으면 탭 영역, 열렸으면 메뉴 패널.
         if (!menuOpen) {
             TapRegions(
@@ -348,6 +374,7 @@ private fun ReaderContent(
                 onNext = viewModel::goNext,
                 onMenu = { menuOpen = true },
             )
+            val previousBook = context.previousBook
             val nextBook = context.nextBook
             if (
                 nextBook != null &&
@@ -358,6 +385,20 @@ private fun ReaderContent(
                     title = nextBook.displayName,
                     onClick = {
                         onNavigate(nextBook, state.toBookSettings())
+                    },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            } else if (
+                previousBook != null &&
+                state.currentPage == 0 &&
+                !settingsOpen
+            ) {
+                AdjacentBookCard(
+                    label = "이전 권",
+                    title = previousBook.displayName,
+                    forward = false,
+                    onClick = {
+                        onNavigate(previousBook, state.toBookSettings())
                     },
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
@@ -426,8 +467,10 @@ private fun ReaderContent(
 }
 
 @Composable
-private fun NextBookCard(
+private fun AdjacentBookCard(
+    label: String,
     title: String,
+    forward: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -448,8 +491,9 @@ private fun NextBookCard(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(spacing.space2),
     ) {
+        if (!forward) PanelyArrowBackIcon(tint = PanelyInkColors.Ink)
         Text(
-            text = "다음 권",
+            text = label,
             style = typography.body,
             color = PanelyInkColors.Ink,
         )
@@ -461,8 +505,23 @@ private fun NextBookCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        PanelyArrowForwardIcon(tint = PanelyInkColors.Ink)
+        if (forward) PanelyArrowForwardIcon(tint = PanelyInkColors.Ink)
     }
+}
+
+@Composable
+private fun NextBookCard(
+    title: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    AdjacentBookCard(
+        label = "다음 권",
+        title = title,
+        forward = true,
+        onClick = onClick,
+        modifier = modifier,
+    )
 }
 
 private fun ReaderState.toBookSettings(): BookSettings = BookSettings(
