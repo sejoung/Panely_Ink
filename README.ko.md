@@ -90,6 +90,17 @@ app/build/outputs/apk/debug/app-debug.apk
 - Release는 `v*` 태그 또는 태그 입력을 받는 수동 실행에서 동작합니다. 릴리즈 검증을
   실행하고 unsigned release APK와 SHA-256 체크섬을 GitHub Release에 게시합니다.
 
+로컬 릴리즈 헬퍼:
+
+```bash
+scripts/release.sh patch
+scripts/release.sh minor
+scripts/release.sh major
+```
+
+스크립트는 semantic version 모드에서 `versionName`/`versionCode`를 올리고, unsigned
+release APK를 빌드한 뒤 로컬 태그를 만들고 push 여부를 물어봅니다.
+
 ## 프로젝트 구조
 
 ```text

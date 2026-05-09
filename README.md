@@ -89,6 +89,17 @@ app/build/outputs/apk/debug/app-debug.apk
 - Release runs on `v*` tags or manual dispatch with a tag input. It runs release checks, builds the
   unsigned release APK, creates SHA-256 checksums, and publishes them to a GitHub Release.
 
+Local release helper:
+
+```bash
+scripts/release.sh patch
+scripts/release.sh minor
+scripts/release.sh major
+```
+
+The script bumps `versionName`/`versionCode` for semantic version modes, builds the unsigned
+release APK, creates the local tag, and asks whether to push.
+
 ## Project Layout
 
 ```text

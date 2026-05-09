@@ -36,6 +36,19 @@ Run connected tests for Room migrations or Android framework behavior:
 Release APK signing is not configured yet. Add a signing config and GitHub Secrets before treating
 release artifacts as install-ready production builds.
 
+For local release preparation:
+
+```bash
+scripts/release.sh patch
+scripts/release.sh minor
+scripts/release.sh major
+```
+
+The script requires a clean working tree, bumps `versionName`/`versionCode` for semantic version
+modes, builds the unsigned APK, writes checksums under `build/release/<tag>/`, commits the version
+bump, and creates the local git tag. By default it asks before pushing. Use `--push` for
+non-interactive push or `--no-push` to skip the prompt.
+
 ## Code Style
 
 - Follow the existing package boundaries.
