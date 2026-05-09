@@ -14,7 +14,6 @@ import androidx.room.PrimaryKey
  * - [fitMode]: `serializeFitMode` 결과 String — `"FitScreen"`, `"Zoom:1.5"` 등
  * - [direction]: `ReadingDirection.name` — `"Ltr"`, `"Rtl"`, `"VerticalScroll"`
  * - [contrast]: 0.5..2.0 (안전가드는 `ContrastMatrix.MIN/MAX`)
- * - [fullRefreshInterval]: 0=끔, 1+=N페이지마다 자동
  */
 @Entity(tableName = "book_settings")
 data class BookSettingsEntity(
@@ -33,12 +32,6 @@ data class BookSettingsEntity(
 
     @ColumnInfo(name = "contrast")
     val contrast: Float,
-
-    @ColumnInfo(name = "invert_enabled")
-    val invertEnabled: Boolean,
-
-    @ColumnInfo(name = "full_refresh_interval")
-    val fullRefreshInterval: Int,
 
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long,
