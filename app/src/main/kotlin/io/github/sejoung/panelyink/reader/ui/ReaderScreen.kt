@@ -194,7 +194,6 @@ private fun ReaderContent(
     )
     ReaderViewEffects(state = state, viewModel = viewModel, view = view)
     ReaderPersistenceEffects(
-        state = state,
         viewModel = viewModel,
         positionRepo = positionRepo,
         bookSettingsRepo = bookSettingsRepo,

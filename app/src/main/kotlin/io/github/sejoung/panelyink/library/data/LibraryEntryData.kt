@@ -41,11 +41,11 @@ internal suspend fun sortLibraryEntries(
     val sortedBooks = when (mode) {
         SortMode.Name -> books
         SortMode.LastOpened -> {
-            val ids = books.map { PositionKey.bookIdFromUri(it.bookIdSource) }
-            val timestamps = positionRepo.loadUpdatedAtMap(ids)
+            val idsBySource = books.associate { it.bookIdSource to PositionKey.bookIdFromUri(it.bookIdSource) }
+            val timestamps = positionRepo.loadUpdatedAtMap(idsBySource.values.toList())
             books.sortedWith(
                 compareByDescending<BookEntry> {
-                    timestamps[PositionKey.bookIdFromUri(it.bookIdSource)] ?: 0L
+                    timestamps[idsBySource.getValue(it.bookIdSource)] ?: 0L
                 }.thenBy(NaturalOrderComparator) { it.displayName },
             )
         }

@@ -13,8 +13,10 @@ import io.github.sejoung.panelyink.core.trim.MarginTrimmer
 import io.github.sejoung.panelyink.library.model.BookEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.concurrent.withLock
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.locks.ReentrantLock
 
 /**
  * 한 권의 책에 대한 자원 모음. ReaderScreen 라이프사이클과 1:1로 묶여 관리된다.
@@ -50,6 +52,7 @@ class CbzBookSession private constructor(
      * 바뀌어도 같은 비트맵에 대한 본문 좌표는 변하지 않으므로 재계산 불필요.
      */
     private val trimCache = ConcurrentHashMap<Int, TrimRect>()
+    private val decodeLock = ReentrantLock()
 
     /** ReaderView가 onSizeChanged에서 갱신. 0/음수면 무시. */
     fun setViewportHint(width: Int, height: Int) {
@@ -61,49 +64,51 @@ class CbzBookSession private constructor(
 
     /** 캐시에 [pageIndex] 비트맵을 넣는다. 이미 있으면 재사용. */
     suspend fun decode(pageIndex: Int): Bitmap = withContext(Dispatchers.IO) {
-        cache.get(pageIndex)?.let { return@withContext it }
-        require(pageIndex in pages.indices) { "page $pageIndex out of range [$pageCount]" }
-        val name = pages[pageIndex].name
-        val t0 = System.currentTimeMillis()
+        decodeLock.withLock {
+            cache.get(pageIndex)?.let { return@withContext it }
+            require(pageIndex in pages.indices) { "page $pageIndex out of range [$pageCount]" }
+            val name = pages[pageIndex].name
+            val t0 = System.currentTimeMillis()
 
-        // 1. 헤더만 읽어 원본 크기 파악
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        archive.openPage(pageIndex).use { input ->
-            BitmapFactory.decodeStream(input, null, bounds)
-        }
-        val tBounds = System.currentTimeMillis()
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
-            throw IOException("decode bounds failed: $name")
-        }
+            // 1. 헤더만 읽어 원본 크기 파악
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            archive.openPage(pageIndex).use { input ->
+                BitmapFactory.decodeStream(input, null, bounds)
+            }
+            val tBounds = System.currentTimeMillis()
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                throw IOException("decode bounds failed: $name")
+            }
 
-        // 2. viewport에 맞춰 inSampleSize 계산
-        val targetW = if (hintWidth > 0) hintWidth else bounds.outWidth
-        val targetH = if (hintHeight > 0) hintHeight else bounds.outHeight
-        val sample = computeInSampleSize(bounds.outWidth, bounds.outHeight, targetW, targetH)
+            // 2. viewport에 맞춰 inSampleSize 계산
+            val targetW = if (hintWidth > 0) hintWidth else bounds.outWidth
+            val targetH = if (hintHeight > 0) hintHeight else bounds.outHeight
+            val sample = computeInSampleSize(bounds.outWidth, bounds.outHeight, targetW, targetH)
 
-        // 3. 본 디코드
-        val opts = BitmapFactory.Options().apply {
-            inSampleSize = sample
-            inPreferredConfig = Bitmap.Config.ARGB_8888 // RGB565 옵션은 v1.0 후반(또는 PRD §11 Q5) 검토
-        }
-        val bitmap = archive.openPage(pageIndex).use { input ->
-            BitmapFactory.decodeStream(input, null, opts)
-        } ?: throw IOException("decode failed: $name")
-        val tDecode = System.currentTimeMillis()
-        Log.d(
-            TAG,
-            "decode #$pageIndex $name: bounds=${tBounds - t0}ms decode=${tDecode - tBounds}ms " +
-                "src=${bounds.outWidth}x${bounds.outHeight} sample=$sample → ${bitmap.width}x${bitmap.height}",
-        )
+            // 3. 본 디코드
+            val opts = BitmapFactory.Options().apply {
+                inSampleSize = sample
+                inPreferredConfig = Bitmap.Config.ARGB_8888 // RGB565 옵션은 v1.0 후반(또는 PRD §11 Q5) 검토
+            }
+            val bitmap = archive.openPage(pageIndex).use { input ->
+                BitmapFactory.decodeStream(input, null, opts)
+            } ?: throw IOException("decode failed: $name")
+            val tDecode = System.currentTimeMillis()
+            Log.d(
+                TAG,
+                "decode #$pageIndex $name: bounds=${tBounds - t0}ms decode=${tDecode - tBounds}ms " +
+                    "src=${bounds.outWidth}x${bounds.outHeight} sample=$sample → ${bitmap.width}x${bitmap.height}",
+            )
 
-        cache.put(pageIndex, bitmap)
-        // 자동 여백 트리밍(M2) — 같은 IO 스레드에서 한 번만 계산. 1500x2000 픽셀
-        // 기준 ~수십 ms로 디코드 자체(100~500ms)에 비하면 작음. 계산이 끝나면
-        // 다음 onDraw가 trim을 사용한다.
-        if (!trimCache.containsKey(pageIndex)) {
-            trimCache[pageIndex] = computeTrim(bitmap)
+            cache.put(pageIndex, bitmap)
+            // 자동 여백 트리밍(M2) — 같은 IO 스레드에서 한 번만 계산. 1500x2000 픽셀
+            // 기준 ~수십 ms로 디코드 자체(100~500ms)에 비하면 작음. 계산이 끝나면
+            // 다음 onDraw가 trim을 사용한다.
+            if (!trimCache.containsKey(pageIndex)) {
+                trimCache[pageIndex] = computeTrim(bitmap)
+            }
+            bitmap
         }
-        bitmap
     }
 
     /** 동기적으로 캐시 hit만 조회. View.onDraw 같은 메인스레드 핫패스용. */
@@ -140,9 +145,11 @@ class CbzBookSession private constructor(
     }
 
     fun close() {
-        cache.clear()
-        trimCache.clear()
-        archive.close()
+        decodeLock.withLock {
+            cache.clear()
+            trimCache.clear()
+            archive.close()
+        }
     }
 
     companion object {

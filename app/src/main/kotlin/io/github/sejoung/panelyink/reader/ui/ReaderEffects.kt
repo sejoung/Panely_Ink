@@ -20,6 +20,13 @@ import io.github.sejoung.panelyink.core.position.PositionRepository
 import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
 import io.github.sejoung.panelyink.data.db.BookSettingsRepository
 import io.github.sejoung.panelyink.library.model.BookEntry
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 
 @Composable
 internal fun ReaderSystemBarsEffect() {
@@ -99,41 +106,101 @@ internal fun ReaderViewEffects(
 }
 
 @Composable
+@OptIn(FlowPreview::class)
 internal fun ReaderPersistenceEffects(
-    state: ReaderState,
     viewModel: ReaderViewModel,
     positionRepo: PositionRepository,
     bookSettingsRepo: BookSettingsRepository,
     appPrefsRepo: AppPreferencesRepository,
 ) {
-    LaunchedEffect(state.currentPage, viewModel) {
-        positionRepo.save(
-            bookId = viewModel.bookId,
-            pageIndex = state.currentPage,
-            pageCount = viewModel.pageCount,
-        )
+    LaunchedEffect(viewModel) {
+        try {
+            viewModel.state
+                .map { it.currentPage }
+                .drop(1)
+                .distinctUntilChanged()
+                .debounce(POSITION_SAVE_DEBOUNCE_MS)
+                .collect { page ->
+                    positionRepo.save(
+                        bookId = viewModel.bookId,
+                        pageIndex = page,
+                        pageCount = viewModel.pageCount,
+                    )
+                }
+        } finally {
+            withContext(NonCancellable) {
+                val latest = viewModel.state.value.currentPage
+                positionRepo.save(
+                    bookId = viewModel.bookId,
+                    pageIndex = latest,
+                    pageCount = viewModel.pageCount,
+                )
+            }
+        }
     }
 
-    LaunchedEffect(
-        viewModel,
-        state.fitMode,
-        state.direction,
-        state.trimEnabled,
-        state.contrast,
-    ) {
-        bookSettingsRepo.save(
-            bookId = viewModel.bookId,
-            settings = state.toBookSettings(),
-        )
+    LaunchedEffect(viewModel) {
+        try {
+            viewModel.state
+                .map { it.toBookSettings() }
+                .drop(1)
+                .distinctUntilChanged()
+                .debounce(SETTINGS_SAVE_DEBOUNCE_MS)
+                .collect { settings ->
+                    bookSettingsRepo.save(
+                        bookId = viewModel.bookId,
+                        settings = settings,
+                    )
+                }
+        } finally {
+            withContext(NonCancellable) {
+                bookSettingsRepo.save(
+                    bookId = viewModel.bookId,
+                    settings = viewModel.state.value.toBookSettings(),
+                )
+            }
+        }
     }
 
-    LaunchedEffect(viewModel, state.invertEnabled) {
-        appPrefsRepo.setInvertEnabled(state.invertEnabled)
+    LaunchedEffect(viewModel) {
+        try {
+            viewModel.state
+                .map { it.invertEnabled }
+                .drop(1)
+                .distinctUntilChanged()
+                .debounce(SETTINGS_SAVE_DEBOUNCE_MS)
+                .collect { enabled ->
+                    appPrefsRepo.setInvertEnabled(enabled)
+                }
+        } finally {
+            withContext(NonCancellable) {
+                val enabled = viewModel.state.value.invertEnabled
+                appPrefsRepo.setInvertEnabled(enabled)
+            }
+        }
     }
-    LaunchedEffect(viewModel, state.fullRefreshInterval) {
-        appPrefsRepo.setFullRefreshInterval(state.fullRefreshInterval)
+
+    LaunchedEffect(viewModel) {
+        try {
+            viewModel.state
+                .map { it.fullRefreshInterval }
+                .drop(1)
+                .distinctUntilChanged()
+                .debounce(SETTINGS_SAVE_DEBOUNCE_MS)
+                .collect { interval ->
+                    appPrefsRepo.setFullRefreshInterval(interval)
+                }
+        } finally {
+            withContext(NonCancellable) {
+                val interval = viewModel.state.value.fullRefreshInterval
+                appPrefsRepo.setFullRefreshInterval(interval)
+            }
+        }
     }
 }
+
+private const val POSITION_SAVE_DEBOUNCE_MS = 400L
+private const val SETTINGS_SAVE_DEBOUNCE_MS = 250L
 
 @Composable
 internal fun ReaderHardwareKeyHandler(

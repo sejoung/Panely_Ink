@@ -17,12 +17,15 @@ class BitmapPageCache(maxBytes: Long) {
         override fun sizeOf(key: Int, value: Bitmap): Int = value.byteCount
     }
 
+    @Synchronized
     fun get(index: Int): Bitmap? = cache.get(index)
 
+    @Synchronized
     fun put(index: Int, bitmap: Bitmap) {
         cache.put(index, bitmap)
     }
 
+    @Synchronized
     fun clear() {
         cache.evictAll()
     }

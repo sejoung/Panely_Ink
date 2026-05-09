@@ -47,7 +47,7 @@ class LibraryRepository(private val context: Context) {
      * - 프로세스 살아있는 동안 자동 invalidate X — 외부에서 파일 변경되면 stale 가능
      *   하지만 라이브러리는 일반적으로 정적이라 사용 패턴상 OK
      *
-     * 동기화: ViewModelScope의 단일 스레드로 호출되므로 plain MutableMap.
+     * 동기화: 호출자는 Main에서 시작하지만 실제 접근은 Dispatchers.IO로 넘어가므로 짧은 lock으로 보호.
      */
     private val childrenCache = mutableMapOf<Uri, List<LibraryEntry>>()
 
@@ -57,11 +57,14 @@ class LibraryRepository(private val context: Context) {
      * 동안 재검사 없이 즉시 응답 → 라이브러리 폴더 위/아래 이동에서 매번 ZIP을 다시 안 연다.
      */
     private val seriesCache = mutableMapOf<Uri, FolderEntry?>()
+    private val cacheLock = Any()
 
     /** 사용자 명시 새로고침 시 캐시 비우기. */
     fun invalidateCache() {
-        childrenCache.clear()
-        seriesCache.clear()
+        synchronized(cacheLock) {
+            childrenCache.clear()
+            seriesCache.clear()
+        }
     }
 
     /** 사용자가 추가한 SAF 트리 [Uri]들을 첫 화면용 root 폴더 행으로 변환. */
@@ -90,7 +93,9 @@ class LibraryRepository(private val context: Context) {
             // 그대로. 정렬은 inspectZipForSeries가 이미 자연순으로 만들어놨다.
             parent.nestedBooks?.let { return@withContext it }
             // in-memory 캐시 hit → SAF query 0번
-            childrenCache[parent.documentUri]?.let { return@withContext it }
+            synchronized(cacheLock) {
+                childrenCache[parent.documentUri]
+            }?.let { return@withContext it }
             val parentDocId = parent.documentIdForChildren()
             val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
                 parent.rootUri, parentDocId,
@@ -135,7 +140,9 @@ class LibraryRepository(private val context: Context) {
             val books = results.filterIsInstance<BookEntry>()
                 .sortedWith(compareBy(NaturalOrderComparator) { it.displayName })
             val sorted = folders + books
-            childrenCache[parent.documentUri] = sorted
+            synchronized(cacheLock) {
+                childrenCache[parent.documentUri] = sorted
+            }
             sorted
         }
 
@@ -159,12 +166,16 @@ class LibraryRepository(private val context: Context) {
     suspend fun inspectZipForSeries(book: BookEntry): FolderEntry? = withContext(Dispatchers.IO) {
         // 이미 nested entry인 책은 ZIP-of-CBZ 자식이라 다시 검사 안 함.
         if (book.nestedEntryName != null) return@withContext null
-        if (seriesCache.containsKey(book.documentUri)) {
-            return@withContext seriesCache[book.documentUri]
+        synchronized(cacheLock) {
+            if (seriesCache.containsKey(book.documentUri)) {
+                return@withContext seriesCache[book.documentUri]
+            }
         }
         val archive = runCatching { CbzArchive.open(context, book.documentUri) }.getOrElse {
             Log.w("PanelyInk.Library", "inspect open failed: ${book.documentUri}", it)
-            seriesCache[book.documentUri] = null
+            synchronized(cacheLock) {
+                seriesCache[book.documentUri] = null
+            }
             return@withContext null
         }
         val result = try {
@@ -192,7 +203,9 @@ class LibraryRepository(private val context: Context) {
         } finally {
             archive.close()
         }
-        seriesCache[book.documentUri] = result
+        synchronized(cacheLock) {
+            seriesCache[book.documentUri] = result
+        }
         result
     }
 

@@ -12,12 +12,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -86,6 +88,7 @@ class ReaderViewModel(
         get() = PositionKey(bookId, state.value.currentPage)
 
     private var preloadJob: Job? = null
+    private var preloadGeneration = 0
 
     fun goNext() = goTo(state.value.currentPage + 1)
 
@@ -193,10 +196,13 @@ class ReaderViewModel(
     private fun triggerPreload() {
         val s = _state.value
         if (s.viewportWidth <= 0 || s.viewportHeight <= 0) return
+        val generation = ++preloadGeneration
         preloadJob?.cancel()
         preloadJob = scope.launch {
             for (idx in s.preloadWindow.byProximityTo(s.currentPage)) {
+                if (generation != preloadGeneration || !currentCoroutineContext().isActive) return@launch
                 decoder.decode(idx, s.viewportWidth, s.viewportHeight)
+                if (generation != preloadGeneration || !currentCoroutineContext().isActive) return@launch
                 _decoded.emit(idx)
             }
         }

@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.util.LinkedHashMap
 
 /**
  * 라이브러리 화면용 상태 보유. 트리 탐색 모델:
@@ -100,6 +101,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
      * Permit 2로 두면 화면 상단부터 보이는 행의 표지가 우선 빨리 채워짐.
      */
     private val coverSemaphore = Semaphore(permits = 2)
+    private val countSemaphore = Semaphore(permits = 2)
+    private val progressLoadedBookIds = mutableSetOf<String>()
 
     /**
      * 표지/메타 갱신 debounce 버퍼 — 추출 1장씩 도착할 때마다 [_state] copy + recompose
@@ -111,6 +114,15 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     private val pendingCovers = mutableMapOf<String, ImageBitmap>()
     private val pendingCoverStatus = mutableMapOf<String, io.github.sejoung.panelyink.data.db.CoverStatus>()
     private var coverFlushJob: Job? = null
+
+    private val coverMemoryCache = object : LinkedHashMap<String, ImageBitmap>(
+        COVER_MEMORY_MAX_ENTRIES,
+        0.75f,
+        true,
+    ) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ImageBitmap>?): Boolean =
+            size > COVER_MEMORY_MAX_ENTRIES
+    }
 
     /**
      * 다음 [refreshRoots] 시 자동으로 단일 root 안으로 한 단계 진입할지.
@@ -160,11 +172,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             coverJobs.clear()
             progressJobs.values.forEach { it.cancel() }
             progressJobs.clear()
+            progressLoadedBookIds.clear()
             folderCoverJobs.values.forEach { it.cancel() }
             folderCoverJobs.clear()
             coverFlushJob?.cancel()
             pendingCovers.clear()
             pendingCoverStatus.clear()
+            coverMemoryCache.clear()
 
             AppDataResetter.resetAll(getApplication(), db)
             repo.invalidateCache()
@@ -188,6 +202,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             coverFlushJob?.cancel()
             pendingCovers.clear()
             pendingCoverStatus.clear()
+            coverMemoryCache.clear()
             _state.value = _state.value.copy(
                 covers = emptyMap(),
                 coverStatus = emptyMap(),
@@ -296,6 +311,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
      */
     fun openBook(book: BookEntry, onBook: (BookEntry) -> Unit) {
         if (book.nestedEntryName != null) {
+            progressLoadedBookIds.remove(PositionKey.bookIdFromUri(book.bookIdSource))
             onBook(book)
             return
         }
@@ -307,6 +323,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 clearSearch()
                 refreshChildren(virtualFolder)
             } else {
+                progressLoadedBookIds.remove(PositionKey.bookIdFromUri(book.bookIdSource))
                 onBook(book)
             }
         }
@@ -362,7 +379,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         if (countingJobs.containsKey(key)) return
         val job = viewModelScope.launch {
             try {
-                val count = repo.countBooks(folder)
+                val count = countSemaphore.withPermit {
+                    repo.countBooks(folder)
+                }
                 _state.value = _state.value.copy(
                     folderCounts = _state.value.folderCounts + (key to count),
                 )
@@ -413,10 +432,12 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
      */
     fun requestProgress(book: BookEntry) {
         val bookId = PositionKey.bookIdFromUri(book.bookIdSource)
+        if (bookId in progressLoadedBookIds) return
         if (progressJobs.containsKey(bookId)) return
         val job = viewModelScope.launch {
             try {
                 val progress = positionRepo.load(bookId)
+                progressLoadedBookIds += bookId
                 if (progress != null && progress.isKnown) {
                     _state.value = _state.value.copy(
                         bookProgress = _state.value.bookProgress + (bookId to progress),
@@ -619,8 +640,11 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val status = pendingCoverStatus.toMap()
         pendingCovers.clear()
         pendingCoverStatus.clear()
+        covers.forEach { (bookId, image) ->
+            coverMemoryCache[bookId] = image
+        }
         _state.value = _state.value.copy(
-            covers = if (covers.isNotEmpty()) _state.value.covers + covers else _state.value.covers,
+            covers = if (covers.isNotEmpty()) coverMemoryCache.toMap() else _state.value.covers,
             coverStatus = if (status.isNotEmpty()) _state.value.coverStatus + status else _state.value.coverStatus,
         )
     }
@@ -651,6 +675,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     companion object {
         private const val COVER_FLUSH_DEBOUNCE_MS = 100L
+        private const val COVER_MEMORY_MAX_ENTRIES = 96
         private const val PREFS_NAME = "panely_ink_prefs"
         private const val KEY_ROOTS = "library_root_uris"
         private const val KEY_PATH = "library_last_path"
