@@ -12,10 +12,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import io.github.sejoung.panelyink.library.LibraryScreen
-import io.github.sejoung.panelyink.reader.BookSettings
-import io.github.sejoung.panelyink.reader.ReaderScreen
-import io.github.sejoung.panelyink.reader.SeriesContext
+import io.github.sejoung.panelyink.library.ui.LibraryScreen
+import io.github.sejoung.panelyink.reader.model.BookSettings
+import io.github.sejoung.panelyink.reader.ui.ReaderScreen
+import io.github.sejoung.panelyink.reader.model.SeriesContext
 import io.github.sejoung.panelyink.ui.theme.PanelyInkTheme
 import io.github.sejoung.panelyink.ui.theme.PanelyInkTokens
 

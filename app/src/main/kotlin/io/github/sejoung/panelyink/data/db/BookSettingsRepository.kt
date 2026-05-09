@@ -1,9 +1,9 @@
 package io.github.sejoung.panelyink.data.db
 
-import io.github.sejoung.panelyink.reader.BookSettings
-import io.github.sejoung.panelyink.reader.deserializeDirection
-import io.github.sejoung.panelyink.reader.deserializeFitMode
-import io.github.sejoung.panelyink.reader.serializeFitMode
+import io.github.sejoung.panelyink.reader.model.BookSettings
+import io.github.sejoung.panelyink.reader.model.deserializeDirection
+import io.github.sejoung.panelyink.reader.model.deserializeFitMode
+import io.github.sejoung.panelyink.reader.model.serializeFitMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

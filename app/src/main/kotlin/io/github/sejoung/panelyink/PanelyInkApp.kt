@@ -1,11 +1,11 @@
 package io.github.sejoung.panelyink
 
+import io.github.sejoung.panelyink.library.data.CoverPruner
 import android.app.Application
 import android.util.Log
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
 import io.github.sejoung.panelyink.data.db.PositionMigration
 import io.github.sejoung.panelyink.data.db.RoomCoverMetaRepository
-import io.github.sejoung.panelyink.library.CoverPruner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

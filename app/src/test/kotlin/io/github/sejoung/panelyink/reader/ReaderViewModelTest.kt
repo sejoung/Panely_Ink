@@ -2,6 +2,9 @@ package io.github.sejoung.panelyink.reader
 
 import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.core.position.PositionKey
+import io.github.sejoung.panelyink.reader.model.ReadingDirection
+import io.github.sejoung.panelyink.reader.session.DecodedPage
+import io.github.sejoung.panelyink.reader.session.PageDecoder
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi

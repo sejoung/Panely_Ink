@@ -9,7 +9,7 @@ import io.github.sejoung.panelyink.reader.ReaderViewModel
  * - [fullRefreshInterval]: e-ink 디바이스 자체의 잔상 정책. 책마다 달라야 할 이유가 약함
  * - [invertEnabled]: 야간/조명 환경에 따라 토글 — 환경 의존이라 모든 책에 일관
  *
- * 책별([io.github.sejoung.panelyink.reader.BookSettings])과 분리. 사용자가 라이브러리
+ * 책별([io.github.sejoung.panelyink.reader.model.BookSettings])과 분리. 사용자가 라이브러리
  * 앱 설정에서 변경하거나, 책 메뉴에서도 토글 가능(흑백 반전) — 어느 쪽이든 같은
  * 전역 저장소에 저장되어 모든 책에 즉시 반영.
  */
