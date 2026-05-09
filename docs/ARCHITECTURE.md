@@ -22,6 +22,7 @@ session lifetime to composition and closes it through `DisposableEffect`.
 ```text
 core/
   archive/      CBZ/ZIP random access
+  book/         stable book identity used across aggregates
   fit/          fit mode and draw rectangle calculation
   position/     book id and progress model
   render/       contrast / invert color matrices
@@ -29,7 +30,12 @@ core/
   trim/         margin detection
 
 data/
-  db/           Room database, DAOs, repositories, migrations
+  db/           Room database root
+    bookmark/   bookmark entity, DAO, repository
+    cover/      cover metadata entity, DAO, repository
+    migration/  one-off persistence migrations
+    position/   resume/progress entity, DAO, repository
+    settings/   per-book settings entity, DAO, repository
   preferences/  SharedPreferences backed app settings
 
 library/
@@ -84,6 +90,8 @@ The library is intentionally shallow by default:
 - Folder rows lazily request book counts and first-cover data.
 - Book rows lazily request progress and covers.
 - Search is currently in-memory within the current folder.
+- Global bookmarks load bookmark rows first, then index only the missing book ids needed to show
+  the list.
 
 This keeps large SD-card libraries responsive and avoids full-library scans on startup.
 
@@ -100,9 +108,18 @@ SharedPreferences stores:
 
 - selected library roots and current path
 - library sort/view mode
-- global app preferences such as invert and full-refresh interval
+- global app preferences such as language, invert, and full-refresh interval
 
 Reader position/settings writes are debounced and finalized on reader disposal.
+
+## Localization
+
+User-facing strings live in Android XML resources:
+
+- `app/src/main/res/values/strings.xml`: English default
+- `app/src/main/res/values-ko/strings.xml`: Korean
+
+The selected language is stored in app preferences. English is the fallback for unknown tags.
 
 ## Testing
 
@@ -110,6 +127,7 @@ Use these commands before submitting changes:
 
 ```bash
 ./gradlew test
+./gradlew lintDebug
 ./gradlew compileDebugAndroidTestKotlin
 ```
 

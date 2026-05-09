@@ -54,6 +54,13 @@ previous or next volume when a series context exists.
 - Ripple, elevation, shadow, and animated spinners are avoided.
 - Sliders apply expensive changes on release, not on every drag frame.
 
+## Text And Localization
+
+- All user-facing text belongs in Android string resources.
+- English is the default locale.
+- Korean translations live in `values-ko`.
+- Avoid embedding workflow explanations or keyboard shortcut documentation directly in the UI.
+
 ## Refresh Policy
 
 E-ink redraw cost matters:

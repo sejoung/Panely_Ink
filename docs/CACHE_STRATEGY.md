@@ -24,7 +24,8 @@ Invalidated by:
 - `resetAllData()`
 
 External file changes are not watched. Users must refresh the library to rescan the current
-location.
+location. Adding a new root refreshes the root list and schedules bookmark pruning, but it does not
+clear already cached child folders from existing roots.
 
 ## ZIP-of-CBZ Series Cache
 
@@ -171,9 +172,48 @@ Invalidated by:
 - `resetAllData()`
 - opening a book removes that book id, so returning from reader can refresh the latest progress
 
+## Global Bookmark Book Index
+
+Location: `LibraryViewModel.globalBookmarkBookIndex`
+
+Stores:
+
+- `bookId -> IndexedBookEntry`
+
+Used by:
+
+- all-bookmarks screen, to resolve bookmark rows back to books
+- opening a bookmarked page directly from the global list
+
+Invalidated by:
+
+- library refresh
+- root removal
+- reset all data
+
+The all-bookmarks screen loads bookmark rows first. If there are no bookmarks, it returns without
+scanning the library. When bookmarks exist, it reuses indexed books and scans only for missing book
+ids.
+
+## Bookmark Orphan Pruning
+
+Location: Room table `bookmark`
+
+Orphan bookmarks are bookmarks whose book id no longer exists in the current roots.
+
+Triggered by:
+
+- adding a new root
+- library refresh
+- opening the global bookmarks screen after missing books are detected
+
+The root-wide prune path is debounced and deduplicated in `LibraryViewModel` so normal screen
+navigation does not repeatedly full-scan the library.
+
 ## Refresh Button Semantics
 
 The library header refresh button is the user-facing cache invalidation point for folder and series
-scan data. It does not clear covers, progress, settings, or bookmarks.
+scan data. It also refreshes the global bookmark index and schedules bookmark orphan pruning. It
+does not clear covers, progress, settings, or valid bookmarks.
 
 Use app settings for destructive cache operations such as clearing all cover thumbnails.

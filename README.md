@@ -1,5 +1,7 @@
 # Panely Ink
 
+Language: English | [한국어](README.ko.md)
+
 <p align="center">
   <img src="docs/icon/panely-ink-icon.svg" width="128" height="128" alt="Panely Ink icon">
 </p>
@@ -29,15 +31,15 @@ Panely Ink is under active development. The core reader and local library are us
 - Single-page reader with Canvas rendering
 - LTR/RTL reading direction
 - Hardware page keys, volume keys, D-pad, and tap zones
-- Resume, progress badges, per-book settings, bookmarks
+- Resume, progress badges, per-book settings, current-book bookmarks, and all-bookmarks view
 - Cover extraction with disk + Room metadata + in-memory LRU cache
 - E-ink-oriented full refresh policy, trim, contrast, and invert controls
 - Previous/next volume navigation and boundary key navigation
+- English and Korean UI strings, with English as the default and an in-app language setting
 
 Planned or incomplete:
 
 - Gamma/sharpness and dithering
-- Bookmark list screen
 - Full library search / metadata indexing
 - Meebook-specific refresh API spike
 - Release packaging and device validation
@@ -84,8 +86,8 @@ app/build/outputs/apk/debug/app-debug.apk
 
 ```text
 app/src/main/kotlin/io/github/sejoung/panelyink/
-├── core/                 # archive, fit, position, render, sort, trim primitives
-├── data/                 # Room, repositories, preferences, reset helpers
+├── core/                 # archive, book identity, fit, position, render, sort, trim primitives
+├── data/                 # Room database packages, repositories, preferences, reset helpers
 ├── library/
 │   ├── data/             # SAF scanning, covers, nested ZIP extraction, path codec
 │   ├── model/            # LibraryEntry, SortMode, ViewMode
@@ -111,6 +113,7 @@ The app relies on aggressive but explicit caching:
 - SAF folder scans are cached per folder until refresh/reset
 - ZIP-of-CBZ inspection results are cached, including negative results
 - Covers use Room metadata, disk PNG cache, and a bounded in-memory LRU
+- Global bookmarks index only the books needed for the all-bookmarks list
 - Reader pages use a 100 MB bitmap LRU per open book session
 - Page trim results are cached per decoded page
 

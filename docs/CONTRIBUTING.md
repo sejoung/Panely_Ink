@@ -16,6 +16,7 @@ Useful checks:
 ```bash
 ./gradlew test
 ./gradlew compileDebugKotlin
+./gradlew lintDebug
 ./gradlew compileDebugAndroidTestKotlin
 ```
 
@@ -32,6 +33,8 @@ Run connected tests for Room migrations or Android framework behavior:
 - Avoid animations, shadows, gradients, and ripple effects.
 - Prefer explicit caches with documented invalidation points.
 - Keep reader hot paths out of Compose when direct `View` drawing is more predictable.
+- Put user-facing text in Android string resources. English is the default; Korean lives in
+  `values-ko`.
 - Add focused tests for behavioral changes.
 
 ## Pull Request Checklist
@@ -46,7 +49,6 @@ Run connected tests for Room migrations or Android framework behavior:
 - Meebook refresh API investigation
 - Real-device performance measurements
 - Dithering and gamma experiments
-- Bookmark list UI
 - Full-library search and metadata indexing
 - Release workflow and signed APK packaging
 

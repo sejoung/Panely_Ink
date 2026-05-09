@@ -15,16 +15,16 @@ Implemented:
 - LTR/RTL reading direction
 - tap zones and hardware key input
 - first/last page boundary navigation to adjacent volumes
-- resume, progress, per-book settings, and bookmarks
+- resume, progress, per-book settings, current-book bookmarks, and all-bookmarks screen
 - cover extraction with disk, Room metadata, and memory LRU caches
 - e-ink full refresh interval, manual full refresh, trim, contrast, and invert
+- English/Korean localization with in-app language selection
 - Room migrations and focused unit/instrumentation tests
 
 ## Before v1.0
 
 - Meebook M7 real-device validation
 - Meebook refresh API spike
-- bookmark list screen
 - Resume definition and polish
 - dithering decision
 - gamma/sharpness decision
