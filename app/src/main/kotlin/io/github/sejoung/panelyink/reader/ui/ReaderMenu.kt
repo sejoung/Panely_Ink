@@ -89,6 +89,7 @@ fun ReaderMenu(
     onPreviousBook: () -> Unit,
     onNextBook: () -> Unit,
     onToggleBookmark: () -> Unit,
+    onOpenBookmarks: () -> Unit,
     onOpenSettings: () -> Unit,
     onExitToLibrary: () -> Unit,
     onClose: () -> Unit,
@@ -187,6 +188,15 @@ fun ReaderMenu(
                 },
                 onClick = onToggleBookmark,
                 primary = currentPageBookmarked,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(Modifier.height(spacing.space1))
+
+            PanelyTextButton(
+                label = stringResource(R.string.reader_bookmarks_open),
+                onClick = onOpenBookmarks,
+                primary = false,
                 modifier = Modifier.fillMaxWidth(),
             )
 

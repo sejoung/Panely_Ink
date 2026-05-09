@@ -383,3 +383,34 @@ fun PanelyBookmarkIcon(
         drawPath(path = path, color = tint, style = Stroke(width = stroke))
     }
 }
+
+/** 삭제 — 북마크/캐시 등 항목 제거 액션. */
+@Composable
+fun PanelyTrashIcon(
+    modifier: Modifier = Modifier,
+    tint: Color = PanelyInkColors.Ink,
+    size: Dp = IconConstants.DefaultSize,
+) {
+    Canvas(modifier = modifier.size(size)) {
+        val s = this.size
+        val stroke = IconConstants.Stroke.toPx()
+        val left = s.width * 0.28f
+        val right = s.width * 0.72f
+        val top = s.height * 0.30f
+        val bottom = s.height * 0.84f
+        val lidY = s.height * 0.24f
+        val handleLeft = s.width * 0.42f
+        val handleRight = s.width * 0.58f
+        val handleTop = s.height * 0.14f
+
+        drawLine(tint, Offset(s.width * 0.20f, lidY), Offset(s.width * 0.80f, lidY), strokeWidth = stroke)
+        drawLine(tint, Offset(handleLeft, lidY), Offset(handleLeft, handleTop), strokeWidth = stroke)
+        drawLine(tint, Offset(handleLeft, handleTop), Offset(handleRight, handleTop), strokeWidth = stroke)
+        drawLine(tint, Offset(handleRight, handleTop), Offset(handleRight, lidY), strokeWidth = stroke)
+        drawLine(tint, Offset(left, top), Offset(left + s.width * 0.06f, bottom), strokeWidth = stroke)
+        drawLine(tint, Offset(right, top), Offset(right - s.width * 0.06f, bottom), strokeWidth = stroke)
+        drawLine(tint, Offset(left + s.width * 0.06f, bottom), Offset(right - s.width * 0.06f, bottom), strokeWidth = stroke)
+        drawLine(tint, Offset(s.width * 0.44f, top + s.height * 0.08f), Offset(s.width * 0.46f, bottom - s.height * 0.08f), strokeWidth = stroke)
+        drawLine(tint, Offset(s.width * 0.56f, top + s.height * 0.08f), Offset(s.width * 0.54f, bottom - s.height * 0.08f), strokeWidth = stroke)
+    }
+}

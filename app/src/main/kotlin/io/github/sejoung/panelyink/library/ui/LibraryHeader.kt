@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
+import io.github.sejoung.panelyink.ui.components.PanelyBookmarkIcon
 import io.github.sejoung.panelyink.ui.components.PanelyCloseIcon
 import io.github.sejoung.panelyink.ui.components.PanelyIconButton
 import io.github.sejoung.panelyink.ui.components.PanelyRefreshIcon
@@ -51,6 +52,7 @@ internal fun LibraryHeader(
     onActivateSearch: () -> Unit,
     onCancelSearch: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
+    onOpenBookmarks: () -> Unit,
     onOpenSettings: () -> Unit,
     onSort: () -> Unit,
     onRefresh: () -> Unit,
@@ -116,6 +118,9 @@ internal fun LibraryHeader(
             }
             PanelyIconButton(onClick = onRefresh, primary = false) { tint ->
                 PanelyRefreshIcon(tint = tint)
+            }
+            PanelyIconButton(onClick = onOpenBookmarks, primary = false) { tint ->
+                PanelyBookmarkIcon(tint = tint)
             }
             PanelyIconButton(onClick = onOpenSettings, primary = false) { tint ->
                 PanelySettingsIcon(tint = tint)

@@ -17,6 +17,7 @@ class BookmarkDaoTest {
 
     private lateinit var db: PanelyDatabase
     private lateinit var repo: BookmarkRepository
+    private var now: Long = 1000L
 
     @Before
     fun setUp() {
@@ -26,7 +27,7 @@ class BookmarkDaoTest {
         )
             .allowMainThreadQueries()
             .build()
-        repo = RoomBookmarkRepository(db, clock = { 1000L })
+        repo = RoomBookmarkRepository(db, clock = { now })
     }
 
     @After
@@ -63,5 +64,42 @@ class BookmarkDaoTest {
         repo.add("book", 7)
 
         assertEquals(listOf(7), repo.loadPages("book"))
+    }
+
+    @Test
+    fun loadAllOrdersByCreatedAtDesc() = runBlocking {
+        now = 1000L
+        repo.add("a", 1)
+        now = 2000L
+        repo.add("b", 2)
+
+        assertEquals(
+            listOf(
+                BookBookmark(bookId = "b", pageIndex = 2, createdAt = 2000L),
+                BookBookmark(bookId = "a", pageIndex = 1, createdAt = 1000L),
+            ),
+            repo.loadAll(),
+        )
+    }
+
+    @Test
+    fun removeOrphansKeepsExistingBooksOnly() = runBlocking {
+        repo.add("kept", 1)
+        repo.add("deleted", 2)
+
+        repo.removeOrphans(setOf("kept"))
+
+        assertEquals(listOf(1), repo.loadPages("kept"))
+        assertEquals(emptyList<Int>(), repo.loadPages("deleted"))
+    }
+
+    @Test
+    fun removeOrphansWithNoExistingBooksClearsAll() = runBlocking {
+        repo.add("a", 1)
+        repo.add("b", 2)
+
+        repo.removeOrphans(emptySet())
+
+        assertEquals(emptyList<BookBookmark>(), repo.loadAll())
     }
 }

@@ -11,6 +11,9 @@ interface BookmarkDao {
     @Query("SELECT * FROM bookmark WHERE book_id = :bookId ORDER BY page_index ASC")
     suspend fun loadForBook(bookId: String): List<BookmarkEntity>
 
+    @Query("SELECT * FROM bookmark ORDER BY created_at DESC, book_id ASC, page_index ASC")
+    suspend fun loadAll(): List<BookmarkEntity>
+
     @Query(
         """
         SELECT EXISTS(
@@ -29,4 +32,10 @@ interface BookmarkDao {
 
     @Query("DELETE FROM bookmark WHERE book_id = :bookId")
     suspend fun deleteForBook(bookId: String)
+
+    @Query("DELETE FROM bookmark")
+    suspend fun deleteAll()
+
+    @Query("DELETE FROM bookmark WHERE book_id NOT IN (:bookIds)")
+    suspend fun deleteNotIn(bookIds: List<String>)
 }

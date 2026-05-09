@@ -8,8 +8,8 @@ import android.util.Log
 import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.core.archive.CbzArchive
 import io.github.sejoung.panelyink.core.archive.CbzPage
+import io.github.sejoung.panelyink.core.book.BookIdentity
 import io.github.sejoung.panelyink.core.fit.TrimRect
-import io.github.sejoung.panelyink.core.position.PositionKey
 import io.github.sejoung.panelyink.core.trim.MarginTrimmer
 import io.github.sejoung.panelyink.library.model.BookEntry
 import kotlinx.coroutines.Dispatchers
@@ -177,15 +177,8 @@ class CbzBookSession private constructor(
                     archive.close()
                     throw IOException(ctx.getString(R.string.reader_error_no_images, entry.displayName))
                 }
-                // bookId 체계: nested entry는 부모 URI + entry name으로 unique. resume/
-                // BookSettings/CoverMeta가 nested 책별로 저장됨.
-                val bookIdSource = if (entry.nestedEntryName != null) {
-                    "${entry.documentUri}#${entry.nestedEntryName}"
-                } else {
-                    entry.documentUri.toString()
-                }
                 val session = CbzBookSession(
-                    bookId = PositionKey.bookIdFromUri(bookIdSource),
+                    bookId = BookIdentity.fromEntry(entry).value,
                     archive = archive,
                     cache = BitmapPageCache(maxBytes = 100L * 1024 * 1024),
                 )

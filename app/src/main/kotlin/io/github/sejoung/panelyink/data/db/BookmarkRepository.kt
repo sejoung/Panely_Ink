@@ -5,10 +5,19 @@ import kotlinx.coroutines.withContext
 
 interface BookmarkRepository {
     suspend fun loadPages(bookId: String): List<Int>
+    suspend fun loadAll(): List<BookBookmark>
     suspend fun isBookmarked(bookId: String, pageIndex: Int): Boolean
     suspend fun add(bookId: String, pageIndex: Int)
     suspend fun remove(bookId: String, pageIndex: Int)
+    suspend fun removeForBook(bookId: String)
+    suspend fun removeOrphans(existingBookIds: Set<String>)
 }
+
+data class BookBookmark(
+    val bookId: String,
+    val pageIndex: Int,
+    val createdAt: Long,
+)
 
 class RoomBookmarkRepository(
     private val db: PanelyDatabase,
@@ -19,6 +28,10 @@ class RoomBookmarkRepository(
 
     override suspend fun loadPages(bookId: String): List<Int> = withContext(Dispatchers.IO) {
         dao.loadForBook(bookId).map { it.pageIndex }
+    }
+
+    override suspend fun loadAll(): List<BookBookmark> = withContext(Dispatchers.IO) {
+        dao.loadAll().map { it.toDomain() }
     }
 
     override suspend fun isBookmarked(bookId: String, pageIndex: Int): Boolean =
@@ -39,4 +52,22 @@ class RoomBookmarkRepository(
     override suspend fun remove(bookId: String, pageIndex: Int) = withContext(Dispatchers.IO) {
         dao.delete(bookId, pageIndex)
     }
+
+    override suspend fun removeForBook(bookId: String) = withContext(Dispatchers.IO) {
+        dao.deleteForBook(bookId)
+    }
+
+    override suspend fun removeOrphans(existingBookIds: Set<String>) = withContext(Dispatchers.IO) {
+        if (existingBookIds.isEmpty()) {
+            dao.deleteAll()
+        } else {
+            dao.deleteNotIn(existingBookIds.toList())
+        }
+    }
 }
+
+private fun BookmarkEntity.toDomain(): BookBookmark = BookBookmark(
+    bookId = bookId,
+    pageIndex = pageIndex,
+    createdAt = createdAt,
+)

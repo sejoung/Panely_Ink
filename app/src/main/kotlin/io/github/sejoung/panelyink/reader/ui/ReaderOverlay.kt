@@ -42,17 +42,22 @@ internal fun ReaderOverlayLayer(
     bookTitle: String,
     menuOpen: Boolean,
     settingsOpen: Boolean,
+    bookmarksOpen: Boolean,
     currentPageBookmarked: Boolean,
+    bookmarkedPages: Set<Int>,
     onOpenMenu: () -> Unit,
     onCloseMenu: () -> Unit,
     onOpenSettings: () -> Unit,
     onCloseSettings: () -> Unit,
+    onOpenBookmarks: () -> Unit,
+    onCloseBookmarks: () -> Unit,
     onExit: () -> Unit,
     onJumpToPage: (Int) -> Unit,
     onToggleBookmark: () -> Unit,
+    onDeleteBookmark: (Int) -> Unit,
     onNavigate: (io.github.sejoung.panelyink.library.model.BookEntry, BookSettings) -> Unit,
 ) {
-    if (!menuOpen) {
+    if (!menuOpen && !bookmarksOpen) {
         TapRegions(
             directionIsRtl = state.direction == ReadingDirection.Rtl,
             onPrev = viewModel::goPrevious,
@@ -63,7 +68,7 @@ internal fun ReaderOverlayLayer(
             state = state,
             pageCount = viewModel.pageCount,
             context = context,
-            settingsOpen = settingsOpen,
+            settingsOpen = settingsOpen || bookmarksOpen,
             onNavigate = onNavigate,
             modifier = Modifier.fillMaxSize(),
         )
@@ -83,6 +88,7 @@ internal fun ReaderOverlayLayer(
                 context.nextBook?.let { onNavigate(it, state.toBookSettings()) }
             },
             onToggleBookmark = onToggleBookmark,
+            onOpenBookmarks = onOpenBookmarks,
             onOpenSettings = onOpenSettings,
             onExitToLibrary = {
                 onCloseMenu()
@@ -103,6 +109,23 @@ internal fun ReaderOverlayLayer(
             onTriggerFullRefresh = viewModel::triggerFullRefresh,
             onBack = {
                 onCloseSettings()
+                onCloseMenu()
+            },
+        )
+    }
+
+    if (bookmarksOpen) {
+        BookmarkListScreen(
+            bookmarks = bookmarkedPages,
+            currentPage = state.currentPage,
+            onSelect = { page ->
+                onJumpToPage(page)
+                onCloseBookmarks()
+                onCloseMenu()
+            },
+            onDelete = onDeleteBookmark,
+            onBack = {
+                onCloseBookmarks()
                 onCloseMenu()
             },
         )

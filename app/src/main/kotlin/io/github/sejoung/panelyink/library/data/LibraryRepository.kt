@@ -9,6 +9,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.Log
 import io.github.sejoung.panelyink.core.archive.CbzArchive
+import io.github.sejoung.panelyink.core.book.BookIdentity
 import io.github.sejoung.panelyink.core.sort.NaturalOrderComparator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -154,6 +155,33 @@ class LibraryRepository(private val context: Context) {
         listChildren(folder).firstOrNull { it is BookEntry } as? BookEntry
     }
 
+    suspend fun listAllBooks(rootUris: List<Uri>, maxDepth: Int = 16): List<IndexedBookEntry> {
+        val roots = listRoots(rootUris)
+        return roots.flatMap { root -> listAllBooksIn(root, depth = 0, maxDepth = maxDepth) }
+    }
+
+    suspend fun findBooksByIds(
+        rootUris: List<Uri>,
+        bookIds: Set<String>,
+        maxDepth: Int = 16,
+    ): List<IndexedBookEntry> {
+        if (bookIds.isEmpty()) return emptyList()
+        val remaining = bookIds.toMutableSet()
+        val found = mutableListOf<IndexedBookEntry>()
+        val roots = listRoots(rootUris)
+        for (root in roots) {
+            if (remaining.isEmpty()) break
+            findBooksByIdsIn(
+                folder = root,
+                remaining = remaining,
+                found = found,
+                depth = 0,
+                maxDepth = maxDepth,
+            )
+        }
+        return found
+    }
+
     /**
      * [book]이 ZIP-of-CBZ(중첩 아카이브 시리즈)이면 가상 폴더로 변환해 반환. 아니면 null.
      *
@@ -207,6 +235,106 @@ class LibraryRepository(private val context: Context) {
             seriesCache[book.documentUri] = result
         }
         result
+    }
+
+    private suspend fun listAllBooksIn(
+        folder: FolderEntry,
+        depth: Int,
+        maxDepth: Int,
+    ): List<IndexedBookEntry> {
+        if (depth > maxDepth) return emptyList()
+        val children = listChildren(folder)
+        val directBooks = mutableListOf<BookEntry>()
+        val childFolders = mutableListOf<FolderEntry>()
+        val indexed = mutableListOf<IndexedBookEntry>()
+
+        for (entry in children) {
+            when (entry) {
+                is FolderEntry -> childFolders += entry
+                is BookEntry -> {
+                    val seriesFolder = if (
+                        entry.nestedEntryName == null &&
+                        entry.displayName.endsWith(".zip", ignoreCase = true)
+                    ) {
+                        inspectZipForSeries(entry)
+                    } else {
+                        null
+                    }
+                    if (seriesFolder != null) {
+                        val nestedBooks = seriesFolder.nestedBooks.orEmpty()
+                        indexed += nestedBooks.map { IndexedBookEntry(book = it, siblings = nestedBooks) }
+                    } else {
+                        directBooks += entry
+                    }
+                }
+            }
+        }
+
+        indexed += directBooks.map { IndexedBookEntry(book = it, siblings = directBooks) }
+        for (child in childFolders) {
+            indexed += listAllBooksIn(child, depth = depth + 1, maxDepth = maxDepth)
+        }
+        return indexed
+    }
+
+    private suspend fun findBooksByIdsIn(
+        folder: FolderEntry,
+        remaining: MutableSet<String>,
+        found: MutableList<IndexedBookEntry>,
+        depth: Int,
+        maxDepth: Int,
+    ) {
+        if (remaining.isEmpty() || depth > maxDepth) return
+        val children = listChildren(folder)
+        val directBooks = mutableListOf<BookEntry>()
+        val childFolders = mutableListOf<FolderEntry>()
+
+        for (entry in children) {
+            if (remaining.isEmpty()) break
+            when (entry) {
+                is FolderEntry -> childFolders += entry
+                is BookEntry -> {
+                    val seriesFolder = if (
+                        entry.nestedEntryName == null &&
+                        entry.displayName.endsWith(".zip", ignoreCase = true)
+                    ) {
+                        inspectZipForSeries(entry)
+                    } else {
+                        null
+                    }
+                    if (seriesFolder != null) {
+                        val nestedBooks = seriesFolder.nestedBooks.orEmpty()
+                        for (nested in nestedBooks) {
+                            val bookId = BookIdentity.fromEntry(nested).value
+                            if (remaining.remove(bookId)) {
+                                found += IndexedBookEntry(book = nested, siblings = nestedBooks)
+                                if (remaining.isEmpty()) break
+                            }
+                        }
+                    } else {
+                        directBooks += entry
+                    }
+                }
+            }
+        }
+
+        for (book in directBooks) {
+            val bookId = BookIdentity.fromEntry(book).value
+            if (remaining.remove(bookId)) {
+                found += IndexedBookEntry(book = book, siblings = directBooks)
+                if (remaining.isEmpty()) return
+            }
+        }
+        for (child in childFolders) {
+            if (remaining.isEmpty()) return
+            findBooksByIdsIn(
+                folder = child,
+                remaining = remaining,
+                found = found,
+                depth = depth + 1,
+                maxDepth = maxDepth,
+            )
+        }
     }
 
     /**
@@ -270,3 +398,8 @@ class LibraryRepository(private val context: Context) {
         )
     }
 }
+
+data class IndexedBookEntry(
+    val book: BookEntry,
+    val siblings: List<BookEntry>,
+)

@@ -66,9 +66,15 @@ internal fun ReaderLifecycleEffect(
 internal fun ReaderBackHandler(
     menuOpen: Boolean,
     settingsOpen: Boolean,
+    bookmarksOpen: Boolean,
     onCloseMenu: () -> Unit,
+    onCloseBookmarks: () -> Unit,
 ) {
-    BackHandler(enabled = menuOpen && !settingsOpen) {
+    BackHandler(enabled = bookmarksOpen) {
+        onCloseBookmarks()
+        onCloseMenu()
+    }
+    BackHandler(enabled = menuOpen && !settingsOpen && !bookmarksOpen) {
         onCloseMenu()
     }
 }
@@ -209,8 +215,10 @@ internal fun ReaderHardwareKeyHandler(
     context: SeriesContext,
     menuOpen: Boolean,
     settingsOpen: Boolean,
+    bookmarksOpen: Boolean,
     onCloseMenu: () -> Unit,
     onCloseSettings: () -> Unit,
+    onCloseBookmarks: () -> Unit,
     onNavigate: (BookEntry, BookSettings) -> Unit,
 ) {
     val activity = LocalContext.current.findMainActivity()
@@ -219,6 +227,7 @@ internal fun ReaderHardwareKeyHandler(
         viewModel,
         menuOpen,
         settingsOpen,
+        bookmarksOpen,
         state.currentPage,
         context.previousBook,
         context.nextBook,
@@ -229,6 +238,17 @@ internal fun ReaderHardwareKeyHandler(
                     event = event,
                     onPrev = onCloseSettings,
                     onNext = onCloseSettings,
+                )
+                bookmarksOpen -> ReaderInput.dispatch(
+                    event = event,
+                    onPrev = {
+                        onCloseBookmarks()
+                        onCloseMenu()
+                    },
+                    onNext = {
+                        onCloseBookmarks()
+                        onCloseMenu()
+                    },
                 )
                 menuOpen -> ReaderInput.dispatch(
                     event = event,

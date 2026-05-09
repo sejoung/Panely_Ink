@@ -45,7 +45,7 @@ import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
 @Composable
 fun LibraryScreen(
     viewModel: LibraryViewModel = viewModel(),
-    onOpenBook: (SeriesContext) -> Unit = {},
+    onOpenBook: (SeriesContext, Int?) -> Unit = { _, _ -> },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var sortOpen by remember { mutableStateOf(false) }
@@ -57,7 +57,7 @@ fun LibraryScreen(
     // 클릭 시는 nestedBooks가 그대로 형제로 들어가 reader가 시리즈 연속 기능에 사용.
     val onOpenBookSafe: (BookEntry, List<BookEntry>) -> Unit = { book, siblings ->
         viewModel.openBook(book) { resolved ->
-            onOpenBook(SeriesContext(current = resolved, siblings = siblings))
+            onOpenBook(SeriesContext(current = resolved, siblings = siblings), null)
         }
     }
 
@@ -119,6 +119,7 @@ fun LibraryScreen(
                 searchActive = false
             },
             onSearchQueryChange = viewModel::setSearchQuery,
+            onOpenBookmarks = viewModel::openGlobalBookmarks,
             onOpenSettings = { appSettingsOpen = true },
             onSort = { sortOpen = true },
             onRefresh = viewModel::refresh,
@@ -193,6 +194,23 @@ fun LibraryScreen(
                 appSettingsOpen = false
             },
             onBack = { appSettingsOpen = false },
+        )
+    }
+
+    if (state.globalBookmarksOpen) {
+        GlobalBookmarksScreen(
+            items = state.globalBookmarks,
+            loading = state.globalBookmarksLoading,
+            onRefresh = viewModel::loadGlobalBookmarks,
+            onOpen = { item ->
+                viewModel.closeGlobalBookmarks()
+                onOpenBook(
+                    SeriesContext(current = item.book, siblings = item.siblings),
+                    item.pageIndex,
+                )
+            },
+            onDelete = viewModel::deleteGlobalBookmark,
+            onBack = viewModel::closeGlobalBookmarks,
         )
     }
 

@@ -17,6 +17,9 @@
     <string name="library_search_empty_title">No search results</string>
     <string name="library_search_empty_body">No items in this folder match \'%1$s\'</string>
     <string name="library_search_placeholder">Search by name</string>
+    <string name="library_bookmarks_title">All Bookmarks</string>
+    <string name="library_bookmarks_loading">Loading bookmarks…</string>
+    <string name="library_bookmarks_empty">No bookmarks in the library.</string>
     <string name="library_options_title">View Options</string>
     <string name="library_options_sort">Sort</string>
     <string name="library_options_view">View</string>
@@ -67,6 +70,10 @@
     <string name="reader_page_jump">Jump to page</string>
     <string name="reader_bookmark_remove">Remove bookmark</string>
     <string name="reader_bookmark_current">Bookmark current page</string>
+    <string name="reader_bookmarks_open">Bookmarks</string>
+    <string name="reader_bookmarks_title">Bookmarks</string>
+    <string name="reader_bookmarks_empty">No bookmarks in this book.</string>
+    <string name="reader_bookmark_page">Page %1$d</string>
     <string name="reader_settings_more">Settings …</string>
     <string name="reader_settings_title">Settings</string>
     <string name="reader_group_page_layout">Page Layout</string>

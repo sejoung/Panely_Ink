@@ -17,6 +17,9 @@
     <string name="library_search_empty_title">검색 결과가 없습니다</string>
     <string name="library_search_empty_body">\'%1$s\' 와 일치하는 항목이 이 폴더에 없음</string>
     <string name="library_search_placeholder">이름으로 검색</string>
+    <string name="library_bookmarks_title">전체 북마크</string>
+    <string name="library_bookmarks_loading">북마크를 불러오는 중…</string>
+    <string name="library_bookmarks_empty">라이브러리에 저장된 북마크가 없습니다.</string>
     <string name="library_options_title">보기 옵션</string>
     <string name="library_options_sort">정렬</string>
     <string name="library_options_view">표시</string>
@@ -67,6 +70,10 @@
     <string name="reader_page_jump">페이지 점프</string>
     <string name="reader_bookmark_remove">북마크 해제</string>
     <string name="reader_bookmark_current">현재 페이지 북마크</string>
+    <string name="reader_bookmarks_open">북마크</string>
+    <string name="reader_bookmarks_title">북마크</string>
+    <string name="reader_bookmarks_empty">이 책에 저장된 북마크가 없습니다.</string>
+    <string name="reader_bookmark_page">%1$d쪽</string>
     <string name="reader_settings_more">설정 …</string>
     <string name="reader_settings_title">설정</string>
     <string name="reader_group_page_layout">페이지 레이아웃</string>

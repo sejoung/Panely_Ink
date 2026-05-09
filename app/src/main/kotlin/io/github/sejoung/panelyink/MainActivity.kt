@@ -46,11 +46,14 @@ class MainActivity : ComponentActivity() {
                 Box(Modifier.fillMaxSize().background(PanelyInkTokens.Color.Paper)) {
                     when (val s = screen) {
                         Screen.Library -> LibraryScreen(
-                            onOpenBook = { ctx -> screen = Screen.Reader(ctx) },
+                            onOpenBook = { ctx, initialPage ->
+                                screen = Screen.Reader(ctx, initialPageOverride = initialPage)
+                            },
                         )
                         is Screen.Reader -> ReaderScreen(
                             context = s.context,
                             propagatedBookSettings = s.propagatedBookSettings,
+                            initialPageOverride = s.initialPageOverride,
                             onBack = { screen = Screen.Library },
                             // 시리즈 형제 권으로 이동 — siblings는 그대로 두고 current만 교체.
                             // 새 ReaderScreen이 produceState 키(current.documentUri)로 재진입.
@@ -58,6 +61,7 @@ class MainActivity : ComponentActivity() {
                                 screen = Screen.Reader(
                                     context = s.context.copy(current = newCurrent),
                                     propagatedBookSettings = settings,
+                                    initialPageOverride = null,
                                 )
                             },
                         )
@@ -77,6 +81,7 @@ class MainActivity : ComponentActivity() {
         data class Reader(
             val context: SeriesContext,
             val propagatedBookSettings: BookSettings? = null,
+            val initialPageOverride: Int? = null,
         ) : Screen
     }
 }

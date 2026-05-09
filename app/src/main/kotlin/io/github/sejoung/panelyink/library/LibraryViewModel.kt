@@ -22,13 +22,16 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.sejoung.panelyink.core.book.BookIdentity
 import io.github.sejoung.panelyink.core.position.BookProgress
-import io.github.sejoung.panelyink.core.position.PositionKey
 import io.github.sejoung.panelyink.data.AppDataResetter
+import io.github.sejoung.panelyink.data.db.BookmarkRepository
 import io.github.sejoung.panelyink.data.db.CoverStatus
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
+import io.github.sejoung.panelyink.data.db.RoomBookmarkRepository
 import io.github.sejoung.panelyink.data.db.RoomCoverMetaRepository
 import io.github.sejoung.panelyink.data.db.RoomPositionRepository
+import io.github.sejoung.panelyink.library.data.IndexedBookEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -61,6 +64,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     private val db = PanelyDatabase.getInstance(application)
     private val positionRepo = RoomPositionRepository(db)
     private val coverMetaRepo = RoomCoverMetaRepository(db)
+    private val bookmarkRepo: BookmarkRepository = RoomBookmarkRepository(db)
 
     private val _state = MutableStateFlow(LibraryState())
     val state: StateFlow<LibraryState> = _state.asStateFlow()
@@ -103,6 +107,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     private val coverSemaphore = Semaphore(permits = 2)
     private val countSemaphore = Semaphore(permits = 2)
     private val progressLoadedBookIds = mutableSetOf<String>()
+    private val globalBookmarkBookIndex = mutableMapOf<String, IndexedBookEntry>()
 
     /**
      * 표지/메타 갱신 debounce 버퍼 — 추출 1장씩 도착할 때마다 [_state] copy + recompose
@@ -268,6 +273,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             )
         }
         val next = _state.value.roots.filterNot { it == uri }
+        globalBookmarkBookIndex.clear()
         persistRoots(next)
         // 사용자가 현재 진입해 있던 root가 사라졌으면 첫 화면으로 복귀.
         val newPath = _state.value.path.takeIf { it.firstOrNull()?.rootUri != uri }.orEmpty()
@@ -278,6 +284,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         } else {
             refreshChildren(newPath.last())
         }
+        pruneBookmarksForCurrentRoots()
     }
 
     /**
@@ -311,7 +318,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
      */
     fun openBook(book: BookEntry, onBook: (BookEntry) -> Unit) {
         if (book.nestedEntryName != null) {
-            progressLoadedBookIds.remove(PositionKey.bookIdFromUri(book.bookIdSource))
+            progressLoadedBookIds.remove(BookIdentity.fromEntry(book).value)
             onBook(book)
             return
         }
@@ -323,7 +330,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 clearSearch()
                 refreshChildren(virtualFolder)
             } else {
-                progressLoadedBookIds.remove(PositionKey.bookIdFromUri(book.bookIdSource))
+                progressLoadedBookIds.remove(BookIdentity.fromEntry(book).value)
                 onBook(book)
             }
         }
@@ -358,8 +365,49 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     /** 명시적 새로고침 — listChildren in-memory 캐시 비우고 같은 위치 다시 스캔. */
     fun refresh() {
         repo.invalidateCache()
+        globalBookmarkBookIndex.clear()
         val current = _state.value.path.lastOrNull()
         if (current == null) refreshRoots() else refreshChildren(current)
+        pruneBookmarksForCurrentRoots()
+    }
+
+    fun openGlobalBookmarks() {
+        _state.value = _state.value.copy(globalBookmarksOpen = true)
+        loadGlobalBookmarks()
+    }
+
+    fun closeGlobalBookmarks() {
+        _state.value = _state.value.copy(globalBookmarksOpen = false)
+    }
+
+    fun loadGlobalBookmarks() {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(globalBookmarksLoading = true)
+            runCatching { loadGlobalBookmarkItems() }
+                .onSuccess { items ->
+                    _state.value = _state.value.copy(
+                        globalBookmarks = items,
+                        globalBookmarksLoading = false,
+                    )
+                }
+                .onFailure {
+                    _state.value = _state.value.copy(
+                        globalBookmarks = emptyList(),
+                        globalBookmarksLoading = false,
+                    )
+                }
+        }
+    }
+
+    fun deleteGlobalBookmark(item: GlobalBookmarkItem) {
+        viewModelScope.launch {
+            bookmarkRepo.remove(item.bookId, item.pageIndex)
+            _state.value = _state.value.copy(
+                globalBookmarks = _state.value.globalBookmarks.filterNot {
+                    it.bookId == item.bookId && it.pageIndex == item.pageIndex
+                },
+            )
+        }
     }
 
     /**
@@ -409,7 +457,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 // 가상 폴더면 첫 nested 책이 곧 표지 source — repo.firstBookIn(SAF query) 생략.
                 val firstBook = folder.nestedBooks?.firstOrNull() ?: repo.firstBookIn(folder)
                 if (firstBook != null) {
-                    val bookId = PositionKey.bookIdFromUri(firstBook.bookIdSource)
+                    val bookId = BookIdentity.fromEntry(firstBook).value
                     _state.value = _state.value.copy(
                         folderFirstBook = _state.value.folderFirstBook + (key to bookId),
                     )
@@ -431,7 +479,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
      * 라이브러리 진입에서 % 라벨이 등장.
      */
     fun requestProgress(book: BookEntry) {
-        val bookId = PositionKey.bookIdFromUri(book.bookIdSource)
+        val bookId = BookIdentity.fromEntry(book).value
         if (bookId in progressLoadedBookIds) return
         if (progressJobs.containsKey(bookId)) return
         val job = viewModelScope.launch {
@@ -465,7 +513,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
      * 첫 진입이 답답해진다. 사용자 명시 새로고침으로만 재추출(`coverMetaRepo.delete`).
      */
     fun requestCover(book: BookEntry) {
-        val bookId = PositionKey.bookIdFromUri(book.bookIdSource)
+        val bookId = BookIdentity.fromEntry(book).value
         if (_state.value.covers.containsKey(bookId)) return
         if (coverJobs.containsKey(bookId)) return
         // batch 캐시 hit: status=FAILED면 즉시 종료, 추가 Room query 없음.
@@ -658,6 +706,55 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    private suspend fun loadGlobalBookmarkItems(): List<GlobalBookmarkItem> {
+        val bookmarks = bookmarkRepo.loadAll()
+        if (bookmarks.isEmpty()) return emptyList()
+        val requestedBookIds = bookmarks.mapTo(mutableSetOf()) { it.bookId }
+        val cached = globalBookmarkBookIndex.filterKeys { it in requestedBookIds }
+        val missingBookIds = requestedBookIds - cached.keys
+        if (missingBookIds.isNotEmpty()) {
+            repo.findBooksByIds(_state.value.roots, missingBookIds).forEach { indexed ->
+                globalBookmarkBookIndex[BookIdentity.fromEntry(indexed.book).value] = indexed
+            }
+        }
+        val indexedBooks = requestedBookIds.mapNotNull { globalBookmarkBookIndex[it] }
+        return buildGlobalBookmarkItems(
+            bookmarks = bookmarks,
+            indexedBooks = indexedBooks,
+        )
+    }
+
+    private suspend fun buildGlobalBookmarkItems(
+        bookmarks: List<io.github.sejoung.panelyink.data.db.BookBookmark>,
+        indexedBooks: List<IndexedBookEntry>,
+    ): List<GlobalBookmarkItem> {
+        val booksById = indexedBooks.associateBy { BookIdentity.fromEntry(it.book).value }
+        bookmarkRepo.removeOrphans(booksById.keys)
+        return bookmarks.mapNotNull { bookmark ->
+            booksById[bookmark.bookId]?.let { indexed ->
+                GlobalBookmarkItem(
+                    bookId = bookmark.bookId,
+                    book = indexed.book,
+                    siblings = indexed.siblings,
+                    pageIndex = bookmark.pageIndex,
+                    createdAt = bookmark.createdAt,
+                )
+            }
+        }
+    }
+
+    private fun pruneBookmarksForCurrentRoots() {
+        viewModelScope.launch {
+            val indexedBooks = repo.listAllBooks(_state.value.roots)
+            val existingBookIds = indexedBooks
+                .mapTo(mutableSetOf()) { BookIdentity.fromEntry(it.book).value }
+            bookmarkRepo.removeOrphans(existingBookIds)
+            if (_state.value.globalBookmarksOpen) {
+                _state.value = _state.value.copy(globalBookmarks = loadGlobalBookmarkItems())
+            }
+        }
+    }
+
     /** path 변경의 단일 진입점. state 갱신 + 디스크 영속화를 한 곳에서 묶어 누락을 방지. */
     private fun setPath(newPath: List<FolderEntry>, alsoUpdateRoots: List<Uri>? = null) {
         _state.value = if (alsoUpdateRoots != null) {
@@ -718,4 +815,15 @@ data class LibraryState(
     val viewMode: ViewMode = ViewMode.DEFAULT,
     /** 현재 폴더 in-memory 검색어. 빈 문자열이면 필터 적용 X. 폴더 이동 시 자동 클리어. */
     val searchQuery: String = "",
+    val globalBookmarksOpen: Boolean = false,
+    val globalBookmarksLoading: Boolean = false,
+    val globalBookmarks: List<GlobalBookmarkItem> = emptyList(),
+)
+
+data class GlobalBookmarkItem(
+    val bookId: String,
+    val book: BookEntry,
+    val siblings: List<BookEntry>,
+    val pageIndex: Int,
+    val createdAt: Long,
 )

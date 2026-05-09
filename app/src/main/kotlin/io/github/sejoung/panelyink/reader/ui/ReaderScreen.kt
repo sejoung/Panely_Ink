@@ -61,6 +61,7 @@ import kotlinx.coroutines.launch
 fun ReaderScreen(
     context: SeriesContext,
     propagatedBookSettings: BookSettings? = null,
+    initialPageOverride: Int? = null,
     onBack: () -> Unit,
     /**
      * 시리즈 형제 권으로 이동 — 호스트가 새 [SeriesContext]를 만들어 [ReaderScreen]을 다시
@@ -86,7 +87,11 @@ fun ReaderScreen(
     var loadingStep by remember { mutableStateOf(localContext.getString(R.string.reader_loading_opening)) }
     // produceState 키는 nested 책까지 구분하는 [BookEntry.bookIdSource]를 사용 — 일반 책은
     // documentUri와 동일, ZIP-of-CBZ 자식은 `${uri}#${entry}`라 형제 권 간 이동 시 새 책으로 정확히 재진입.
-    val sessionState by produceState<SessionState>(SessionState.Loading, entry.bookIdSource) {
+    val sessionState by produceState<SessionState>(
+        SessionState.Loading,
+        entry.bookIdSource,
+        initialPageOverride,
+    ) {
         value = try {
             Log.d(TAG, "ReaderScreen open: ${entry.displayName}")
             loadingStep = localContext.getString(R.string.reader_loading_scan_pages)
@@ -94,9 +99,10 @@ fun ReaderScreen(
             loadingStep = localContext.getString(R.string.reader_loading_restore_position)
             // Room에서 마지막 페이지를 미리 로드 — ReaderViewModel 생성 시점이 동기라
             // 여기서 비동기로 받아 Ready에 묶어서 넘긴다. 페이지 수 줄어든 책은 clamp.
-            val resumed = positionRepo.load(session.bookId)
-                ?.pageIndex
-                ?.coerceIn(0, session.pageCount - 1)
+            val resumed = initialPageOverride?.coerceIn(0, session.pageCount - 1)
+                ?: positionRepo.load(session.bookId)
+                    ?.pageIndex
+                    ?.coerceIn(0, session.pageCount - 1)
                 ?: 0
             // 책별 설정도 같이 로드 — 없으면 DEFAULTS. 책당 1행이라 가벼움.
             val bookSettings = bookSettingsRepo.load(session.bookId)
@@ -187,13 +193,16 @@ private fun ReaderContent(
     var view by remember { mutableStateOf<ReaderView?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
+    var bookmarksOpen by remember { mutableStateOf(false) }
     var bookmarkedPages by remember(session) { mutableStateOf<Set<Int>>(emptySet()) }
     val uiScope = rememberCoroutineScope()
 
     ReaderBackHandler(
         menuOpen = menuOpen,
         settingsOpen = settingsOpen,
+        bookmarksOpen = bookmarksOpen,
         onCloseMenu = { menuOpen = false },
+        onCloseBookmarks = { bookmarksOpen = false },
     )
     ReaderViewEffects(state = state, viewModel = viewModel, view = view)
     ReaderPersistenceEffects(
@@ -211,8 +220,10 @@ private fun ReaderContent(
         context = context,
         menuOpen = menuOpen,
         settingsOpen = settingsOpen,
+        bookmarksOpen = bookmarksOpen,
         onCloseMenu = { menuOpen = false },
         onCloseSettings = { settingsOpen = false },
+        onCloseBookmarks = { bookmarksOpen = false },
         onNavigate = onNavigate,
     )
 
@@ -232,11 +243,15 @@ private fun ReaderContent(
             bookTitle = bookTitle,
             menuOpen = menuOpen,
             settingsOpen = settingsOpen,
+            bookmarksOpen = bookmarksOpen,
             currentPageBookmarked = state.currentPage in bookmarkedPages,
+            bookmarkedPages = bookmarkedPages,
             onOpenMenu = { menuOpen = true },
             onCloseMenu = { menuOpen = false },
             onOpenSettings = { settingsOpen = true },
             onCloseSettings = { settingsOpen = false },
+            onOpenBookmarks = { bookmarksOpen = true },
+            onCloseBookmarks = { bookmarksOpen = false },
             onExit = onExit,
             onJumpToPage = { page ->
                 viewModel.goTo(page)
@@ -252,6 +267,12 @@ private fun ReaderContent(
                         bookmarkRepo.add(session.bookId, page)
                         bookmarkedPages = bookmarkedPages + page
                     }
+                }
+            },
+            onDeleteBookmark = { page ->
+                uiScope.launch {
+                    bookmarkRepo.remove(session.bookId, page)
+                    bookmarkedPages = bookmarkedPages - page
                 }
             },
             onNavigate = onNavigate,
