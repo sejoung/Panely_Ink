@@ -1,11 +1,5 @@
 package io.github.sejoung.panelyink.library.ui
 
-import io.github.sejoung.panelyink.library.LibraryViewModel
-import io.github.sejoung.panelyink.library.model.BookEntry
-import io.github.sejoung.panelyink.library.model.FolderEntry
-import io.github.sejoung.panelyink.library.model.LibraryEntry
-import io.github.sejoung.panelyink.library.model.SortMode
-import io.github.sejoung.panelyink.library.model.ViewMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,31 +11,31 @@ import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
 
 @Composable
 internal fun HairlineDivider() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .background(PanelyInkColors.Hairline),
-    )
+  Box(
+    modifier = Modifier
+      .fillMaxWidth()
+      .height(1.dp)
+      .background(PanelyInkColors.Hairline),
+  )
 }
 
 @Composable
 internal fun stringResourceCompat(id: Int): String =
-    androidx.compose.ui.res.stringResource(id)
+  androidx.compose.ui.res.stringResource(id)
 
 @Composable
 internal fun stringResourceCompat(id: Int, vararg formatArgs: Any): String =
-    androidx.compose.ui.res.stringResource(id, *formatArgs)
+  androidx.compose.ui.res.stringResource(id, *formatArgs)
 
 internal fun formatBytes(bytes: Long): String {
-    if (bytes <= 0) return "-"
-    val mb = bytes / 1024.0 / 1024.0
-    return if (mb >= 1.0) "%.1f MB".format(mb) else "%d KB".format(bytes / 1024)
+  if (bytes <= 0) return "-"
+  val mb = bytes / 1024.0 / 1024.0
+  return if (mb >= 1.0) "%.1f MB".format(mb) else "%d KB".format(bytes / 1024)
 }
 
 internal tailrec fun resolveActivity(context: android.content.Context): android.app.Activity? =
-    when (context) {
-        is android.app.Activity -> context
-        is android.content.ContextWrapper -> resolveActivity(context.baseContext)
-        else -> null
-    }
+  when (context) {
+    is android.app.Activity -> context
+    is android.content.ContextWrapper -> resolveActivity(context.baseContext)
+    else -> null
+  }

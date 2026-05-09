@@ -10,7 +10,7 @@ package io.github.sejoung.panelyink.core.position
  * - M3에서 SharedPreferences → Room으로 이전(`RoomPositionRepository`).
  *   `suspend` 시그니처로 메인스레드 SQLite I/O 차단 방지.
  *
- * 구현은 [io.github.sejoung.panelyink.data.db.RoomPositionRepository] 참조.
+ * 구현은 [io.github.sejoung.panelyink.data.db.position.RoomPositionRepository] 참조.
  */
 interface PositionRepository {
     /** 마지막으로 본 위치 + 책 길이. 기록 없으면 null. */

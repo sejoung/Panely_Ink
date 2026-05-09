@@ -1,11 +1,11 @@
 package io.github.sejoung.panelyink
 
-import io.github.sejoung.panelyink.library.data.CoverPruner
 import android.app.Application
 import android.util.Log
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
-import io.github.sejoung.panelyink.data.db.PositionMigration
-import io.github.sejoung.panelyink.data.db.RoomCoverMetaRepository
+import io.github.sejoung.panelyink.data.db.cover.RoomCoverMetaRepository
+import io.github.sejoung.panelyink.data.db.migration.PositionMigration
+import io.github.sejoung.panelyink.library.data.CoverPruner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,29 +21,29 @@ import kotlinx.coroutines.launch
  */
 class PanelyInkApp : Application() {
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+  private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    override fun onCreate() {
-        super.onCreate()
-        appScope.launch {
-            val db = PanelyDatabase.getInstance(this@PanelyInkApp)
-            runCatching {
-                PositionMigration.migrateFromPrefs(this@PanelyInkApp, db)
-            }.onFailure {
-                Log.w(TAG, "position migration failed", it)
-            }
-            // 표지 캐시 LRU 정리(M3) — 사용자 세션 시작 시 1회. 누적 사이즈가 한도
-            // 미만이면 즉시 종료하므로 비용 작음.
-            runCatching {
-                val coverMetaRepo = RoomCoverMetaRepository(db)
-                CoverPruner.prune(this@PanelyInkApp, coverMetaRepo)
-            }.onFailure {
-                Log.w(TAG, "cover prune failed", it)
-            }
-        }
+  override fun onCreate() {
+    super.onCreate()
+    appScope.launch {
+      val db = PanelyDatabase.getInstance(this@PanelyInkApp)
+      runCatching {
+        PositionMigration.migrateFromPrefs(this@PanelyInkApp, db)
+      }.onFailure {
+        Log.w(TAG, "position migration failed", it)
+      }
+      // 표지 캐시 LRU 정리(M3) — 사용자 세션 시작 시 1회. 누적 사이즈가 한도
+      // 미만이면 즉시 종료하므로 비용 작음.
+      runCatching {
+        val coverMetaRepo = RoomCoverMetaRepository(db)
+        CoverPruner.prune(this@PanelyInkApp, coverMetaRepo)
+      }.onFailure {
+        Log.w(TAG, "cover prune failed", it)
+      }
     }
+  }
 
-    companion object {
-        private const val TAG = "PanelyInk.App"
-    }
+  companion object {
+    private const val TAG = "PanelyInk.App"
+  }
 }

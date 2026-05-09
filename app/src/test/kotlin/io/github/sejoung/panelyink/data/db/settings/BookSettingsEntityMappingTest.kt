@@ -1,4 +1,4 @@
-package io.github.sejoung.panelyink.data.db
+package io.github.sejoung.panelyink.data.db.settings
 
 import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.reader.model.BookSettings

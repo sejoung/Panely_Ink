@@ -1,7 +1,9 @@
-package io.github.sejoung.panelyink.data.db
+package io.github.sejoung.panelyink.data.db.migration
 
 import android.content.Context
 import androidx.core.content.edit
+import io.github.sejoung.panelyink.data.db.PanelyDatabase
+import io.github.sejoung.panelyink.data.db.position.PositionEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

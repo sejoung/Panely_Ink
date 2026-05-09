@@ -1,5 +1,6 @@
 package io.github.sejoung.panelyink
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
 import android.view.KeyEvent
@@ -16,8 +17,8 @@ import androidx.compose.ui.Modifier
 import io.github.sejoung.panelyink.core.preferences.AppLocale
 import io.github.sejoung.panelyink.library.ui.LibraryScreen
 import io.github.sejoung.panelyink.reader.model.BookSettings
-import io.github.sejoung.panelyink.reader.ui.ReaderScreen
 import io.github.sejoung.panelyink.reader.model.SeriesContext
+import io.github.sejoung.panelyink.reader.ui.ReaderScreen
 import io.github.sejoung.panelyink.ui.theme.PanelyInkTheme
 import io.github.sejoung.panelyink.ui.theme.PanelyInkTokens
 
@@ -32,56 +33,60 @@ import io.github.sejoung.panelyink.ui.theme.PanelyInkTokens
  */
 class MainActivity : ComponentActivity() {
 
-    var keyDispatcher: ((KeyEvent) -> Boolean)? = null
+  var keyDispatcher: ((KeyEvent) -> Boolean)? = null
 
-    override fun attachBaseContext(newBase: Context) {
-        super.attachBaseContext(AppLocale.wrapFromPreferences(newBase))
-    }
+  override fun attachBaseContext(newBase: Context) {
+    super.attachBaseContext(AppLocale.wrapFromPreferences(newBase))
+  }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent {
-            PanelyInkTheme {
-                var screen by remember { mutableStateOf<Screen>(Screen.Library) }
-                Box(Modifier.fillMaxSize().background(PanelyInkTokens.Color.Paper)) {
-                    when (val s = screen) {
-                        Screen.Library -> LibraryScreen(
-                            onOpenBook = { ctx, initialPage ->
-                                screen = Screen.Reader(ctx, initialPageOverride = initialPage)
-                            },
-                        )
-                        is Screen.Reader -> ReaderScreen(
-                            context = s.context,
-                            propagatedBookSettings = s.propagatedBookSettings,
-                            initialPageOverride = s.initialPageOverride,
-                            onBack = { screen = Screen.Library },
-                            // 시리즈 형제 권으로 이동 — siblings는 그대로 두고 current만 교체.
-                            // 새 ReaderScreen이 produceState 키(current.documentUri)로 재진입.
-                            onNavigate = { newCurrent, settings ->
-                                screen = Screen.Reader(
-                                    context = s.context.copy(current = newCurrent),
-                                    propagatedBookSettings = settings,
-                                    initialPageOverride = null,
-                                )
-                            },
-                        )
-                    }
-                }
-            }
+  override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    setContent {
+      PanelyInkTheme {
+        var screen by remember { mutableStateOf<Screen>(Screen.Library) }
+        Box(Modifier
+          .fillMaxSize()
+          .background(PanelyInkTokens.Color.Paper)) {
+          when (val s = screen) {
+            Screen.Library -> LibraryScreen(
+              onOpenBook = { ctx, initialPage ->
+                screen = Screen.Reader(ctx, initialPageOverride = initialPage)
+              },
+            )
+
+            is Screen.Reader -> ReaderScreen(
+              context = s.context,
+              propagatedBookSettings = s.propagatedBookSettings,
+              initialPageOverride = s.initialPageOverride,
+              onBack = { screen = Screen.Library },
+              // 시리즈 형제 권으로 이동 — siblings는 그대로 두고 current만 교체.
+              // 새 ReaderScreen이 produceState 키(current.documentUri)로 재진입.
+              onNavigate = { newCurrent, settings ->
+                screen = Screen.Reader(
+                  context = s.context.copy(current = newCurrent),
+                  propagatedBookSettings = settings,
+                  initialPageOverride = null,
+                )
+              },
+            )
+          }
         }
+      }
     }
+  }
 
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (keyDispatcher?.invoke(event) == true) return true
-        return super.dispatchKeyEvent(event)
-    }
+  @SuppressLint("RestrictedApi")
+  override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+    if (keyDispatcher?.invoke(event) == true) return true
+    return super.dispatchKeyEvent(event)
+  }
 
-    private sealed interface Screen {
-        data object Library : Screen
-        data class Reader(
-            val context: SeriesContext,
-            val propagatedBookSettings: BookSettings? = null,
-            val initialPageOverride: Int? = null,
-        ) : Screen
-    }
+  private sealed interface Screen {
+    data object Library : Screen
+    data class Reader(
+      val context: SeriesContext,
+      val propagatedBookSettings: BookSettings? = null,
+      val initialPageOverride: Int? = null,
+    ) : Screen
+  }
 }

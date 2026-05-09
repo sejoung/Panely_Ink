@@ -1,11 +1,5 @@
 package io.github.sejoung.panelyink.library.ui
 
-import io.github.sejoung.panelyink.library.LibraryViewModel
-import io.github.sejoung.panelyink.library.model.BookEntry
-import io.github.sejoung.panelyink.library.model.FolderEntry
-import io.github.sejoung.panelyink.library.model.LibraryEntry
-import io.github.sejoung.panelyink.library.model.SortMode
-import io.github.sejoung.panelyink.library.model.ViewMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -40,60 +34,60 @@ import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
  */
 @Composable
 fun ConfirmResetDialog(
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
+  onConfirm: () -> Unit,
+  onDismiss: () -> Unit,
 ) {
-    val typography = LocalPanelyInkTypography.current
-    val spacing = LocalPanelyInkSpacing.current
+  val typography = LocalPanelyInkTypography.current
+  val spacing = LocalPanelyInkSpacing.current
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+  Dialog(
+    onDismissRequest = onDismiss,
+    properties = DialogProperties(usePlatformDefaultWidth = false),
+  ) {
+    Box(
+      modifier = Modifier
+        .padding(horizontal = spacing.space4)
+        .background(PanelyInkColors.Paper)
+        .border(2.dp, PanelyInkColors.Ink)
+        .padding(spacing.space3),
     ) {
-        Box(
-            modifier = Modifier
-                .padding(horizontal = spacing.space4)
-                .background(PanelyInkColors.Paper)
-                .border(2.dp, PanelyInkColors.Ink)
-                .padding(spacing.space3),
+      Column {
+        Text(
+          text = stringResource(R.string.settings_reset_title),
+          style = typography.title,
+          color = PanelyInkColors.Ink,
+        )
+        Spacer(Modifier.height(spacing.space2))
+        Text(
+          text = stringResource(R.string.settings_reset_confirm_body),
+          style = typography.body,
+          color = PanelyInkColors.Ink,
+        )
+        Spacer(Modifier.height(spacing.space1))
+        Text(
+          text = stringResource(R.string.settings_reset_confirm_warning),
+          style = typography.body,
+          color = PanelyInkColors.Mute,
+        )
+        Spacer(Modifier.height(spacing.space3))
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(spacing.space1),
         ) {
-            Column {
-                Text(
-                    text = stringResource(R.string.settings_reset_title),
-                    style = typography.title,
-                    color = PanelyInkColors.Ink,
-                )
-                Spacer(Modifier.height(spacing.space2))
-                Text(
-                    text = stringResource(R.string.settings_reset_confirm_body),
-                    style = typography.body,
-                    color = PanelyInkColors.Ink,
-                )
-                Spacer(Modifier.height(spacing.space1))
-                Text(
-                    text = stringResource(R.string.settings_reset_confirm_warning),
-                    style = typography.body,
-                    color = PanelyInkColors.Mute,
-                )
-                Spacer(Modifier.height(spacing.space3))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(spacing.space1),
-                ) {
-                    PanelyTextButton(
-                        label = stringResource(R.string.common_cancel),
-                        onClick = onDismiss,
-                        primary = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    PanelyTextButton(
-                        label = stringResource(R.string.common_reset),
-                        onClick = onConfirm,
-                        primary = false,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
+          PanelyTextButton(
+            label = stringResource(R.string.common_cancel),
+            onClick = onDismiss,
+            primary = true,
+            modifier = Modifier.weight(1f),
+          )
+          PanelyTextButton(
+            label = stringResource(R.string.common_reset),
+            onClick = onConfirm,
+            primary = false,
+            modifier = Modifier.weight(1f),
+          )
         }
+      }
     }
+  }
 }

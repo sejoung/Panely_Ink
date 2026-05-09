@@ -1,11 +1,5 @@
 package io.github.sejoung.panelyink.library.ui
 
-import io.github.sejoung.panelyink.library.LibraryViewModel
-import io.github.sejoung.panelyink.library.model.BookEntry
-import io.github.sejoung.panelyink.library.model.FolderEntry
-import io.github.sejoung.panelyink.library.model.LibraryEntry
-import io.github.sejoung.panelyink.library.model.SortMode
-import io.github.sejoung.panelyink.library.model.ViewMode
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -62,287 +56,297 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun AppSettingsScreen(
-    roots: List<Uri>,
-    onAddRoot: () -> Unit,
-    onRemoveRoot: (Uri) -> Unit,
-    onClearCoverCache: () -> Unit,
-    onResetAllData: () -> Unit,
-    onBack: () -> Unit,
-    modifier: Modifier = Modifier,
+  roots: List<Uri>,
+  onAddRoot: () -> Unit,
+  onRemoveRoot: (Uri) -> Unit,
+  onClearCoverCache: () -> Unit,
+  onResetAllData: () -> Unit,
+  onBack: () -> Unit,
+  modifier: Modifier = Modifier,
 ) {
-    BackHandler { onBack() }
+  BackHandler { onBack() }
 
-    val typography = LocalPanelyInkTypography.current
-    val spacing = LocalPanelyInkSpacing.current
-    val localContext = LocalContext.current
-    val ctx = localContext.applicationContext
-    val repo: AppPreferencesRepository = remember(ctx) {
-        SharedPrefsAppPreferencesRepository(ctx)
+  val typography = LocalPanelyInkTypography.current
+  val spacing = LocalPanelyInkSpacing.current
+  val localContext = LocalContext.current
+  val ctx = localContext.applicationContext
+  val repo: AppPreferencesRepository = remember(ctx) {
+    SharedPrefsAppPreferencesRepository(ctx)
+  }
+  val scope = rememberCoroutineScope()
+  var resetDialogOpen by remember { mutableStateOf(false) }
+
+  // 화면 진입 시 1회 SharedPreferences 로드. 책 진입 흐름과 달리 빈번하지 않아 단순.
+  var prefs by remember { mutableStateOf<AppPreferences?>(null) }
+  LaunchedEffect(repo) { prefs = repo.load() }
+
+  Column(
+    modifier = modifier
+      .fillMaxSize()
+      .background(PanelyInkColors.Paper),
+  ) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = spacing.space3, vertical = spacing.space2),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(spacing.space2),
+    ) {
+      PanelyIconButton(onClick = onBack, primary = false) { tint ->
+        PanelyArrowBackIcon(tint = tint)
+      }
+      Text(
+        text = stringResource(R.string.settings_app_title),
+        style = typography.title,
+        color = PanelyInkColors.Ink,
+      )
     }
-    val scope = rememberCoroutineScope()
-    var resetDialogOpen by remember { mutableStateOf(false) }
+    Box(
+      modifier = Modifier
+        .fillMaxWidth()
+        .height(1.dp)
+        .background(PanelyInkColors.Hairline),
+    )
 
-    // 화면 진입 시 1회 SharedPreferences 로드. 책 진입 흐름과 달리 빈번하지 않아 단순.
-    var prefs by remember { mutableStateOf<AppPreferences?>(null) }
-    LaunchedEffect(repo) { prefs = repo.load() }
+    val current = prefs
+    if (current == null) {
+      // 1회 로드 동안 placeholder. 거의 즉시 끝나서 시각적으로 거의 안 보임.
+      Box(
+        modifier = Modifier
+          .fillMaxSize()
+          .padding(spacing.space3),
+        contentAlignment = Alignment.Center,
+      ) {
+        Text(
+          text = stringResource(R.string.common_loading),
+          style = typography.body,
+          color = PanelyInkColors.Mute
+        )
+      }
+      return@Column
+    }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(PanelyInkColors.Paper),
+      modifier = Modifier
+        .fillMaxSize()
+        .verticalScroll(rememberScrollState())
+        .padding(horizontal = spacing.space3, vertical = spacing.space2),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = spacing.space3, vertical = spacing.space2),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(spacing.space2),
-        ) {
-            PanelyIconButton(onClick = onBack, primary = false) { tint ->
-                PanelyArrowBackIcon(tint = tint)
-            }
-            Text(
-                text = stringResource(R.string.settings_app_title),
-                style = typography.title,
-                color = PanelyInkColors.Ink,
-            )
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(PanelyInkColors.Hairline),
+      GroupHeader(stringResource(R.string.settings_language))
+      Spacer(Modifier.height(spacing.space2))
+      LanguageSegments(
+        languageTag = current.languageTag,
+        onSelect = { language ->
+          prefs = current.copy(languageTag = language.tag)
+          scope.launch {
+            repo.setLanguageTag(language.tag)
+            resolveActivity(localContext)?.recreate()
+          }
+        },
+      )
+
+      GroupSeparator(spacing.space4)
+
+      GroupHeader(stringResource(R.string.settings_display))
+      Spacer(Modifier.height(spacing.space2))
+
+      SectionLabel(stringResource(R.string.settings_full_refresh_interval))
+      Spacer(Modifier.height(spacing.space1))
+      FullRefreshIntervalSegments(
+        interval = current.fullRefreshInterval,
+        onSelect = { value ->
+          prefs = current.copy(fullRefreshInterval = value)
+          scope.launch { repo.setFullRefreshInterval(value) }
+        },
+      )
+
+      Spacer(Modifier.height(spacing.space3))
+
+      SectionLabel(stringResource(R.string.settings_invert))
+      Spacer(Modifier.height(spacing.space1))
+      InvertSegments(
+        enabled = current.invertEnabled,
+        onSelect = { value ->
+          prefs = current.copy(invertEnabled = value)
+          scope.launch { repo.setInvertEnabled(value) }
+        },
+      )
+
+      Spacer(Modifier.height(spacing.space4))
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(1.dp)
+          .background(PanelyInkColors.Hairline),
+      )
+      Spacer(Modifier.height(spacing.space4))
+
+      // 캐시 — 표지 추출 디스크 캐시. 사용자가 명시 정리 가능.
+      GroupHeader(stringResource(R.string.settings_cache))
+      Spacer(Modifier.height(spacing.space2))
+      Text(
+        text = stringResource(R.string.settings_cover_cache_body),
+        style = typography.body,
+        color = PanelyInkColors.Mute,
+      )
+      Spacer(Modifier.height(spacing.space2))
+      PanelyTextButton(
+        label = stringResource(R.string.settings_clear_cover_cache),
+        onClick = onClearCoverCache,
+        primary = false,
+        modifier = Modifier.fillMaxWidth(),
+      )
+
+      Spacer(Modifier.height(spacing.space4))
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(1.dp)
+          .background(PanelyInkColors.Hairline),
+      )
+      Spacer(Modifier.height(spacing.space4))
+
+      // 폴더 관리 — 추가/제거 모두 여기. 이전엔 별도 ManageRootsDialog였고
+      // 추가는 헤더 + 아이콘에 분리됐지만 둘 다 흡수해 한 곳에 모음(2026-05-08).
+      GroupHeader(stringResource(R.string.settings_folders))
+      Spacer(Modifier.height(spacing.space2))
+      if (roots.isEmpty()) {
+        Text(
+          text = stringResource(R.string.settings_no_folders),
+          style = typography.body,
+          color = PanelyInkColors.Mute,
         )
-
-        val current = prefs
-        if (current == null) {
-            // 1회 로드 동안 placeholder. 거의 즉시 끝나서 시각적으로 거의 안 보임.
-            Box(
-                modifier = Modifier.fillMaxSize().padding(spacing.space3),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(text = stringResource(R.string.common_loading), style = typography.body, color = PanelyInkColors.Mute)
-            }
-            return@Column
+      } else {
+        roots.forEach { uri ->
+          RootRow(uri = uri, onRemove = { onRemoveRoot(uri) })
         }
+      }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = spacing.space3, vertical = spacing.space2),
-        ) {
-            GroupHeader(stringResource(R.string.settings_language))
-            Spacer(Modifier.height(spacing.space2))
-            LanguageSegments(
-                languageTag = current.languageTag,
-                onSelect = { language ->
-                    prefs = current.copy(languageTag = language.tag)
-                    scope.launch {
-                        repo.setLanguageTag(language.tag)
-                        resolveActivity(localContext)?.recreate()
-                    }
-                },
-            )
+      Spacer(Modifier.height(spacing.space2))
+      PanelyTextButton(
+        label = stringResource(R.string.library_add_folder),
+        onClick = onAddRoot,
+        primary = roots.isEmpty(),
+        modifier = Modifier.fillMaxWidth(),
+      )
+      Spacer(Modifier.height(spacing.space1))
+      // 시스템 SAF picker는 우리가 제어 못 함 — 사용자에게 취소 방법 안내.
+      Text(
+        text = stringResource(R.string.settings_picker_cancel_hint),
+        style = typography.caption,
+        color = PanelyInkColors.Mute,
+      )
 
-            GroupSeparator(spacing.space4)
+      Spacer(Modifier.height(spacing.space4))
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(1.dp)
+          .background(PanelyInkColors.Hairline),
+      )
+      Spacer(Modifier.height(spacing.space4))
 
-            GroupHeader(stringResource(R.string.settings_display))
-            Spacer(Modifier.height(spacing.space2))
+      // 위험 영역 — 신규 사용자 상태로 복귀(Room/Prefs/SAF/캐시 모두 비움).
+      GroupHeader(stringResource(R.string.settings_reset_group))
+      Spacer(Modifier.height(spacing.space2))
+      Text(
+        text = stringResource(R.string.settings_reset_body),
+        style = typography.body,
+        color = PanelyInkColors.Mute,
+      )
+      Spacer(Modifier.height(spacing.space2))
+      PanelyTextButton(
+        label = stringResource(R.string.settings_reset_all),
+        onClick = { resetDialogOpen = true },
+        primary = false,
+        modifier = Modifier.fillMaxWidth(),
+      )
 
-            SectionLabel(stringResource(R.string.settings_full_refresh_interval))
-            Spacer(Modifier.height(spacing.space1))
-            FullRefreshIntervalSegments(
-                interval = current.fullRefreshInterval,
-                onSelect = { value ->
-                    prefs = current.copy(fullRefreshInterval = value)
-                    scope.launch { repo.setFullRefreshInterval(value) }
-                },
-            )
-
-            Spacer(Modifier.height(spacing.space3))
-
-            SectionLabel(stringResource(R.string.settings_invert))
-            Spacer(Modifier.height(spacing.space1))
-            InvertSegments(
-                enabled = current.invertEnabled,
-                onSelect = { value ->
-                    prefs = current.copy(invertEnabled = value)
-                    scope.launch { repo.setInvertEnabled(value) }
-                },
-            )
-
-            Spacer(Modifier.height(spacing.space4))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(PanelyInkColors.Hairline),
-            )
-            Spacer(Modifier.height(spacing.space4))
-
-            // 캐시 — 표지 추출 디스크 캐시. 사용자가 명시 정리 가능.
-            GroupHeader(stringResource(R.string.settings_cache))
-            Spacer(Modifier.height(spacing.space2))
-            Text(
-                text = stringResource(R.string.settings_cover_cache_body),
-                style = typography.body,
-                color = PanelyInkColors.Mute,
-            )
-            Spacer(Modifier.height(spacing.space2))
-            PanelyTextButton(
-                label = stringResource(R.string.settings_clear_cover_cache),
-                onClick = onClearCoverCache,
-                primary = false,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Spacer(Modifier.height(spacing.space4))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(PanelyInkColors.Hairline),
-            )
-            Spacer(Modifier.height(spacing.space4))
-
-            // 폴더 관리 — 추가/제거 모두 여기. 이전엔 별도 ManageRootsDialog였고
-            // 추가는 헤더 + 아이콘에 분리됐지만 둘 다 흡수해 한 곳에 모음(2026-05-08).
-            GroupHeader(stringResource(R.string.settings_folders))
-            Spacer(Modifier.height(spacing.space2))
-            if (roots.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.settings_no_folders),
-                    style = typography.body,
-                    color = PanelyInkColors.Mute,
-                )
-            } else {
-                roots.forEach { uri ->
-                    RootRow(uri = uri, onRemove = { onRemoveRoot(uri) })
-                }
-            }
-
-            Spacer(Modifier.height(spacing.space2))
-            PanelyTextButton(
-                label = stringResource(R.string.library_add_folder),
-                onClick = onAddRoot,
-                primary = roots.isEmpty(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(spacing.space1))
-            // 시스템 SAF picker는 우리가 제어 못 함 — 사용자에게 취소 방법 안내.
-            Text(
-                text = stringResource(R.string.settings_picker_cancel_hint),
-                style = typography.caption,
-                color = PanelyInkColors.Mute,
-            )
-
-            Spacer(Modifier.height(spacing.space4))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(PanelyInkColors.Hairline),
-            )
-            Spacer(Modifier.height(spacing.space4))
-
-            // 위험 영역 — 신규 사용자 상태로 복귀(Room/Prefs/SAF/캐시 모두 비움).
-            GroupHeader(stringResource(R.string.settings_reset_group))
-            Spacer(Modifier.height(spacing.space2))
-            Text(
-                text = stringResource(R.string.settings_reset_body),
-                style = typography.body,
-                color = PanelyInkColors.Mute,
-            )
-            Spacer(Modifier.height(spacing.space2))
-            PanelyTextButton(
-                label = stringResource(R.string.settings_reset_all),
-                onClick = { resetDialogOpen = true },
-                primary = false,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Spacer(Modifier.height(spacing.space3))
-        }
+      Spacer(Modifier.height(spacing.space3))
     }
+  }
 
-    if (resetDialogOpen) {
-        ConfirmResetDialog(
-            onConfirm = {
-                resetDialogOpen = false
-                onResetAllData()
-            },
-            onDismiss = { resetDialogOpen = false },
-        )
-    }
+  if (resetDialogOpen) {
+    ConfirmResetDialog(
+      onConfirm = {
+        resetDialogOpen = false
+        onResetAllData()
+      },
+      onDismiss = { resetDialogOpen = false },
+    )
+  }
 }
 
 @Composable
 private fun RootRow(uri: Uri, onRemove: () -> Unit) {
-    val typography = LocalPanelyInkTypography.current
-    val spacing = LocalPanelyInkSpacing.current
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = spacing.space1),
-    ) {
-        Text(
-            text = uri.lastPathSegment ?: uri.toString(),
-            style = typography.list,
-            color = PanelyInkColors.Ink,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = uri.toString(),
-            style = typography.caption,
-            color = PanelyInkColors.Mute,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(Modifier.height(spacing.space1))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PanelyTextButton(label = stringResource(R.string.library_remove_folder), onClick = onRemove, primary = false)
-        }
+  val typography = LocalPanelyInkTypography.current
+  val spacing = LocalPanelyInkSpacing.current
+  Column(
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(vertical = spacing.space1),
+  ) {
+    Text(
+      text = uri.lastPathSegment ?: uri.toString(),
+      style = typography.list,
+      color = PanelyInkColors.Ink,
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis,
+    )
+    Text(
+      text = uri.toString(),
+      style = typography.caption,
+      color = PanelyInkColors.Mute,
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis,
+    )
+    Spacer(Modifier.height(spacing.space1))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+      PanelyTextButton(
+        label = stringResource(R.string.library_remove_folder),
+        onClick = onRemove,
+        primary = false
+      )
     }
+  }
 }
 
 @Composable
 private fun LanguageSegments(
-    languageTag: String,
-    onSelect: (AppLanguage) -> Unit,
+  languageTag: String,
+  onSelect: (AppLanguage) -> Unit,
 ) {
-    val options = listOf(
-        AppLanguage.English to stringResource(R.string.settings_language_english),
-        AppLanguage.Korean to stringResource(R.string.settings_language_korean),
-        AppLanguage.System to stringResource(R.string.settings_language_system),
-    )
-    Segments(
-        options = options,
-        isSelected = { it == AppLanguage.fromTag(languageTag) },
-        labelOf = { value -> options.first { it.first == value }.second },
-        onSelect = onSelect,
-    )
+  val options = listOf(
+    AppLanguage.English to stringResource(R.string.settings_language_english),
+    AppLanguage.Korean to stringResource(R.string.settings_language_korean),
+    AppLanguage.System to stringResource(R.string.settings_language_system),
+  )
+  Segments(
+    options = options,
+    isSelected = { it == AppLanguage.fromTag(languageTag) },
+    labelOf = { value -> options.first { it.first == value }.second },
+    onSelect = onSelect,
+  )
 }
 
 @Composable
 private fun SectionLabel(text: String) {
-    val typography = LocalPanelyInkTypography.current
-    Text(
-        text = text,
-        style = typography.caption,
-        color = PanelyInkColors.Mute,
-    )
+  val typography = LocalPanelyInkTypography.current
+  Text(
+    text = text,
+    style = typography.caption,
+    color = PanelyInkColors.Mute,
+  )
 }
 
 @Composable
 private fun GroupSeparator(verticalSpace: androidx.compose.ui.unit.Dp) {
-    Spacer(Modifier.height(verticalSpace))
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .background(PanelyInkColors.Hairline),
-    )
-    Spacer(Modifier.height(verticalSpace))
+  Spacer(Modifier.height(verticalSpace))
+  Box(
+    modifier = Modifier
+      .fillMaxWidth()
+      .height(1.dp)
+      .background(PanelyInkColors.Hairline),
+  )
+  Spacer(Modifier.height(verticalSpace))
 }

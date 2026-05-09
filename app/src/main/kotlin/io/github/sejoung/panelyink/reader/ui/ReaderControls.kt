@@ -1,12 +1,5 @@
 package io.github.sejoung.panelyink.reader.ui
 
-import io.github.sejoung.panelyink.reader.ReaderState
-import io.github.sejoung.panelyink.reader.ReaderViewModel
-import io.github.sejoung.panelyink.reader.input.ReaderInput
-import io.github.sejoung.panelyink.reader.model.BookSettings
-import io.github.sejoung.panelyink.reader.model.ReadingDirection
-import io.github.sejoung.panelyink.reader.model.SeriesContext
-import io.github.sejoung.panelyink.reader.session.CbzBookSession
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.core.render.ContrastMatrix
+import io.github.sejoung.panelyink.reader.model.ReadingDirection
 import io.github.sejoung.panelyink.ui.components.PanelyTextButton
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
 import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
@@ -64,113 +58,113 @@ import kotlin.math.roundToInt
  */
 @Composable
 internal fun GroupHeader(text: String) {
-    val typography = LocalPanelyInkTypography.current
-    Text(
-        text = text,
-        style = typography.list,
-        color = PanelyInkColors.Ink,
-    )
+  val typography = LocalPanelyInkTypography.current
+  Text(
+    text = text,
+    style = typography.list,
+    color = PanelyInkColors.Ink,
+  )
 }
 
 @Composable
 internal fun SectionLabel(text: String) {
-    val typography = LocalPanelyInkTypography.current
-    Text(
-        text = text,
-        style = typography.caption,
-        color = PanelyInkColors.Mute,
-    )
+  val typography = LocalPanelyInkTypography.current
+  Text(
+    text = text,
+    style = typography.caption,
+    color = PanelyInkColors.Mute,
+  )
 }
 
 @Composable
 internal fun FitSegments(
-    selected: FitMode,
-    onSelect: (FitMode) -> Unit,
+  selected: FitMode,
+  onSelect: (FitMode) -> Unit,
 ) {
-    val options = listOf(
-        FitMode.FitScreen to stringResource(R.string.reader_fit_screen),
-        FitMode.FitWidth to stringResource(R.string.reader_fit_width),
-        FitMode.FitHeight to stringResource(R.string.reader_fit_height),
-    )
-    Segments(
-        options = options,
-        isSelected = { it == selected },
-        labelOf = { options.first { p -> p.first == it }.second },
-        onSelect = onSelect,
-    )
+  val options = listOf(
+    FitMode.FitScreen to stringResource(R.string.reader_fit_screen),
+    FitMode.FitWidth to stringResource(R.string.reader_fit_width),
+    FitMode.FitHeight to stringResource(R.string.reader_fit_height),
+  )
+  Segments(
+    options = options,
+    isSelected = { it == selected },
+    labelOf = { options.first { p -> p.first == it }.second },
+    onSelect = onSelect,
+  )
 }
 
 @Composable
 internal fun DirectionSegments(
-    selected: ReadingDirection,
-    onSelect: (ReadingDirection) -> Unit,
+  selected: ReadingDirection,
+  onSelect: (ReadingDirection) -> Unit,
 ) {
-    // M1.5에서 VerticalScroll 추가. 지금은 LTR/RTL 두 개만 노출.
-    val options = listOf(
-        ReadingDirection.Ltr to stringResource(R.string.reader_direction_ltr),
-        ReadingDirection.Rtl to stringResource(R.string.reader_direction_rtl),
-    )
-    Segments(
-        options = options,
-        isSelected = { it == selected },
-        labelOf = { options.first { p -> p.first == it }.second },
-        onSelect = onSelect,
-    )
+  // M1.5에서 VerticalScroll 추가. 지금은 LTR/RTL 두 개만 노출.
+  val options = listOf(
+    ReadingDirection.Ltr to stringResource(R.string.reader_direction_ltr),
+    ReadingDirection.Rtl to stringResource(R.string.reader_direction_rtl),
+  )
+  Segments(
+    options = options,
+    isSelected = { it == selected },
+    labelOf = { options.first { p -> p.first == it }.second },
+    onSelect = onSelect,
+  )
 }
 
 @Composable
 internal fun TrimSegments(
-    enabled: Boolean,
-    onSelect: (Boolean) -> Unit,
+  enabled: Boolean,
+  onSelect: (Boolean) -> Unit,
 ) {
-    val options = listOf(
-        true to stringResource(R.string.reader_trim_auto),
-        false to stringResource(R.string.common_off),
-    )
-    Segments(
-        options = options,
-        isSelected = { it == enabled },
-        labelOf = { options.first { p -> p.first == it }.second },
-        onSelect = onSelect,
-    )
+  val options = listOf(
+    true to stringResource(R.string.reader_trim_auto),
+    false to stringResource(R.string.common_off),
+  )
+  Segments(
+    options = options,
+    isSelected = { it == enabled },
+    labelOf = { options.first { p -> p.first == it }.second },
+    onSelect = onSelect,
+  )
 }
 
 @Composable
 internal fun InvertSegments(
-    enabled: Boolean,
-    onSelect: (Boolean) -> Unit,
+  enabled: Boolean,
+  onSelect: (Boolean) -> Unit,
 ) {
-    val options = listOf(
-        false to stringResource(R.string.common_off),
-        true to stringResource(R.string.common_on),
-    )
-    Segments(
-        options = options,
-        isSelected = { it == enabled },
-        labelOf = { options.first { p -> p.first == it }.second },
-        onSelect = onSelect,
-    )
+  val options = listOf(
+    false to stringResource(R.string.common_off),
+    true to stringResource(R.string.common_on),
+  )
+  Segments(
+    options = options,
+    isSelected = { it == enabled },
+    labelOf = { options.first { p -> p.first == it }.second },
+    onSelect = onSelect,
+  )
 }
 
 @Composable
 internal fun FullRefreshIntervalSegments(
-    interval: Int,
-    onSelect: (Int) -> Unit,
+  interval: Int,
+  onSelect: (Int) -> Unit,
 ) {
-    // 0=끔, 1=매 페이지, 3/5/10=일반. 1과 10은 잔상 체감 비교용 양쪽 끝.
-    val options = listOf(
-        1 to "1",
-        3 to "3",
-        5 to "5",
-        10 to "10",
-        0 to stringResource(R.string.common_off),
-    )
-    Segments(
-        options = options,
-        isSelected = { it == interval },
-        labelOf = { options.first { p -> p.first == it }.second },
-        onSelect = onSelect,
-    )
+  // 0=끔, 1=매 페이지, 3/5/10=일반. 1과 10은 잔상 체감 비교용 양쪽 끝.
+  val options = listOf(
+    1 to "1",
+    3 to "3",
+    5 to "5",
+    10 to "10",
+    0 to stringResource(R.string.common_off),
+  )
+  Segments(
+    options = options,
+    isSelected = { it == interval },
+    labelOf = { options.first { p -> p.first == it }.second },
+    onSelect = onSelect,
+  )
 }
 
 /**
@@ -181,44 +175,44 @@ internal fun FullRefreshIntervalSegments(
  */
 @Composable
 internal fun <T> Segments(
-    options: List<Pair<T, String>>,
-    isSelected: (T) -> Boolean,
-    labelOf: (T) -> String,
-    onSelect: (T) -> Unit,
+  options: List<Pair<T, String>>,
+  isSelected: (T) -> Boolean,
+  labelOf: (T) -> String,
+  onSelect: (T) -> Unit,
 ) {
-    val typography = LocalPanelyInkTypography.current
-    Row(
+  val typography = LocalPanelyInkTypography.current
+  Row(
+    modifier = Modifier
+      .fillMaxWidth()
+      .height(48.dp),
+    horizontalArrangement = Arrangement.spacedBy(8.dp),
+  ) {
+    options.forEach { (value, _) ->
+      val selected = isSelected(value)
+      val bg = if (selected) PanelyInkColors.Ink else PanelyInkColors.Paper
+      val fg = if (selected) PanelyInkColors.Paper else PanelyInkColors.Ink
+      Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        options.forEach { (value, _) ->
-            val selected = isSelected(value)
-            val bg = if (selected) PanelyInkColors.Ink else PanelyInkColors.Paper
-            val fg = if (selected) PanelyInkColors.Paper else PanelyInkColors.Ink
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .background(bg)
-                    .border(2.dp, PanelyInkColors.Ink)
-                    .clickable(
-                        interactionSource = remember(value) { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { onSelect(value) },
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = labelOf(value),
-                    style = typography.body,
-                    color = fg,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
+          .weight(1f)
+          .fillMaxHeight()
+          .background(bg)
+          .border(2.dp, PanelyInkColors.Ink)
+          .clickable(
+            interactionSource = remember(value) { MutableInteractionSource() },
+            indication = null,
+            onClick = { onSelect(value) },
+          ),
+        contentAlignment = Alignment.Center,
+      ) {
+        Text(
+          text = labelOf(value),
+          style = typography.body,
+          color = fg,
+          textAlign = TextAlign.Center,
+        )
+      }
     }
+  }
 }
 
 /**
@@ -228,111 +222,111 @@ internal fun <T> Segments(
  */
 @Composable
 internal fun ContrastSlider(
-    contrast: Float,
-    onCommit: (Float) -> Unit,
-    onReset: () -> Unit,
+  contrast: Float,
+  onCommit: (Float) -> Unit,
+  onReset: () -> Unit,
 ) {
-    val typography = LocalPanelyInkTypography.current
-    val density = LocalDensity.current
+  val typography = LocalPanelyInkTypography.current
+  val density = LocalDensity.current
 
-    val handleDp = 24.dp
-    val handlePx = with(density) { handleDp.toPx() }
-    val trackDp = 4.dp
-    val totalDp = 48.dp
+  val handleDp = 24.dp
+  val handlePx = with(density) { handleDp.toPx() }
+  val trackDp = 4.dp
+  val totalDp = 48.dp
 
-    var widthPx by remember { mutableStateOf(0) }
-    var dragX by remember(contrast) { mutableStateOf<Float?>(null) }
+  var widthPx by remember { mutableStateOf(0) }
+  var dragX by remember(contrast) { mutableStateOf<Float?>(null) }
 
-    val maxThumbPx = (widthPx - handlePx).coerceAtLeast(0f)
-    val range = ContrastMatrix.MAX - ContrastMatrix.MIN
-    val baseRatio = ((contrast - ContrastMatrix.MIN) / range).coerceIn(0f, 1f)
-    val baseThumbPx = baseRatio * maxThumbPx
+  val maxThumbPx = (widthPx - handlePx).coerceAtLeast(0f)
+  val range = ContrastMatrix.MAX - ContrastMatrix.MIN
+  val baseRatio = ((contrast - ContrastMatrix.MIN) / range).coerceIn(0f, 1f)
+  val baseThumbPx = baseRatio * maxThumbPx
 
-    fun pointerToThumbPx(pointerX: Float): Float =
-        (pointerX - handlePx / 2f).coerceIn(0f, maxThumbPx)
+  fun pointerToThumbPx(pointerX: Float): Float =
+    (pointerX - handlePx / 2f).coerceIn(0f, maxThumbPx)
 
-    fun pointerToContrast(pointerX: Float): Float {
-        if (maxThumbPx <= 0f) return ContrastMatrix.IDENTITY
-        val anchor = pointerToThumbPx(pointerX)
-        val raw = ContrastMatrix.MIN + (anchor / maxThumbPx) * range
-        return (Math.round(raw * 20f) / 20f).coerceIn(ContrastMatrix.MIN, ContrastMatrix.MAX)
-    }
+  fun pointerToContrast(pointerX: Float): Float {
+    if (maxThumbPx <= 0f) return ContrastMatrix.IDENTITY
+    val anchor = pointerToThumbPx(pointerX)
+    val raw = ContrastMatrix.MIN + (anchor / maxThumbPx) * range
+    return (Math.round(raw * 20f) / 20f).coerceIn(ContrastMatrix.MIN, ContrastMatrix.MAX)
+  }
 
-    val thumbPx = dragX?.let(::pointerToThumbPx) ?: baseThumbPx
-    val thumbDp = with(density) { thumbPx.toDp() }
-    val previewContrast = dragX?.let(::pointerToContrast) ?: contrast
+  val thumbPx = dragX?.let(::pointerToThumbPx) ?: baseThumbPx
+  val thumbDp = with(density) { thumbPx.toDp() }
+  val previewContrast = dragX?.let(::pointerToContrast) ?: contrast
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(totalDp)
-                .onSizeChanged { widthPx = it.width }
-                .pointerInput(Unit) {
-                    detectHorizontalDragGestures(
-                        onDragStart = { offset -> dragX = offset.x },
-                        onDragEnd = {
-                            val finalX = dragX
-                            dragX = null
-                            if (finalX != null) {
-                                val v = pointerToContrast(finalX)
-                                if (v != contrast) onCommit(v)
-                            }
-                        },
-                        onDragCancel = { dragX = null },
-                        onHorizontalDrag = { change, _ -> dragX = change.position.x },
-                    )
-                }
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onTap = { offset ->
-                            val v = pointerToContrast(offset.x)
-                            if (v != contrast) onCommit(v)
-                        },
-                    )
-                },
-        ) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .fillMaxWidth()
-                    .padding(horizontal = handleDp / 2)
-                    .height(trackDp)
-                    .offset(y = (totalDp - trackDp) / 2)
-                    .background(PanelyInkColors.Hairline),
-            )
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = handleDp / 2)
-                    .width(thumbDp)
-                    .height(trackDp)
-                    .background(PanelyInkColors.Ink),
-            )
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .offset(x = thumbDp)
-                    .size(handleDp)
-                    .background(PanelyInkColors.Ink),
-            )
+  Column(modifier = Modifier.fillMaxWidth()) {
+    Box(
+      modifier = Modifier
+        .fillMaxWidth()
+        .height(totalDp)
+        .onSizeChanged { widthPx = it.width }
+        .pointerInput(Unit) {
+          detectHorizontalDragGestures(
+            onDragStart = { offset -> dragX = offset.x },
+            onDragEnd = {
+              val finalX = dragX
+              dragX = null
+              if (finalX != null) {
+                val v = pointerToContrast(finalX)
+                if (v != contrast) onCommit(v)
+              }
+            },
+            onDragCancel = { dragX = null },
+            onHorizontalDrag = { change, _ -> dragX = change.position.x },
+          )
         }
-        Spacer(Modifier.height(4.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "${(previewContrast * 100).roundToInt()}%",
-                style = typography.caption,
-                color = PanelyInkColors.Ink,
-                modifier = Modifier.weight(1f),
-            )
-            PanelyTextButton(
-                label = stringResource(R.string.common_original),
-                onClick = onReset,
-                primary = false,
-            )
-        }
+        .pointerInput(Unit) {
+          detectTapGestures(
+            onTap = { offset ->
+              val v = pointerToContrast(offset.x)
+              if (v != contrast) onCommit(v)
+            },
+          )
+        },
+    ) {
+      Box(
+        modifier = Modifier
+          .align(Alignment.CenterStart)
+          .fillMaxWidth()
+          .padding(horizontal = handleDp / 2)
+          .height(trackDp)
+          .offset(y = (totalDp - trackDp) / 2)
+          .background(PanelyInkColors.Hairline),
+      )
+      Box(
+        modifier = Modifier
+          .align(Alignment.CenterStart)
+          .padding(start = handleDp / 2)
+          .width(thumbDp)
+          .height(trackDp)
+          .background(PanelyInkColors.Ink),
+      )
+      Box(
+        modifier = Modifier
+          .align(Alignment.CenterStart)
+          .offset(x = thumbDp)
+          .size(handleDp)
+          .background(PanelyInkColors.Ink),
+      )
     }
+    Spacer(Modifier.height(4.dp))
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Text(
+        text = "${(previewContrast * 100).roundToInt()}%",
+        style = typography.caption,
+        color = PanelyInkColors.Ink,
+        modifier = Modifier.weight(1f),
+      )
+      PanelyTextButton(
+        label = stringResource(R.string.common_original),
+        onClick = onReset,
+        primary = false,
+      )
+    }
+  }
 }

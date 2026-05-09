@@ -1,7 +1,8 @@
-package io.github.sejoung.panelyink.data.db
+package io.github.sejoung.panelyink.data.db.position
 
 import io.github.sejoung.panelyink.core.position.BookProgress
 import io.github.sejoung.panelyink.core.position.PositionRepository
+import io.github.sejoung.panelyink.data.db.PanelyDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

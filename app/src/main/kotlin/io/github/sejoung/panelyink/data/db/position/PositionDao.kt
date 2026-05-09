@@ -1,4 +1,4 @@
-package io.github.sejoung.panelyink.data.db
+package io.github.sejoung.panelyink.data.db.position
 
 import androidx.room.Dao
 import androidx.room.Insert

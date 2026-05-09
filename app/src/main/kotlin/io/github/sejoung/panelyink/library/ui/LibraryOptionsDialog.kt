@@ -1,11 +1,5 @@
 package io.github.sejoung.panelyink.library.ui
 
-import io.github.sejoung.panelyink.library.LibraryViewModel
-import io.github.sejoung.panelyink.library.model.BookEntry
-import io.github.sejoung.panelyink.library.model.FolderEntry
-import io.github.sejoung.panelyink.library.model.LibraryEntry
-import io.github.sejoung.panelyink.library.model.SortMode
-import io.github.sejoung.panelyink.library.model.ViewMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import io.github.sejoung.panelyink.R
+import io.github.sejoung.panelyink.library.model.SortMode
+import io.github.sejoung.panelyink.library.model.ViewMode
 import io.github.sejoung.panelyink.ui.components.PanelyTextButton
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
@@ -45,116 +41,120 @@ import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
  */
 @Composable
 fun LibraryOptionsDialog(
-    selectedSort: SortMode,
-    selectedView: ViewMode,
-    onSortChange: (SortMode) -> Unit,
-    onViewChange: (ViewMode) -> Unit,
-    onDismiss: () -> Unit,
+  selectedSort: SortMode,
+  selectedView: ViewMode,
+  onSortChange: (SortMode) -> Unit,
+  onViewChange: (ViewMode) -> Unit,
+  onDismiss: () -> Unit,
 ) {
-    val typography = LocalPanelyInkTypography.current
-    val spacing = LocalPanelyInkSpacing.current
+  val typography = LocalPanelyInkTypography.current
+  val spacing = LocalPanelyInkSpacing.current
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+  Dialog(
+    onDismissRequest = onDismiss,
+    properties = DialogProperties(usePlatformDefaultWidth = false),
+  ) {
+    Box(
+      modifier = Modifier
+        .padding(horizontal = spacing.space4)
+        .background(PanelyInkColors.Paper)
+        .border(2.dp, PanelyInkColors.Ink)
+        .padding(spacing.space3),
     ) {
-        Box(
-            modifier = Modifier
-                .padding(horizontal = spacing.space4)
-                .background(PanelyInkColors.Paper)
-                .border(2.dp, PanelyInkColors.Ink)
-                .padding(spacing.space3),
+      Column {
+        Text(
+          text = stringResource(R.string.library_options_title),
+          style = typography.title,
+          color = PanelyInkColors.Ink,
+        )
+
+        Spacer(Modifier.height(spacing.space2))
+
+        SectionLabel(stringResource(R.string.library_options_sort))
+        Spacer(Modifier.height(spacing.space1))
+        OptionRow(
+          label = stringResource(R.string.library_sort_name),
+          isSelected = selectedSort == SortMode.Name,
+          onClick = { onSortChange(SortMode.Name) },
+        )
+        Spacer(Modifier.height(spacing.space1))
+        OptionRow(
+          label = stringResource(R.string.library_sort_last_opened),
+          isSelected = selectedSort == SortMode.LastOpened,
+          onClick = { onSortChange(SortMode.LastOpened) },
+        )
+
+        Spacer(Modifier.height(spacing.space2))
+
+        SectionLabel(stringResource(R.string.library_options_view))
+        Spacer(Modifier.height(spacing.space1))
+        OptionRow(
+          label = stringResource(R.string.library_view_list),
+          isSelected = selectedView == ViewMode.List,
+          onClick = { onViewChange(ViewMode.List) },
+        )
+        Spacer(Modifier.height(spacing.space1))
+        OptionRow(
+          label = stringResource(R.string.library_view_cover),
+          isSelected = selectedView == ViewMode.Cover,
+          onClick = { onViewChange(ViewMode.Cover) },
+        )
+        Spacer(Modifier.height(spacing.space1))
+        OptionRow(
+          label = stringResource(R.string.library_view_grid),
+          isSelected = selectedView == ViewMode.Grid,
+          onClick = { onViewChange(ViewMode.Grid) },
+        )
+
+        Spacer(Modifier.height(spacing.space2))
+        Row(
+          horizontalArrangement = Arrangement.End,
+          modifier = Modifier.fillMaxWidth(),
         ) {
-            Column {
-                Text(
-                    text = stringResource(R.string.library_options_title),
-                    style = typography.title,
-                    color = PanelyInkColors.Ink,
-                )
-
-                Spacer(Modifier.height(spacing.space2))
-
-                SectionLabel(stringResource(R.string.library_options_sort))
-                Spacer(Modifier.height(spacing.space1))
-                OptionRow(
-                    label = stringResource(R.string.library_sort_name),
-                    isSelected = selectedSort == SortMode.Name,
-                    onClick = { onSortChange(SortMode.Name) },
-                )
-                Spacer(Modifier.height(spacing.space1))
-                OptionRow(
-                    label = stringResource(R.string.library_sort_last_opened),
-                    isSelected = selectedSort == SortMode.LastOpened,
-                    onClick = { onSortChange(SortMode.LastOpened) },
-                )
-
-                Spacer(Modifier.height(spacing.space2))
-
-                SectionLabel(stringResource(R.string.library_options_view))
-                Spacer(Modifier.height(spacing.space1))
-                OptionRow(
-                    label = stringResource(R.string.library_view_list),
-                    isSelected = selectedView == ViewMode.List,
-                    onClick = { onViewChange(ViewMode.List) },
-                )
-                Spacer(Modifier.height(spacing.space1))
-                OptionRow(
-                    label = stringResource(R.string.library_view_cover),
-                    isSelected = selectedView == ViewMode.Cover,
-                    onClick = { onViewChange(ViewMode.Cover) },
-                )
-                Spacer(Modifier.height(spacing.space1))
-                OptionRow(
-                    label = stringResource(R.string.library_view_grid),
-                    isSelected = selectedView == ViewMode.Grid,
-                    onClick = { onViewChange(ViewMode.Grid) },
-                )
-
-                Spacer(Modifier.height(spacing.space2))
-                Row(
-                    horizontalArrangement = Arrangement.End,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    PanelyTextButton(label = stringResource(R.string.common_close), onClick = onDismiss, primary = true)
-                }
-            }
+          PanelyTextButton(
+            label = stringResource(R.string.common_close),
+            onClick = onDismiss,
+            primary = true
+          )
         }
+      }
     }
+  }
 }
 
 @Composable
 private fun SectionLabel(text: String) {
-    val typography = LocalPanelyInkTypography.current
-    Text(
-        text = text,
-        style = typography.caption,
-        color = PanelyInkColors.Mute,
-    )
+  val typography = LocalPanelyInkTypography.current
+  Text(
+    text = text,
+    style = typography.caption,
+    color = PanelyInkColors.Mute,
+  )
 }
 
 @Composable
 private fun OptionRow(
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
+  label: String,
+  isSelected: Boolean,
+  onClick: () -> Unit,
 ) {
-    val typography = LocalPanelyInkTypography.current
-    val bg = if (isSelected) PanelyInkColors.Ink else PanelyInkColors.Paper
-    val fg = if (isSelected) PanelyInkColors.Paper else PanelyInkColors.Ink
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .background(bg)
-            .border(2.dp, PanelyInkColors.Ink)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
-            .padding(horizontal = 16.dp),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Text(text = label, style = typography.body, color = fg)
-    }
+  val typography = LocalPanelyInkTypography.current
+  val bg = if (isSelected) PanelyInkColors.Ink else PanelyInkColors.Paper
+  val fg = if (isSelected) PanelyInkColors.Paper else PanelyInkColors.Ink
+  Box(
+    modifier = Modifier
+      .fillMaxWidth()
+      .height(48.dp)
+      .background(bg)
+      .border(2.dp, PanelyInkColors.Ink)
+      .clickable(
+        interactionSource = remember { MutableInteractionSource() },
+        indication = null,
+        onClick = onClick,
+      )
+      .padding(horizontal = 16.dp),
+    contentAlignment = Alignment.CenterStart,
+  ) {
+    Text(text = label, style = typography.body, color = fg)
+  }
 }

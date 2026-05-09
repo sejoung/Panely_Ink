@@ -1,5 +1,6 @@
-package io.github.sejoung.panelyink.data.db
+package io.github.sejoung.panelyink.data.db.cover
 
+import io.github.sejoung.panelyink.data.db.PanelyDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

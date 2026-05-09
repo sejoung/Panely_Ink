@@ -1,9 +1,5 @@
 package io.github.sejoung.panelyink.library.data
 
-import io.github.sejoung.panelyink.library.model.BookEntry
-import io.github.sejoung.panelyink.library.model.FolderEntry
-import io.github.sejoung.panelyink.library.model.LibraryEntry
-import io.github.sejoung.panelyink.library.model.SortMode
 import android.content.Context
 import android.net.Uri
 import android.util.Log
@@ -33,64 +29,64 @@ import java.io.FileOutputStream
  */
 object NestedZipExtractor {
 
-    private const val DIR = "nested"
-    private const val EXT = "cbz"
-    private const val TAG = "PanelyInk.NestedExtractor"
+  private const val DIR = "nested"
+  private const val EXT = "cbz"
+  private const val TAG = "PanelyInk.NestedExtractor"
 
-    /**
-     * nested entry를 임시 파일로 추출. 이미 캐시에 있으면 그대로 반환(추출 X).
-     *
-     * @return 추출된 cbz 파일. 추출 실패 시 예외.
-     */
-    suspend fun extract(
-        context: Context,
-        parentUri: Uri,
-        entryName: String,
-    ): File = withContext(Dispatchers.IO) {
-        val target = cacheFile(context, parentUri, entryName)
-        if (target.exists() && target.length() > 0) {
-            Log.d(TAG, "cache hit: ${target.name}")
-            return@withContext target
+  /**
+   * nested entry를 임시 파일로 추출. 이미 캐시에 있으면 그대로 반환(추출 X).
+   *
+   * @return 추출된 cbz 파일. 추출 실패 시 예외.
+   */
+  suspend fun extract(
+    context: Context,
+    parentUri: Uri,
+    entryName: String,
+  ): File = withContext(Dispatchers.IO) {
+    val target = cacheFile(context, parentUri, entryName)
+    if (target.exists() && target.length() > 0) {
+      Log.d(TAG, "cache hit: ${target.name}")
+      return@withContext target
+    }
+    target.parentFile?.mkdirs()
+
+    Log.d(TAG, "extract start: parent=$parentUri entry=$entryName")
+    val t0 = System.currentTimeMillis()
+    val archive = CbzArchive.open(context, parentUri)
+    try {
+      archive.openNestedEntry(entryName).use { input ->
+        FileOutputStream(target).use { output ->
+          input.copyTo(output)
         }
-        target.parentFile?.mkdirs()
-
-        Log.d(TAG, "extract start: parent=$parentUri entry=$entryName")
-        val t0 = System.currentTimeMillis()
-        val archive = CbzArchive.open(context, parentUri)
-        try {
-            archive.openNestedEntry(entryName).use { input ->
-                FileOutputStream(target).use { output ->
-                    input.copyTo(output)
-                }
-            }
-        } catch (t: Throwable) {
-            // 부분 파일 정리
-            runCatching { if (target.exists()) target.delete() }
-            throw t
-        } finally {
-            archive.close()
-        }
-        Log.d(
-            TAG,
-            "extract done: ${target.length()} bytes in ${System.currentTimeMillis() - t0}ms",
-        )
-        target
+      }
+    } catch (t: Throwable) {
+      // 부분 파일 정리
+      runCatching { if (target.exists()) target.delete() }
+      throw t
+    } finally {
+      archive.close()
     }
+    Log.d(
+      TAG,
+      "extract done: ${target.length()} bytes in ${System.currentTimeMillis() - t0}ms",
+    )
+    target
+  }
 
-    /** 캐시 파일 경로 — 부모 URI + entry name으로 unique. */
-    fun cacheFile(context: Context, parentUri: Uri, entryName: String): File {
-        val parentHash = PositionKey.bookIdFromUri(parentUri.toString())
-        val entryHash = PositionKey.bookIdFromUri(entryName)
-        val dir = File(context.cacheDir, DIR)
-        return File(dir, "${parentHash}__${entryHash}.$EXT")
-    }
+  /** 캐시 파일 경로 — 부모 URI + entry name으로 unique. */
+  fun cacheFile(context: Context, parentUri: Uri, entryName: String): File {
+    val parentHash = PositionKey.bookIdFromUri(parentUri.toString())
+    val entryHash = PositionKey.bookIdFromUri(entryName)
+    val dir = File(context.cacheDir, DIR)
+    return File(dir, "${parentHash}__${entryHash}.$EXT")
+  }
 
-    /** 사용자 명시 정리 — `clearCoverCache`/`resetAllData`와 같이 호출되면 좋음. */
-    suspend fun clearAll(context: Context): Int = withContext(Dispatchers.IO) {
-        val dir = File(context.cacheDir, DIR)
-        if (!dir.exists()) return@withContext 0
-        var deleted = 0
-        dir.listFiles()?.forEach { if (it.delete()) deleted++ }
-        deleted
-    }
+  /** 사용자 명시 정리 — `clearCoverCache`/`resetAllData`와 같이 호출되면 좋음. */
+  suspend fun clearAll(context: Context): Int = withContext(Dispatchers.IO) {
+    val dir = File(context.cacheDir, DIR)
+    if (!dir.exists()) return@withContext 0
+    var deleted = 0
+    dir.listFiles()?.forEach { if (it.delete()) deleted++ }
+    deleted
+  }
 }

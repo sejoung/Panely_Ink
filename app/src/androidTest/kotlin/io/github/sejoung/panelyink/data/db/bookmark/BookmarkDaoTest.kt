@@ -1,8 +1,9 @@
-package io.github.sejoung.panelyink.data.db
+package io.github.sejoung.panelyink.data.db.bookmark
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.sejoung.panelyink.data.db.PanelyDatabase
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals

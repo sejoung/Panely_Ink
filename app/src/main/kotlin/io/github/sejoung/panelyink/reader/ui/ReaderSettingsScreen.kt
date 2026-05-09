@@ -1,12 +1,5 @@
 package io.github.sejoung.panelyink.reader.ui
 
-import io.github.sejoung.panelyink.reader.ReaderState
-import io.github.sejoung.panelyink.reader.ReaderViewModel
-import io.github.sejoung.panelyink.reader.input.ReaderInput
-import io.github.sejoung.panelyink.reader.model.BookSettings
-import io.github.sejoung.panelyink.reader.model.ReadingDirection
-import io.github.sejoung.panelyink.reader.model.SeriesContext
-import io.github.sejoung.panelyink.reader.session.CbzBookSession
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.core.render.ContrastMatrix
+import io.github.sejoung.panelyink.reader.ReaderState
+import io.github.sejoung.panelyink.reader.model.ReadingDirection
 import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
 import io.github.sejoung.panelyink.ui.components.PanelyIconButton
 import io.github.sejoung.panelyink.ui.components.PanelyTextButton
@@ -50,139 +45,139 @@ import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
  */
 @Composable
 fun ReaderSettingsScreen(
-    state: ReaderState,
-    onFitModeChange: (FitMode) -> Unit,
-    onDirectionChange: (ReadingDirection) -> Unit,
-    onTrimEnabledChange: (Boolean) -> Unit,
-    onContrastChange: (Float) -> Unit,
-    onInvertEnabledChange: (Boolean) -> Unit,
-    onTriggerFullRefresh: () -> Unit,
-    onBack: () -> Unit,
-    modifier: Modifier = Modifier,
+  state: ReaderState,
+  onFitModeChange: (FitMode) -> Unit,
+  onDirectionChange: (ReadingDirection) -> Unit,
+  onTrimEnabledChange: (Boolean) -> Unit,
+  onContrastChange: (Float) -> Unit,
+  onInvertEnabledChange: (Boolean) -> Unit,
+  onTriggerFullRefresh: () -> Unit,
+  onBack: () -> Unit,
+  modifier: Modifier = Modifier,
 ) {
-    BackHandler { onBack() }
+  BackHandler { onBack() }
 
-    val typography = LocalPanelyInkTypography.current
-    val spacing = LocalPanelyInkSpacing.current
+  val typography = LocalPanelyInkTypography.current
+  val spacing = LocalPanelyInkSpacing.current
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(PanelyInkColors.Paper),
+  Column(
+    modifier = modifier
+      .fillMaxSize()
+      .background(PanelyInkColors.Paper),
+  ) {
+    // 헤더 — back 화살표 + 제목
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = spacing.space3, vertical = spacing.space2),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(spacing.space2),
     ) {
-        // 헤더 — back 화살표 + 제목
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = spacing.space3, vertical = spacing.space2),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(spacing.space2),
-        ) {
-            PanelyIconButton(onClick = onBack, primary = false) { tint ->
-                PanelyArrowBackIcon(tint = tint)
-            }
-            Text(
-                text = stringResource(R.string.reader_settings_title),
-                style = typography.title,
-                color = PanelyInkColors.Ink,
-            )
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(PanelyInkColors.Hairline),
-        )
-
-        // 본문 — 3그룹(페이지 레이아웃 / 화질 / 디스플레이)으로 묶고 Hairline divider로
-        // 분리. 섹션 라벨은 caption Mute, 그룹 헤더는 list Ink로 시각 hierarchy.
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = spacing.space3, vertical = spacing.space2),
-        ) {
-            // ── 그룹 1: 페이지 레이아웃 ─────────────────────────────
-            GroupHeader(stringResource(R.string.reader_group_page_layout))
-            Spacer(Modifier.height(spacing.space2))
-
-            SectionLabel(stringResource(R.string.reader_fit))
-            Spacer(Modifier.height(spacing.space1))
-            FitSegments(
-                selected = state.fitMode,
-                onSelect = onFitModeChange,
-            )
-
-            Spacer(Modifier.height(spacing.space2))
-
-            SectionLabel(stringResource(R.string.reader_direction))
-            Spacer(Modifier.height(spacing.space1))
-            DirectionSegments(
-                selected = state.direction,
-                onSelect = onDirectionChange,
-            )
-
-            Spacer(Modifier.height(spacing.space2))
-
-            SectionLabel(stringResource(R.string.reader_trim))
-            Spacer(Modifier.height(spacing.space1))
-            TrimSegments(
-                enabled = state.trimEnabled,
-                onSelect = onTrimEnabledChange,
-            )
-
-            GroupSeparator(spacing.space4)
-
-            // ── 그룹 2: 화질 ────────────────────────────────────
-            GroupHeader(stringResource(R.string.reader_group_image))
-            Spacer(Modifier.height(spacing.space2))
-
-            SectionLabel(stringResource(R.string.reader_contrast))
-            Spacer(Modifier.height(spacing.space1))
-            ContrastSlider(
-                contrast = state.contrast,
-                onCommit = onContrastChange,
-                onReset = { onContrastChange(ContrastMatrix.IDENTITY) },
-            )
-
-            Spacer(Modifier.height(spacing.space2))
-
-            SectionLabel(stringResource(R.string.settings_invert))
-            Spacer(Modifier.height(spacing.space1))
-            InvertSegments(
-                enabled = state.invertEnabled,
-                onSelect = onInvertEnabledChange,
-            )
-
-            GroupSeparator(spacing.space4)
-
-            // ── 그룹 3: 디스플레이 (현재 책에 즉시 영향) ─────────
-            // 풀리프레시 주기는 디바이스 특성이라 라이브러리 앱 설정에서 전역 관리.
-            // 여기엔 "현재 책에 한 번 깜빡임"만 둠.
-            GroupHeader(stringResource(R.string.reader_group_display))
-            Spacer(Modifier.height(spacing.space2))
-
-            PanelyTextButton(
-                label = stringResource(R.string.reader_full_refresh_now),
-                onClick = onTriggerFullRefresh,
-                primary = false,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Spacer(Modifier.height(spacing.space3))
-        }
+      PanelyIconButton(onClick = onBack, primary = false) { tint ->
+        PanelyArrowBackIcon(tint = tint)
+      }
+      Text(
+        text = stringResource(R.string.reader_settings_title),
+        style = typography.title,
+        color = PanelyInkColors.Ink,
+      )
     }
+    Box(
+      modifier = Modifier
+        .fillMaxWidth()
+        .height(1.dp)
+        .background(PanelyInkColors.Hairline),
+    )
+
+    // 본문 — 3그룹(페이지 레이아웃 / 화질 / 디스플레이)으로 묶고 Hairline divider로
+    // 분리. 섹션 라벨은 caption Mute, 그룹 헤더는 list Ink로 시각 hierarchy.
+    Column(
+      modifier = Modifier
+        .fillMaxSize()
+        .verticalScroll(rememberScrollState())
+        .padding(horizontal = spacing.space3, vertical = spacing.space2),
+    ) {
+      // ── 그룹 1: 페이지 레이아웃 ─────────────────────────────
+      GroupHeader(stringResource(R.string.reader_group_page_layout))
+      Spacer(Modifier.height(spacing.space2))
+
+      SectionLabel(stringResource(R.string.reader_fit))
+      Spacer(Modifier.height(spacing.space1))
+      FitSegments(
+        selected = state.fitMode,
+        onSelect = onFitModeChange,
+      )
+
+      Spacer(Modifier.height(spacing.space2))
+
+      SectionLabel(stringResource(R.string.reader_direction))
+      Spacer(Modifier.height(spacing.space1))
+      DirectionSegments(
+        selected = state.direction,
+        onSelect = onDirectionChange,
+      )
+
+      Spacer(Modifier.height(spacing.space2))
+
+      SectionLabel(stringResource(R.string.reader_trim))
+      Spacer(Modifier.height(spacing.space1))
+      TrimSegments(
+        enabled = state.trimEnabled,
+        onSelect = onTrimEnabledChange,
+      )
+
+      GroupSeparator(spacing.space4)
+
+      // ── 그룹 2: 화질 ────────────────────────────────────
+      GroupHeader(stringResource(R.string.reader_group_image))
+      Spacer(Modifier.height(spacing.space2))
+
+      SectionLabel(stringResource(R.string.reader_contrast))
+      Spacer(Modifier.height(spacing.space1))
+      ContrastSlider(
+        contrast = state.contrast,
+        onCommit = onContrastChange,
+        onReset = { onContrastChange(ContrastMatrix.IDENTITY) },
+      )
+
+      Spacer(Modifier.height(spacing.space2))
+
+      SectionLabel(stringResource(R.string.settings_invert))
+      Spacer(Modifier.height(spacing.space1))
+      InvertSegments(
+        enabled = state.invertEnabled,
+        onSelect = onInvertEnabledChange,
+      )
+
+      GroupSeparator(spacing.space4)
+
+      // ── 그룹 3: 디스플레이 (현재 책에 즉시 영향) ─────────
+      // 풀리프레시 주기는 디바이스 특성이라 라이브러리 앱 설정에서 전역 관리.
+      // 여기엔 "현재 책에 한 번 깜빡임"만 둠.
+      GroupHeader(stringResource(R.string.reader_group_display))
+      Spacer(Modifier.height(spacing.space2))
+
+      PanelyTextButton(
+        label = stringResource(R.string.reader_full_refresh_now),
+        onClick = onTriggerFullRefresh,
+        primary = false,
+        modifier = Modifier.fillMaxWidth(),
+      )
+
+      Spacer(Modifier.height(spacing.space3))
+    }
+  }
 }
 
 /** 그룹 사이 큰 spacing + 1dp Hairline divider. */
 @Composable
 private fun GroupSeparator(verticalSpace: androidx.compose.ui.unit.Dp) {
-    Spacer(Modifier.height(verticalSpace))
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .background(PanelyInkColors.Hairline),
-    )
-    Spacer(Modifier.height(verticalSpace))
+  Spacer(Modifier.height(verticalSpace))
+  Box(
+    modifier = Modifier
+      .fillMaxWidth()
+      .height(1.dp)
+      .background(PanelyInkColors.Hairline),
+  )
+  Spacer(Modifier.height(verticalSpace))
 }

@@ -1,9 +1,5 @@
 package io.github.sejoung.panelyink.library.data
 
-import io.github.sejoung.panelyink.library.model.BookEntry
-import io.github.sejoung.panelyink.library.model.FolderEntry
-import io.github.sejoung.panelyink.library.model.LibraryEntry
-import io.github.sejoung.panelyink.library.model.SortMode
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -24,35 +20,35 @@ import java.io.FileOutputStream
  */
 object CoverCache {
 
-    private const val DIR = "covers"
-    private const val EXT = "png"
-    private const val TAG = "PanelyInk.CoverCache"
+  private const val DIR = "covers"
+  private const val EXT = "png"
+  private const val TAG = "PanelyInk.CoverCache"
 
-    fun cacheFile(context: Context, bookId: String): File {
-        val dir = File(context.filesDir, DIR).apply { if (!exists()) mkdirs() }
-        return File(dir, "$bookId.$EXT")
-    }
+  fun cacheFile(context: Context, bookId: String): File {
+    val dir = File(context.filesDir, DIR).apply { if (!exists()) mkdirs() }
+    return File(dir, "$bookId.$EXT")
+  }
 
-    /** 디스크에 표지가 있으면 디코드해서 반환, 없거나 깨졌으면 null. */
-    fun loadBitmap(file: File): Bitmap? {
-        if (!file.exists() || file.length() == 0L) return null
-        return runCatching {
-            BitmapFactory.decodeFile(file.absolutePath)
-        }.onFailure {
-            Log.w(TAG, "load failed: ${file.name}", it)
-        }.getOrNull()
-    }
+  /** 디스크에 표지가 있으면 디코드해서 반환, 없거나 깨졌으면 null. */
+  fun loadBitmap(file: File): Bitmap? {
+    if (!file.exists() || file.length() == 0L) return null
+    return runCatching {
+      BitmapFactory.decodeFile(file.absolutePath)
+    }.onFailure {
+      Log.w(TAG, "load failed: ${file.name}", it)
+    }.getOrNull()
+  }
 
-    /** PNG로 무손실 압축 저장. 200KB 미만이라 압축 시간은 무시할 수준. */
-    fun saveBitmap(file: File, bitmap: Bitmap): Boolean = runCatching {
-        FileOutputStream(file).use { out ->
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-        }
-        true
-    }.getOrElse {
-        Log.w(TAG, "save failed: ${file.name}", it)
-        // 부분 쓰기 방지를 위해 깨진 파일 정리
-        runCatching { if (file.exists()) file.delete() }
-        false
+  /** PNG로 무손실 압축 저장. 200KB 미만이라 압축 시간은 무시할 수준. */
+  fun saveBitmap(file: File, bitmap: Bitmap): Boolean = runCatching {
+    FileOutputStream(file).use { out ->
+      bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
     }
+    true
+  }.getOrElse {
+    Log.w(TAG, "save failed: ${file.name}", it)
+    // 부분 쓰기 방지를 위해 깨진 파일 정리
+    runCatching { if (file.exists()) file.delete() }
+    false
+  }
 }

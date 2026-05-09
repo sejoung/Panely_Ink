@@ -1,4 +1,4 @@
-package io.github.sejoung.panelyink.data.db
+package io.github.sejoung.panelyink.data.db.position
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
