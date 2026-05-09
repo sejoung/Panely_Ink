@@ -3,8 +3,6 @@ package io.github.sejoung.panelyink.library.data
 import android.content.Context
 import android.util.Log
 import io.github.sejoung.panelyink.data.db.cover.CoverMetaRepository
-import io.github.sejoung.panelyink.library.data.CoverPruner.clearAll
-import io.github.sejoung.panelyink.library.data.CoverPruner.prune
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -13,15 +11,15 @@ import java.io.File
  * 표지 캐시 디스크 정리.
  *
  * 두 가지 정리 모드:
- * - [prune]: 자동 + 사용자 명시. orphan(메타 없는 파일) 정리 + LRU(사이즈 초과 시
+ * - [CoverPruner.prune]: 자동 + 사용자 명시. orphan(메타 없는 파일) 정리 + LRU(사이즈 초과 시
  *   가장 오래된 메타+파일부터 삭제)
- * - [clearAll]: 사용자 명시 "표지 캐시 비우기". 디스크 파일 + 메타(FAILED 포함) 모두
+ * - [CoverPruner.clearAll]: 사용자 명시 "표지 캐시 비우기". 디스크 파일 + 메타(FAILED 포함) 모두
  *   삭제 → 다음 라이브러리 진입에서 모든 책 표지 재추출. FAILED 메타가 같이 삭제되니
  *   깨진 책도 재시도됨.
  *
  * 호출 시점:
- * - [io.github.sejoung.panelyink.PanelyInkApp.onCreate] 백그라운드: [prune]
- * - 앱 설정 화면 "표지 캐시 비우기" 버튼: [clearAll]
+ * - [io.github.sejoung.panelyink.PanelyInkApp.onCreate] 백그라운드: [CoverPruner.prune]
+ * - 앱 설정 화면 "표지 캐시 비우기" 버튼: [CoverPruner.clearAll]
  */
 object CoverPruner {
 

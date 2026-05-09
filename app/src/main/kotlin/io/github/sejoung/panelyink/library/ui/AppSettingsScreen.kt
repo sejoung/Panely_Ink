@@ -48,9 +48,11 @@ import kotlinx.coroutines.launch
 /**
  * 앱 전역 설정 화면 — 라이브러리에서 진입. 모든 책에 공통 적용되는 옵션만.
  *
- * 책별 설정([io.github.sejoung.panelyink.reader.ReaderSettingsScreen])과 분리:
- * - 디바이스 특성/환경 의존(풀리프레시 주기, 흑백 반전) → 여기
+ * 책별 설정([io.github.sejoung.panelyink.reader.ui.ReaderSettingsScreen])과 분리:
+ * - 디바이스 특성/환경 의존(풀리프레시 주기, 흑백 반전, 언어) → 여기
  * - 책 내용에 대한 사용자 취향(맞춤/방향/트리밍/대비) → 책 메뉴
+ *
+ * 흑백 반전은 리더 설정에서도 토글할 수 있지만 저장소는 같은 전역 설정이다.
  *
  * 변경 사항은 즉시 [AppPreferencesRepository]에 저장. 다음 책 진입에 반영.
  */

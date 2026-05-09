@@ -30,9 +30,6 @@ interface BookmarkDao {
     @Query("DELETE FROM bookmark WHERE book_id = :bookId AND page_index = :pageIndex")
     suspend fun delete(bookId: String, pageIndex: Int)
 
-    @Query("DELETE FROM bookmark WHERE book_id = :bookId")
-    suspend fun deleteForBook(bookId: String)
-
     @Query("DELETE FROM bookmark")
     suspend fun deleteAll()
 

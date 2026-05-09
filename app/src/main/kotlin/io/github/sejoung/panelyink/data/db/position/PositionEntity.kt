@@ -7,7 +7,8 @@ import androidx.room.PrimaryKey
 /**
  * 책별 마지막 페이지(Resume) — PRD §6.1.
  *
- * v0.x SharedPreferences("panely_ink_positions") 데이터를 [DatabaseMigration]가
+ * v0.x SharedPreferences("panely_ink_positions") 데이터를
+ * [io.github.sejoung.panelyink.data.db.migration.PositionMigration]가
  * 첫 실행 시 1회 복사. bookId 키 형식은 SHA-1 hex(`PositionKey.bookIdFromUri`).
  */
 @Entity(tableName = "position")

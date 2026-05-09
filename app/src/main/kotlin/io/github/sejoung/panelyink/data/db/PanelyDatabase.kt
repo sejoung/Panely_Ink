@@ -6,7 +6,6 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import io.github.sejoung.panelyink.data.db.PanelyDatabase.Companion.getInstance
 import io.github.sejoung.panelyink.data.db.bookmark.BookmarkDao
 import io.github.sejoung.panelyink.data.db.bookmark.BookmarkEntity
 import io.github.sejoung.panelyink.data.db.cover.CoverMetaDao
@@ -28,7 +27,7 @@ import io.github.sejoung.panelyink.data.db.settings.BookSettingsEntity
  * - v5: `bookmark` 테이블 추가 (책별 페이지 북마크)
  * - v6: `book_settings`에서 전역 prefs로 분리된 orphan 컬럼 제거
  *
- * 싱글톤 보장: [getInstance]가 더블 체크 락. 안드로이드 앱에서 DB는 프로세스당 1개.
+ * 싱글톤 보장: [PanelyDatabase.getInstance]가 더블 체크 락. 안드로이드 앱에서 DB는 프로세스당 1개.
  */
 @Database(
   entities = [

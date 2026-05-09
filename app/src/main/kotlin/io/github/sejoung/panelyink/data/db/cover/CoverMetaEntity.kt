@@ -12,7 +12,7 @@ import androidx.room.PrimaryKey
  *   부담. status=FAILED면 다음부터 skip
  * - **추출 페이지 추적**: [sourcePageIndex] — v1.0은 항상 0, v1.5에서 사용자가 다른
  *   페이지로 변경 옵션
- * - **LRU 정리**: [extractedAt]으로 오래된 표지부터 정리(M3 후속 항목)
+ * - **LRU 정리**: [extractedAt]으로 오래된 표지부터 정리
  *
  * 디스크 파일 경로(`filesDir/covers/<bookId>.png`)는 결정적이라 컬럼 안 둠 — bookId
  * 만으로 위치 계산. 파일이 사라지면 status=OK여도 재추출.
@@ -42,6 +42,6 @@ data class CoverMetaEntity(
  * - [OK]: 디스크에 정상 PNG 저장됨
  * - [FAILED]: archive open 실패, 페이지 0개, BitmapFactory 디코드 실패 등 — 재시도 X
  *
- * v1.0은 두 상태만. 사용자 명시 새로고침으로 status를 지워 재추출 가능(추후 UI).
+ * 사용자 명시 "표지 캐시 비우기"는 FAILED 메타까지 지워 다음 진입 때 재추출을 허용한다.
  */
 enum class CoverStatus { OK, FAILED }

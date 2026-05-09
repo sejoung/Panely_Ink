@@ -57,7 +57,7 @@ import kotlin.math.roundToInt
  *
  * 디자인 원칙(2026-05-08 결정):
  * - 자주 쓰는 = 페이지 점프, 라이브러리 복귀 → 여기
- * - 책당 1회 설정 = 화면 맞춤/방향/트림/대비/풀리프레시 → [ReaderSettingsScreen]
+ * - 책당 1회 설정 = 화면 맞춤/방향/트림/대비, 현재 화면 디스플레이 액션 → [ReaderSettingsScreen]
  *
  * Guidelines §6 / §12 / §11 준수:
  * - Card/Panel: Paper 배경 + 2dp Ink 보더, elevation/round/shadow 없음

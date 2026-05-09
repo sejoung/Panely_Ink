@@ -18,8 +18,6 @@ import io.github.sejoung.panelyink.data.db.bookmark.RoomBookmarkRepository
 import io.github.sejoung.panelyink.data.db.cover.CoverStatus
 import io.github.sejoung.panelyink.data.db.cover.RoomCoverMetaRepository
 import io.github.sejoung.panelyink.data.db.position.RoomPositionRepository
-import io.github.sejoung.panelyink.library.LibraryViewModel.Companion.KEY_PATH
-import io.github.sejoung.panelyink.library.LibraryViewModel.Companion.KEY_ROOTS
 import io.github.sejoung.panelyink.library.data.CoverCache
 import io.github.sejoung.panelyink.library.data.CoverExtractor
 import io.github.sejoung.panelyink.library.data.CoverPruner
@@ -55,8 +53,8 @@ import kotlinx.coroutines.withContext
  * SAF 권한은 root URI에만 부여 — 모든 자식 접근은 같은 권한 트리 안에서 일어난다.
  *
  * 영속 상태:
- * - [KEY_ROOTS]  : 사용자가 추가한 SAF 트리 URI 집합
- * - [KEY_PATH]   : 마지막으로 보던 path (JSON 직렬화). 앱 재시작 시 복원.
+ * - `KEY_ROOTS`: 사용자가 추가한 SAF 트리 URI 집합
+ * - `KEY_PATH`: 마지막으로 보던 path (JSON 직렬화). 앱 재시작 시 복원.
  *                  root가 사라졌거나 path가 비어있으면 무시.
  */
 class LibraryViewModel(application: Application) : AndroidViewModel(application) {

@@ -12,8 +12,7 @@ import java.io.FileOutputStream
  *
  * `filesDir`(외부 cacheDir 아님)을 쓰는 이유: cacheDir은 Android가 임의 시점에 비울 수
  * 있어 라이브러리 첫 진입마다 재추출 비용이 발생한다. 표지는 사용자 데이터의 일부로
- * 보고 filesDir에 두되, 추후 [io.github.sejoung.panelyink.library.data.LibraryRepository]
- * 측에서 LRU 정리 정책(M3 후반 항목)을 추가한다.
+ * 보고 filesDir에 둔다. 누적 용량과 orphan 파일은 [CoverPruner]가 정리한다.
  *
  * bookId는 [io.github.sejoung.panelyink.core.position.PositionKey.bookIdFromUri] 결과
  * SHA-1 hex로 파일시스템 안전.

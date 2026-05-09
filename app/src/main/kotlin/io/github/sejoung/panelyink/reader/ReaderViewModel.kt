@@ -37,10 +37,11 @@ import kotlinx.coroutines.launch
  * - 현재 페이지 / 방향 / fit 모드 보유
  * - 프리로드 윈도(±3) 계산 및 디코드 트리거
  * - PositionKey 노출 (Resume의 1차 키)
+ * - 앱 전역 풀리프레시/흑백 반전 값을 상태에 반영
  *
  * v1.0 비책임:
  * - 페이지 캐시 정책 (CbzBookSession 안 LruCache)
- * - 풀리프레시 주기 (View 레이어 결정)
+ * - 풀리프레시 실제 렌더링 (ReaderView가 처리)
  */
 class ReaderViewModel(
   val bookId: String,
@@ -120,7 +121,7 @@ class ReaderViewModel(
   }
 
   /**
-   * 풀리프레시 주기 변경. 메뉴에서 사용자 조정 또는 M5 실기 테스트 결과로 호출.
+   * 풀리프레시 주기 변경. 앱 전역 설정에서 사용자 조정 시 호출.
    *
    * - 0: 자동 트리거 끔. [triggerFullRefresh]로만 동작
    * - 1: 매 페이지마다 (잔상 방어 최대, 깜빡임 빈도 ↑)
@@ -218,7 +219,7 @@ class ReaderViewModel(
     /** PRD §6.1: ±3 프리로드. 3GB RAM·RK3566 기준 ARGB8888 8MB×7장 ≈ 56MB. */
     const val PRELOAD_RADIUS = 3
 
-    /** PRD §6.1 / PROGRESS M2: 기본 풀리프레시 주기 — N=5 페이지마다. */
+    /** PRD §6.1: 기본 풀리프레시 주기 — N=5 페이지마다. */
     const val FULL_REFRESH_INTERVAL_DEFAULT = 5
   }
 }

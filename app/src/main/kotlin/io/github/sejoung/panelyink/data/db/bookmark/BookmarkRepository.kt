@@ -10,7 +10,6 @@ interface BookmarkRepository {
     suspend fun isBookmarked(bookId: String, pageIndex: Int): Boolean
     suspend fun add(bookId: String, pageIndex: Int)
     suspend fun remove(bookId: String, pageIndex: Int)
-    suspend fun removeForBook(bookId: String)
     suspend fun removeOrphans(existingBookIds: Set<String>)
 }
 
@@ -52,10 +51,6 @@ class RoomBookmarkRepository(
 
     override suspend fun remove(bookId: String, pageIndex: Int) = withContext(Dispatchers.IO) {
         dao.delete(bookId, pageIndex)
-    }
-
-    override suspend fun removeForBook(bookId: String) = withContext(Dispatchers.IO) {
-        dao.deleteForBook(bookId)
     }
 
     override suspend fun removeOrphans(existingBookIds: Set<String>) = withContext(Dispatchers.IO) {
