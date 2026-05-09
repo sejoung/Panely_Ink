@@ -284,6 +284,33 @@ fun PanelySortIcon(
     }
 }
 
+/** 새로고침 — 라이브러리 캐시 무효화 후 현재 위치 재스캔. */
+@Composable
+fun PanelyRefreshIcon(
+    modifier: Modifier = Modifier,
+    tint: Color = PanelyInkColors.Ink,
+    size: Dp = IconConstants.DefaultSize,
+) {
+    Canvas(modifier = modifier.size(size)) {
+        val s = this.size
+        val stroke = IconConstants.Stroke.toPx()
+        val pad = s.minDimension * 0.20f
+        val arcSize = Size(s.width - pad * 2, s.height - pad * 2)
+        drawArc(
+            color = tint,
+            startAngle = 35f,
+            sweepAngle = 285f,
+            useCenter = false,
+            topLeft = Offset(pad, pad),
+            size = arcSize,
+            style = Stroke(width = stroke),
+        )
+        val tip = Offset(s.width * 0.76f, s.height * 0.24f)
+        drawLine(tint, tip, Offset(s.width * 0.76f, s.height * 0.43f), strokeWidth = stroke)
+        drawLine(tint, tip, Offset(s.width * 0.58f, s.height * 0.26f), strokeWidth = stroke)
+    }
+}
+
 /** 좌향 화살표 — 헤더 back 액션. chevron보다 머리가 작고 본체에 라인이 있다. */
 @Composable
 fun PanelyArrowBackIcon(

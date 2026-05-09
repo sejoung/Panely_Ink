@@ -121,6 +121,7 @@ fun LibraryScreen(
             onSearchQueryChange = viewModel::setSearchQuery,
             onOpenSettings = { appSettingsOpen = true },
             onSort = { sortOpen = true },
+            onRefresh = viewModel::refresh,
             onUp = viewModel::goUp,
         )
         HairlineDivider()
@@ -205,4 +206,3 @@ fun LibraryScreen(
         )
     }
 }
-

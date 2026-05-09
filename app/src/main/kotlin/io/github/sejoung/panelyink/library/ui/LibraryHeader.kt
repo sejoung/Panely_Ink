@@ -34,6 +34,7 @@ import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
 import io.github.sejoung.panelyink.ui.components.PanelyCloseIcon
 import io.github.sejoung.panelyink.ui.components.PanelyIconButton
+import io.github.sejoung.panelyink.ui.components.PanelyRefreshIcon
 import io.github.sejoung.panelyink.ui.components.PanelySearchIcon
 import io.github.sejoung.panelyink.ui.components.PanelySettingsIcon
 import io.github.sejoung.panelyink.ui.components.PanelySortIcon
@@ -52,6 +53,7 @@ internal fun LibraryHeader(
     onSearchQueryChange: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onSort: () -> Unit,
+    onRefresh: () -> Unit,
     onUp: () -> Boolean,
 ) {
     val typography = LocalPanelyInkTypography.current
@@ -111,6 +113,9 @@ internal fun LibraryHeader(
             }
             PanelyIconButton(onClick = onSort, primary = false) { tint ->
                 PanelySortIcon(tint = tint)
+            }
+            PanelyIconButton(onClick = onRefresh, primary = false) { tint ->
+                PanelyRefreshIcon(tint = tint)
             }
             PanelyIconButton(onClick = onOpenSettings, primary = false) { tint ->
                 PanelySettingsIcon(tint = tint)
