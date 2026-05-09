@@ -108,6 +108,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     private val countSemaphore = Semaphore(permits = 2)
     private val progressLoadedBookIds = mutableSetOf<String>()
     private val globalBookmarkBookIndex = mutableMapOf<String, IndexedBookEntry>()
+    private var bookmarkPruneJob: Job? = null
 
     /**
      * 표지/메타 갱신 debounce 버퍼 — 추출 1장씩 도착할 때마다 [_state] copy + recompose
@@ -263,6 +264,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         } else if (_state.value.path.isEmpty()) {
             refreshRoots()
         }
+        scheduleBookmarkPruneForCurrentRoots()
     }
 
     fun removeRoot(uri: Uri) {
@@ -284,7 +286,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         } else {
             refreshChildren(newPath.last())
         }
-        pruneBookmarksForCurrentRoots()
+        if (_state.value.globalBookmarksOpen) {
+            loadGlobalBookmarks()
+        }
     }
 
     /**
@@ -368,7 +372,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         globalBookmarkBookIndex.clear()
         val current = _state.value.path.lastOrNull()
         if (current == null) refreshRoots() else refreshChildren(current)
-        pruneBookmarksForCurrentRoots()
+        scheduleBookmarkPruneForCurrentRoots()
     }
 
     fun openGlobalBookmarks() {
@@ -743,8 +747,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun pruneBookmarksForCurrentRoots() {
-        viewModelScope.launch {
+    private fun scheduleBookmarkPruneForCurrentRoots() {
+        bookmarkPruneJob?.cancel()
+        bookmarkPruneJob = viewModelScope.launch {
+            delay(BOOKMARK_PRUNE_DEBOUNCE_MS)
             val indexedBooks = repo.listAllBooks(_state.value.roots)
             val existingBookIds = indexedBooks
                 .mapTo(mutableSetOf()) { BookIdentity.fromEntry(it.book).value }
@@ -772,6 +778,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     companion object {
         private const val COVER_FLUSH_DEBOUNCE_MS = 100L
+        private const val BOOKMARK_PRUNE_DEBOUNCE_MS = 500L
         private const val COVER_MEMORY_MAX_ENTRIES = 96
         private const val PREFS_NAME = "panely_ink_prefs"
         private const val KEY_ROOTS = "library_root_uris"
