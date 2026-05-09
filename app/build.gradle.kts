@@ -46,6 +46,9 @@ android {
         named("test") {
             java.srcDirs("src/test/kotlin")
         }
+        named("androidTest") {
+            java.srcDirs("src/androidTest/kotlin")
+        }
     }
 
     packaging {
@@ -78,4 +81,11 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.room.testing)
 }

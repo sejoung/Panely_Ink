@@ -116,7 +116,7 @@ abstract class PanelyDatabase : RoomDatabase() {
          * SQLite/Room 호환성을 위해 DROP COLUMN 대신 새 테이블 생성 → 기존 데이터 복사
          * → drop/rename 순서로 처리한다.
          */
-        private val MIGRATION_5_6 = object : Migration(5, 6) {
+        internal val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     """
