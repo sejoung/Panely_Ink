@@ -10,7 +10,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.sejoung.panelyink.core.position.BookProgress
 import io.github.sejoung.panelyink.core.position.PositionKey
-import io.github.sejoung.panelyink.core.sort.NaturalOrderComparator
 import io.github.sejoung.panelyink.data.AppDataResetter
 import io.github.sejoung.panelyink.data.db.CoverStatus
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
@@ -26,8 +25,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 
 /**
  * 라이브러리 화면용 상태 보유. 트리 탐색 모델:
@@ -113,8 +110,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         val savedRoots = prefs.getStringSet(KEY_ROOTS, emptySet()).orEmpty().map(Uri::parse)
-        val savedPath = decodePath(prefs.getString(KEY_PATH, null))
-            .takeIf { isPathValid(it, savedRoots) }
+        val savedPath = LibraryPathCodec.decode(prefs.getString(KEY_PATH, null))
+            .takeIf { LibraryPathCodec.isValid(it, savedRoots) }
             .orEmpty()
         val savedSort = SortMode.fromKey(prefs.getString(KEY_SORT, null))
         val savedView = ViewMode.fromKey(prefs.getString(KEY_VIEW, null))
@@ -208,7 +205,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         if (mode == _state.value.sortMode) return
         prefs.edit { putString(KEY_SORT, mode.name) }
         viewModelScope.launch {
-            val sorted = applySort(_state.value.entries, mode)
+            val sorted = sortLibraryEntries(_state.value.entries, mode, positionRepo)
             _state.value = _state.value.copy(sortMode = mode, entries = sorted)
         }
     }
@@ -517,9 +514,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 val target = rootEntries.first()
                 setPath(listOf(target))
                 val children = repo.listChildren(target)
-                val sorted = applySort(children, _state.value.sortMode)
+                val sorted = sortLibraryEntries(children, _state.value.sortMode, positionRepo)
                 _state.value = _state.value.copy(entries = sorted, scanning = false)
-                prefetchBookData(sorted)
+                applyPrefetchedBookData(prefetchBookData(sorted, positionRepo, coverMetaRepo))
                 batchInspectSeries()
             } else {
                 pendingAutoDescend = false
@@ -534,9 +531,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         listJob = viewModelScope.launch {
             _state.value = _state.value.copy(scanning = true)
             val children = repo.listChildren(folder)
-            val sorted = applySort(children, _state.value.sortMode)
+            val sorted = sortLibraryEntries(children, _state.value.sortMode, positionRepo)
             _state.value = _state.value.copy(entries = sorted, scanning = false)
-            prefetchBookData(sorted)
+            applyPrefetchedBookData(prefetchBookData(sorted, positionRepo, coverMetaRepo))
             batchInspectSeries()
         }
     }
@@ -614,56 +611,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    /**
-     * 폴더 진입 시 책들의 진행률 + 표지 메타를 batch로 한 번에 채움 — 책 N권 화면이면
-     * 이전엔 (N progress query) + (N cover meta query) = 2N개. 이제 2 query.
-     * BookRow의 [requestProgress]/[requestCover]는 캐시 hit으로 추가 query 없음.
-     */
-    private suspend fun prefetchBookData(entries: List<LibraryEntry>) {
-        val books = entries.filterIsInstance<BookEntry>()
-        if (books.isEmpty()) return
-        val bookIds = books.map { PositionKey.bookIdFromUri(it.bookIdSource) }
-        // 두 batch query 동시 실행 — async/await로 더 줄일 수 있지만 IO 디스패처 한계라
-        // 큰 차이 X. 순차 호출로 단순 유지.
-        val progressMap = positionRepo.loadProgressMap(bookIds)
-        val coverMetaMap = coverMetaRepo.loadMap(bookIds)
-
-        val knownProgress = progressMap.filterValues { it.isKnown }
-        val statusMap = coverMetaMap.mapValues { it.value.status }
-        if (knownProgress.isNotEmpty() || statusMap.isNotEmpty()) {
+    private fun applyPrefetchedBookData(data: PrefetchedBookData) {
+        if (data.progress.isNotEmpty() || data.coverStatus.isNotEmpty()) {
             _state.value = _state.value.copy(
-                bookProgress = _state.value.bookProgress + knownProgress,
-                coverStatus = _state.value.coverStatus + statusMap,
+                bookProgress = _state.value.bookProgress + data.progress,
+                coverStatus = _state.value.coverStatus + data.coverStatus,
             )
         }
-    }
-
-    /**
-     * 정렬 모드 적용 — 폴더는 항상 이름순 고정, 책만 모드에 따라.
-     *
-     * - [SortMode.Name]: repo가 이미 자연순으로 반환했으므로 그대로
-     * - [SortMode.LastOpened]: position 테이블 batch 쿼리로 updated_at 가져와 내림차순.
-     *   미열람 책(맵에 없음)은 0 취급되어 맨 뒤로 가고, 그 안에서는 자연순 유지.
-     */
-    private suspend fun applySort(
-        entries: List<LibraryEntry>,
-        mode: SortMode,
-    ): List<LibraryEntry> {
-        val folders = entries.filterIsInstance<FolderEntry>()
-        val books = entries.filterIsInstance<BookEntry>()
-        val sortedBooks = when (mode) {
-            SortMode.Name -> books // repo가 이미 자연순
-            SortMode.LastOpened -> {
-                val ids = books.map { PositionKey.bookIdFromUri(it.bookIdSource) }
-                val timestamps = positionRepo.loadUpdatedAtMap(ids)
-                books.sortedWith(
-                    compareByDescending<BookEntry> {
-                        timestamps[PositionKey.bookIdFromUri(it.bookIdSource)] ?: 0L
-                    }.thenBy(NaturalOrderComparator) { it.displayName },
-                )
-            }
-        }
-        return folders + sortedBooks
     }
 
     /** path 변경의 단일 진입점. state 갱신 + 디스크 영속화를 한 곳에서 묶어 누락을 방지. */
@@ -673,54 +627,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         } else {
             _state.value.copy(path = newPath)
         }
-        prefs.edit { putString(KEY_PATH, encodePath(newPath)) }
+        prefs.edit { putString(KEY_PATH, LibraryPathCodec.encode(newPath)) }
     }
 
     private fun persistRoots(roots: List<Uri>) {
         prefs.edit { putStringSet(KEY_ROOTS, roots.map(Uri::toString).toSet()) }
     }
 
-    /**
-     * 저장된 path가 현재 roots와 정합한지 검증 — root가 사라졌거나 path 첫 단계의
-     * rootUri가 더 이상 추가된 root 목록에 없으면 path는 무효.
-     *
-     * 폴더 자체 존재 여부(SAF에서 사라진 폴더)는 여기서 검증하지 않는다 — refreshChildren이
-     * 빈 결과를 반환하면 사용자가 ← back으로 한 단계 위로 가면 됨.
-     */
-    private fun isPathValid(path: List<FolderEntry>, currentRoots: List<Uri>): Boolean {
-        if (path.isEmpty()) return false
-        val firstRoot = path.first().rootUri
-        return firstRoot in currentRoots && path.all { it.rootUri == firstRoot }
-    }
-
-    private fun encodePath(path: List<FolderEntry>): String {
-        val arr = JSONArray()
-        for (f in path) {
-            arr.put(JSONObject().apply {
-                put(JSON_NAME, f.displayName)
-                put(JSON_DOC, f.documentUri.toString())
-                put(JSON_ROOT, f.rootUri.toString())
-                put(JSON_IS_ROOT, f.isRoot)
-            })
-        }
-        return arr.toString()
-    }
-
-    private fun decodePath(raw: String?): List<FolderEntry> {
-        if (raw.isNullOrEmpty()) return emptyList()
-        return runCatching {
-            val arr = JSONArray(raw)
-            (0 until arr.length()).map { i ->
-                val o = arr.getJSONObject(i)
-                FolderEntry(
-                    documentUri = Uri.parse(o.getString(JSON_DOC)),
-                    displayName = o.getString(JSON_NAME),
-                    rootUri = Uri.parse(o.getString(JSON_ROOT)),
-                    isRoot = o.getBoolean(JSON_IS_ROOT),
-                )
-            }
-        }.getOrElse { emptyList() }
-    }
 
     companion object {
         private const val COVER_FLUSH_DEBOUNCE_MS = 100L
@@ -729,10 +642,6 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         private const val KEY_PATH = "library_last_path"
         private const val KEY_SORT = "library_sort_mode"
         private const val KEY_VIEW = "library_view_mode"
-        private const val JSON_NAME = "name"
-        private const val JSON_DOC = "doc"
-        private const val JSON_ROOT = "root"
-        private const val JSON_IS_ROOT = "isRoot"
     }
 }
 

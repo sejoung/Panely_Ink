@@ -1,28 +1,17 @@
 package io.github.sejoung.panelyink.reader
 
-import android.content.Context
-import android.content.ContextWrapper
 import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -31,15 +20,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
-import io.github.sejoung.panelyink.MainActivity
 import io.github.sejoung.panelyink.core.position.PositionRepository
 import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
@@ -51,8 +33,6 @@ import io.github.sejoung.panelyink.data.db.RoomBookSettingsRepository
 import io.github.sejoung.panelyink.data.db.RoomPositionRepository
 import io.github.sejoung.panelyink.data.preferences.SharedPrefsAppPreferencesRepository
 import io.github.sejoung.panelyink.library.BookEntry
-import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
-import io.github.sejoung.panelyink.ui.components.PanelyArrowForwardIcon
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
 import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
@@ -91,27 +71,7 @@ fun ReaderScreen(
     }
     BackHandler { onBack() }
 
-    // Guidelines §12: 본문 모드는 크롬 0dp. 시스템 status/navigation bar를 숨겨
-    // 페이지가 화면 전체를 차지하게 한다. 라이브러리 복귀 시 원상복귀.
-    val view = LocalView.current
-    val activity = LocalContext.current.findMainActivity()
-    DisposableEffect(activity, view) {
-        val window = activity?.window
-        if (window != null) {
-            val controller = WindowCompat.getInsetsController(window, view)
-            // 스와이프로 일시 표시 — e-ink에서 잔상 가능성은 있지만, 사용자가
-            // 의도적으로 시스템 바를 호출할 수 있어야 한다(예: 시간 확인).
-            controller.systemBarsBehavior =
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            controller.hide(WindowInsetsCompat.Type.systemBars())
-        }
-        onDispose {
-            if (window != null) {
-                val controller = WindowCompat.getInsetsController(window, view)
-                controller.show(WindowInsetsCompat.Type.systemBars())
-            }
-        }
-    }
+    ReaderSystemBarsEffect()
 
     var loadingStep by remember { mutableStateOf("책을 여는 중…") }
     // produceState 키는 nested 책까지 구분하는 [BookEntry.bookIdSource]를 사용 — 일반 책은
@@ -211,12 +171,7 @@ private fun ReaderContent(
         )
     }
 
-    DisposableEffect(viewModel, session) {
-        onDispose {
-            viewModel.close()
-            session.close()
-        }
-    }
+    ReaderLifecycleEffect(session = session, viewModel = viewModel)
 
     val state by viewModel.state.collectAsState()
     var view by remember { mutableStateOf<ReaderView?>(null) }
@@ -225,346 +180,74 @@ private fun ReaderContent(
     var bookmarkedPages by remember(session) { mutableStateOf<Set<Int>>(emptySet()) }
     val uiScope = rememberCoroutineScope()
 
-    // ← back 우선순위: settings(자체 BackHandler) → menu → ReaderScreen 최상단(라이브러리로).
-    // settingsOpen=true일 땐 ReaderSettingsScreen 안의 BackHandler가 잡으므로 여긴 비활성.
-    BackHandler(enabled = menuOpen && !settingsOpen) {
-        menuOpen = false
-    }
-
-    // 상태 → View 명령형 setter
-    LaunchedEffect(
-        state.currentPage,
-        state.fitMode,
-        state.trimEnabled,
-        state.contrast,
-        state.invertEnabled,
-        view,
-    ) {
-        view?.setPageIndex(state.currentPage)
-        view?.setFitMode(state.fitMode)
-        view?.setTrimEnabled(state.trimEnabled)
-        view?.setContrast(state.contrast)
-        view?.setInvertEnabled(state.invertEnabled)
-    }
-
-    // PRD §6.1 Resume + M3 진행률 — 페이지 변경 시 (pageIndex, pageCount) 저장.
-    // pageCount는 viewModel 생성 후 불변이라 매번 같은 값을 같이 넘김 → 라이브러리에서
-    // 진행률 % 계산 가능.
-    LaunchedEffect(state.currentPage, viewModel) {
-        positionRepo.save(
-            bookId = viewModel.bookId,
-            pageIndex = state.currentPage,
-            pageCount = viewModel.pageCount,
-        )
-    }
-
-    // 책별 설정 저장 — fit/방향/트림/대비. 첫 진입 한 번 발화는 동일 값 저장이라 무해.
-    LaunchedEffect(
-        viewModel,
-        state.fitMode,
-        state.direction,
-        state.trimEnabled,
-        state.contrast,
-    ) {
-        bookSettingsRepo.save(
-            bookId = viewModel.bookId,
-            settings = BookSettings(
-                fitMode = state.fitMode,
-                direction = state.direction,
-                trimEnabled = state.trimEnabled,
-                contrast = state.contrast,
-            ),
-        )
-    }
-
-    // 전역 prefs 저장 — 흑백 반전 / 풀리프레시 주기. 책 메뉴에서 변경되어도 모든
-    // 책에 같은 값을 적용하기 위해 SharedPreferences로 분리(2026-05-08).
-    LaunchedEffect(viewModel, state.invertEnabled) {
-        appPrefsRepo.setInvertEnabled(state.invertEnabled)
-    }
-    LaunchedEffect(viewModel, state.fullRefreshInterval) {
-        appPrefsRepo.setFullRefreshInterval(state.fullRefreshInterval)
-    }
-
-    // 디코드 1장 도착 → invalidate. 현재 페이지가 캐시 hit이면 onDraw가 그림.
-    LaunchedEffect(viewModel, view) {
-        viewModel.decoded.collect { view?.invalidate() }
-    }
-
+    ReaderBackHandler(
+        menuOpen = menuOpen,
+        settingsOpen = settingsOpen,
+        onCloseMenu = { menuOpen = false },
+    )
+    ReaderViewEffects(state = state, viewModel = viewModel, view = view)
+    ReaderPersistenceEffects(
+        state = state,
+        viewModel = viewModel,
+        positionRepo = positionRepo,
+        bookSettingsRepo = bookSettingsRepo,
+        appPrefsRepo = appPrefsRepo,
+    )
     LaunchedEffect(session) {
         bookmarkedPages = bookmarkRepo.loadPages(session.bookId).toSet()
     }
-
-    // 풀리프레시 generation 변경 — N페이지마다 검정 1프레임으로 잔상 정리(M2).
-    // 첫 진입 시 generation=0 → LaunchedEffect 발화는 일어나지만 0 → 분기로 무시.
-    LaunchedEffect(state.fullRefreshGeneration, view) {
-        if (state.fullRefreshGeneration > 0) {
-            view?.requestFullRefresh()
-        }
-    }
-
-    // 하드웨어 키 라우팅 — 메뉴/설정 열림 시 키는 그 화면 닫기로 흡수.
-    val activity = LocalContext.current.findMainActivity()
-    DisposableEffect(
-        activity,
-        viewModel,
-        menuOpen,
-        settingsOpen,
-        state.currentPage,
-        context.previousBook,
-        context.nextBook,
-    ) {
-        activity?.keyDispatcher = { event ->
-            when {
-                settingsOpen -> ReaderInput.dispatch(
-                    event = event,
-                    onPrev = { settingsOpen = false },
-                    onNext = { settingsOpen = false },
-                )
-                menuOpen -> ReaderInput.dispatch(
-                    event = event,
-                    onPrev = { menuOpen = false },
-                    onNext = { menuOpen = false },
-                )
-                else -> ReaderInput.dispatch(
-                    event = event,
-                    onPrev = {
-                        val previousBook = context.previousBook
-                        if (state.currentPage == 0 && previousBook != null) {
-                            onNavigate(previousBook, state.toBookSettings())
-                        } else {
-                            viewModel.goPrevious()
-                        }
-                    },
-                    onNext = {
-                        val nextBook = context.nextBook
-                        if (state.currentPage == viewModel.pageCount - 1 && nextBook != null) {
-                            onNavigate(nextBook, state.toBookSettings())
-                        } else {
-                            viewModel.goNext()
-                        }
-                    },
-                )
-            }
-        }
-        onDispose { activity?.keyDispatcher = null }
-    }
+    ReaderHardwareKeyHandler(
+        state = state,
+        viewModel = viewModel,
+        context = context,
+        menuOpen = menuOpen,
+        settingsOpen = settingsOpen,
+        onCloseMenu = { menuOpen = false },
+        onCloseSettings = { settingsOpen = false },
+        onNavigate = onNavigate,
+    )
 
     Box(modifier = Modifier.fillMaxSize()) {
-        key(session) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { ctx ->
-                    ReaderView(ctx).also {
-                        it.attach(session, viewModel)
-                        view = it
-                    }
-                },
-                onRelease = { v ->
-                    v.detach()
-                    if (view === v) view = null
-                },
-            )
-        }
-        // 본문 위 레이어: 메뉴 닫혔으면 탭 영역, 열렸으면 메뉴 패널.
-        if (!menuOpen) {
-            TapRegions(
-                directionIsRtl = state.direction == ReadingDirection.Rtl,
-                onPrev = viewModel::goPrevious,
-                onNext = viewModel::goNext,
-                onMenu = { menuOpen = true },
-            )
-            val previousBook = context.previousBook
-            val nextBook = context.nextBook
-            if (
-                nextBook != null &&
-                state.currentPage == viewModel.pageCount - 1 &&
-                !settingsOpen
-            ) {
-                NextBookCard(
-                    title = nextBook.displayName,
-                    onClick = {
-                        onNavigate(nextBook, state.toBookSettings())
-                    },
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
-            } else if (
-                previousBook != null &&
-                state.currentPage == 0 &&
-                !settingsOpen
-            ) {
-                AdjacentBookCard(
-                    label = "이전 권",
-                    title = previousBook.displayName,
-                    forward = false,
-                    onClick = {
-                        onNavigate(previousBook, state.toBookSettings())
-                    },
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
-            }
-        } else {
-            ReaderMenu(
-                state = state,
-                bookTitle = bookTitle,
-                pageCount = viewModel.pageCount,
-                previousBookTitle = context.previousBook?.displayName,
-                nextBookTitle = context.nextBook?.displayName,
-                currentPageBookmarked = state.currentPage in bookmarkedPages,
-                onJumpToPage = { page ->
-                    viewModel.goTo(page)
-                    menuOpen = false
-                },
-                onPreviousBook = {
-                    context.previousBook?.let { onNavigate(it, state.toBookSettings()) }
-                },
-                onNextBook = {
-                    context.nextBook?.let { onNavigate(it, state.toBookSettings()) }
-                },
-                onToggleBookmark = {
-                    val page = state.currentPage
-                    uiScope.launch {
-                        if (page in bookmarkedPages) {
-                            bookmarkRepo.remove(session.bookId, page)
-                            bookmarkedPages = bookmarkedPages - page
-                        } else {
-                            bookmarkRepo.add(session.bookId, page)
-                            bookmarkedPages = bookmarkedPages + page
-                        }
-                    }
-                },
-                onOpenSettings = {
-                    settingsOpen = true
-                },
-                onExitToLibrary = {
-                    menuOpen = false
-                    onExit()
-                },
-                onClose = { menuOpen = false },
-            )
-        }
-        // 풀스크린 설정 — 메뉴/탭 영역 위에 그려져 본문도 가린다.
-        // 본문 ViewModel은 그대로 살아있어 설정 변경이 즉시 state에 반영되며,
-        // 설정 닫힐 때 본문은 새 설정으로 이미 렌더돼있다.
-        if (settingsOpen) {
-            ReaderSettingsScreen(
-                state = state,
-                onFitModeChange = viewModel::setFitMode,
-                onDirectionChange = viewModel::setDirection,
-                onTrimEnabledChange = viewModel::setTrimEnabled,
-                onContrastChange = viewModel::setContrast,
-                onInvertEnabledChange = viewModel::setInvertEnabled,
-                onTriggerFullRefresh = viewModel::triggerFullRefresh,
-                onBack = {
-                    settingsOpen = false
-                    // 메뉴는 자동으로 닫아 본문으로 바로 복귀 — 사용자가 다시 메뉴
-                    // 열고 싶으면 중앙 탭으로.
-                    menuOpen = false
-                },
-            )
-        }
-    }
-}
-
-@Composable
-private fun AdjacentBookCard(
-    label: String,
-    title: String,
-    forward: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val typography = LocalPanelyInkTypography.current
-    val spacing = LocalPanelyInkSpacing.current
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(PanelyInkColors.Paper)
-            .border(2.dp, PanelyInkColors.Ink)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
-            .padding(horizontal = spacing.space3, vertical = spacing.space2),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(spacing.space2),
-    ) {
-        if (!forward) PanelyArrowBackIcon(tint = PanelyInkColors.Ink)
-        Text(
-            text = label,
-            style = typography.body,
-            color = PanelyInkColors.Ink,
+        ReaderAndroidViewHost(
+            session = session,
+            viewModel = viewModel,
+            onViewAttached = { view = it },
+            onViewReleased = { released ->
+                if (view === released) view = null
+            },
         )
-        Text(
-            text = title,
-            style = typography.caption,
-            color = PanelyInkColors.Mute,
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+        ReaderOverlayLayer(
+            state = state,
+            viewModel = viewModel,
+            context = context,
+            bookTitle = bookTitle,
+            menuOpen = menuOpen,
+            settingsOpen = settingsOpen,
+            currentPageBookmarked = state.currentPage in bookmarkedPages,
+            onOpenMenu = { menuOpen = true },
+            onCloseMenu = { menuOpen = false },
+            onOpenSettings = { settingsOpen = true },
+            onCloseSettings = { settingsOpen = false },
+            onExit = onExit,
+            onJumpToPage = { page ->
+                viewModel.goTo(page)
+                menuOpen = false
+            },
+            onToggleBookmark = {
+                val page = state.currentPage
+                uiScope.launch {
+                    if (page in bookmarkedPages) {
+                        bookmarkRepo.remove(session.bookId, page)
+                        bookmarkedPages = bookmarkedPages - page
+                    } else {
+                        bookmarkRepo.add(session.bookId, page)
+                        bookmarkedPages = bookmarkedPages + page
+                    }
+                }
+            },
+            onNavigate = onNavigate,
         )
-        if (forward) PanelyArrowForwardIcon(tint = PanelyInkColors.Ink)
     }
-}
-
-@Composable
-private fun NextBookCard(
-    title: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    AdjacentBookCard(
-        label = "다음 권",
-        title = title,
-        forward = true,
-        onClick = onClick,
-        modifier = modifier,
-    )
-}
-
-private fun ReaderState.toBookSettings(): BookSettings = BookSettings(
-    fitMode = fitMode,
-    direction = direction,
-    trimEnabled = trimEnabled,
-    contrast = contrast,
-)
-
-@Composable
-private fun TapRegions(
-    directionIsRtl: Boolean,
-    onPrev: () -> Unit,
-    onNext: () -> Unit,
-    onMenu: () -> Unit,
-) {
-    // Guidelines §5: 좌 30 / 중앙 40 / 우 30. RTL이면 좌/우 의미 반전 (탭 한정).
-    val left: () -> Unit = if (directionIsRtl) onNext else onPrev
-    val right: () -> Unit = if (directionIsRtl) onPrev else onNext
-
-    Row(
-        modifier = Modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.Start,
-    ) {
-        TapRegion(weight = 0.3f, onClick = left)
-        TapRegion(weight = 0.4f, onClick = onMenu)
-        TapRegion(weight = 0.3f, onClick = right)
-    }
-}
-
-@Composable
-private fun RowScope.TapRegion(weight: Float, onClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    Box(
-        modifier = Modifier
-            .weight(weight)
-            .fillMaxHeight()
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = onClick,
-            ),
-    )
 }
 
 @Composable
@@ -613,12 +296,4 @@ private sealed interface SessionState {
         val appPreferences: AppPreferences,
     ) : SessionState
     data class Failed(val message: String) : SessionState
-}
-
-/** ContextWrapper 체인을 따라 올라가 [MainActivity]를 찾는다. Compose의
- *  `LocalContext.current`가 ContextThemeWrapper로 감싸져 와도 안전. */
-private tailrec fun Context.findMainActivity(): MainActivity? = when (this) {
-    is MainActivity -> this
-    is ContextWrapper -> baseContext.findMainActivity()
-    else -> null
 }
