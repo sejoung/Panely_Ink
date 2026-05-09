@@ -26,6 +26,16 @@ Run connected tests for Room migrations or Android framework behavior:
 ./gradlew connectedDebugAndroidTest
 ```
 
+## GitHub Actions
+
+- `.github/workflows/ci.yml` runs on pushes to `main`/`master`, pull requests, and manual dispatch.
+  It uploads lint/test reports and a debug APK artifact.
+- `.github/workflows/release.yml` runs on `v*` tags or manual dispatch with a tag input. It builds
+  an unsigned release APK and publishes it with `SHA256SUMS.txt` to GitHub Releases.
+
+Release APK signing is not configured yet. Add a signing config and GitHub Secrets before treating
+release artifacts as install-ready production builds.
+
 ## Code Style
 
 - Follow the existing package boundaries.

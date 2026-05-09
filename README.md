@@ -82,6 +82,13 @@ The debug APK is generated at:
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## GitHub Actions
+
+- CI runs on pushes to `main`/`master`, pull requests, and manual dispatch. It compiles debug
+  Kotlin, runs unit tests, lint, androidTest compilation, and builds a debug APK artifact.
+- Release runs on `v*` tags or manual dispatch with a tag input. It runs release checks, builds the
+  unsigned release APK, creates SHA-256 checksums, and publishes them to a GitHub Release.
+
 ## Project Layout
 
 ```text

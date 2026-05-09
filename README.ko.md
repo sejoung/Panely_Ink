@@ -83,6 +83,13 @@ Panely Ink는 애니메이션이나 색상이 많은 UI를 피합니다. 리더 
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## GitHub Actions
+
+- CI는 `main`/`master` 푸시, Pull Request, 수동 실행에서 동작합니다. debug Kotlin 컴파일,
+  단위 테스트, lint, androidTest 컴파일, debug APK artifact 생성을 수행합니다.
+- Release는 `v*` 태그 또는 태그 입력을 받는 수동 실행에서 동작합니다. 릴리즈 검증을
+  실행하고 unsigned release APK와 SHA-256 체크섬을 GitHub Release에 게시합니다.
+
 ## 프로젝트 구조
 
 ```text
