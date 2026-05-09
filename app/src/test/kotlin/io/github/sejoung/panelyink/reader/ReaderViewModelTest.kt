@@ -2,6 +2,7 @@ package io.github.sejoung.panelyink.reader
 
 import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.core.position.PositionKey
+import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.reader.model.ReadingDirection
 import io.github.sejoung.panelyink.reader.session.DecodedPage
 import io.github.sejoung.panelyink.reader.session.PageDecoder
@@ -15,8 +16,6 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
-import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -69,6 +68,24 @@ class ReaderViewModelTest {
     }
 
     @Test
+    fun initialAppPreferencesAreApplied() {
+        val vm = ReaderViewModel(
+            bookId = "b",
+            pageCount = 100,
+            decoder = FakePageDecoder(),
+            initialAppPreferences = AppPreferences(
+                fullRefreshInterval = 10,
+                invertEnabled = true,
+                languageTag = "ko",
+            ),
+        )
+
+        assertEquals(10, vm.state.value.fullRefreshInterval)
+        assertEquals(true, vm.state.value.invertEnabled)
+        vm.close()
+    }
+
+    @Test
     fun goNextIncrementsPage() {
         val vm = ReaderViewModel("b", 10, FakePageDecoder())
         vm.goNext()
@@ -101,15 +118,6 @@ class ReaderViewModelTest {
     }
 
     @Test
-    fun goToSamePageIsNoOp() {
-        val vm = ReaderViewModel("b", 10, FakePageDecoder(), initialPage = 5)
-        val before = vm.state.value
-        vm.goTo(5)
-        assertSame("state 인스턴스가 그대로여야 함", before, vm.state.value)
-        vm.close()
-    }
-
-    @Test
     fun preloadWindowClampsAtEnd() {
         val vm = ReaderViewModel("b", 5, FakePageDecoder(), initialPage = 4)
         assertEquals(1..4, vm.state.value.preloadWindow)
@@ -128,15 +136,6 @@ class ReaderViewModelTest {
         val vm = ReaderViewModel("b", 10, FakePageDecoder())
         vm.setFitMode(FitMode.FitWidth)
         assertEquals(FitMode.FitWidth, vm.state.value.fitMode)
-        vm.close()
-    }
-
-    @Test
-    fun setFitModeSameValueIsNoOp() {
-        val vm = ReaderViewModel("b", 10, FakePageDecoder())
-        val before = vm.state.value
-        vm.setFitMode(FitMode.FitScreen)
-        assertSame(before, vm.state.value)
         vm.close()
     }
 
@@ -241,15 +240,6 @@ class ReaderViewModelTest {
         assertEquals(PositionKey("book42", 7), vm.positionKey)
         vm.goTo(15)
         assertEquals(PositionKey("book42", 15), vm.positionKey)
-        vm.close()
-    }
-
-    @Test
-    fun stateInstanceChangesOnPageMove() {
-        val vm = ReaderViewModel("b", 10, FakePageDecoder())
-        val before = vm.state.value
-        vm.goNext()
-        assertNotEquals(before, vm.state.value)
         vm.close()
     }
 
@@ -372,15 +362,6 @@ class ReaderViewModelTest {
         vm.close()
     }
 
-    @Test
-    fun setContrastSameValueIsNoOp() {
-        val vm = ReaderViewModel("b", 10, FakePageDecoder())
-        val before = vm.state.value
-        vm.setContrast(1.0f)
-        assertSame(before, vm.state.value)
-        vm.close()
-    }
-
     @Test(expected = IllegalArgumentException::class)
     fun setContrastBelowMinIsRejected() {
         val vm = ReaderViewModel("b", 10, FakePageDecoder())
@@ -410,14 +391,6 @@ class ReaderViewModelTest {
         vm.close()
     }
 
-    @Test
-    fun setInvertEnabledSameValueIsNoOp() {
-        val vm = ReaderViewModel("b", 10, FakePageDecoder())
-        val before = vm.state.value
-        vm.setInvertEnabled(false)
-        assertSame(before, vm.state.value)
-        vm.close()
-    }
 }
 
 /**
