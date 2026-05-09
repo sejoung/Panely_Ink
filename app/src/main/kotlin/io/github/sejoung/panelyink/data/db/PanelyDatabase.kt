@@ -16,14 +16,18 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * - v2: `book_settings` 테이블 추가 (책별 fit/direction/trim/contrast/invert/refresh)
  * - v3: `position.page_count` 컬럼 추가 (라이브러리 진행률 배지용)
  * - v4: `cover_meta` 테이블 추가 (표지 추출 상태/시점, 깨진 책 재시도 방지)
- *
- * 다음 단계 후보: `bookmark` 테이블 → v5
+ * - v5: `bookmark` 테이블 추가 (책별 페이지 북마크)
  *
  * 싱글톤 보장: [getInstance]가 더블 체크 락. 안드로이드 앱에서 DB는 프로세스당 1개.
  */
 @Database(
-    entities = [PositionEntity::class, BookSettingsEntity::class, CoverMetaEntity::class],
-    version = 4,
+    entities = [
+        PositionEntity::class,
+        BookSettingsEntity::class,
+        CoverMetaEntity::class,
+        BookmarkEntity::class,
+    ],
+    version = 5,
     exportSchema = false,
 )
 abstract class PanelyDatabase : RoomDatabase() {
@@ -31,6 +35,7 @@ abstract class PanelyDatabase : RoomDatabase() {
     abstract fun positionDao(): PositionDao
     abstract fun bookSettingsDao(): BookSettingsDao
     abstract fun coverMetaDao(): CoverMetaDao
+    abstract fun bookmarkDao(): BookmarkDao
 
     companion object {
         private const val DB_NAME = "panely_ink.db"
@@ -88,6 +93,22 @@ abstract class PanelyDatabase : RoomDatabase() {
             }
         }
 
+        /** v4 → v5: 페이지 북마크 테이블 신규. */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `bookmark` (
+                        `book_id` TEXT NOT NULL,
+                        `page_index` INTEGER NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`book_id`, `page_index`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         @Volatile
         private var instance: PanelyDatabase? = null
 
@@ -98,7 +119,12 @@ abstract class PanelyDatabase : RoomDatabase() {
                     PanelyDatabase::class.java,
                     DB_NAME,
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3,
+                        MIGRATION_3_4,
+                        MIGRATION_4_5,
+                    )
                     .build()
                     .also { instance = it }
             }

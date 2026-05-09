@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import io.github.sejoung.panelyink.library.LibraryScreen
+import io.github.sejoung.panelyink.reader.BookSettings
 import io.github.sejoung.panelyink.reader.ReaderScreen
 import io.github.sejoung.panelyink.reader.SeriesContext
 import io.github.sejoung.panelyink.ui.theme.PanelyInkTheme
@@ -43,11 +44,15 @@ class MainActivity : ComponentActivity() {
                         )
                         is Screen.Reader -> ReaderScreen(
                             context = s.context,
+                            propagatedBookSettings = s.propagatedBookSettings,
                             onBack = { screen = Screen.Library },
                             // 시리즈 형제 권으로 이동 — siblings는 그대로 두고 current만 교체.
                             // 새 ReaderScreen이 produceState 키(current.documentUri)로 재진입.
-                            onNavigate = { newCurrent ->
-                                screen = Screen.Reader(s.context.copy(current = newCurrent))
+                            onNavigate = { newCurrent, settings ->
+                                screen = Screen.Reader(
+                                    context = s.context.copy(current = newCurrent),
+                                    propagatedBookSettings = settings,
+                                )
                             },
                         )
                     }
@@ -63,6 +68,9 @@ class MainActivity : ComponentActivity() {
 
     private sealed interface Screen {
         data object Library : Screen
-        data class Reader(val context: SeriesContext) : Screen
+        data class Reader(
+            val context: SeriesContext,
+            val propagatedBookSettings: BookSettings? = null,
+        ) : Screen
     }
 }

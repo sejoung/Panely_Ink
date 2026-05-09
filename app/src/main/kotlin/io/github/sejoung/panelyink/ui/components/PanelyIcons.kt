@@ -307,3 +307,52 @@ fun PanelyArrowBackIcon(
         drawLine(tint, Offset(tip, cy), Offset(head, cy + headSpan), strokeWidth = stroke)
     }
 }
+
+/** 우향 화살표 — 다음 권 / forward 액션. */
+@Composable
+fun PanelyArrowForwardIcon(
+    modifier: Modifier = Modifier,
+    tint: Color = PanelyInkColors.Ink,
+    size: Dp = IconConstants.DefaultSize,
+) {
+    Canvas(modifier = modifier.size(size)) {
+        val s = this.size
+        val stroke = IconConstants.Stroke.toPx()
+        val padX = s.width * 0.18f
+        val cy = s.height / 2f
+        val tip = s.width - padX
+        val tail = padX
+        val head = s.width * 0.64f
+        val headSpan = s.height * 0.25f
+        drawLine(tint, Offset(tail, cy), Offset(tip, cy), strokeWidth = stroke)
+        drawLine(tint, Offset(tip, cy), Offset(head, cy - headSpan), strokeWidth = stroke)
+        drawLine(tint, Offset(tip, cy), Offset(head, cy + headSpan), strokeWidth = stroke)
+    }
+}
+
+/** 북마크 — 현재 페이지 저장/해제 액션. */
+@Composable
+fun PanelyBookmarkIcon(
+    modifier: Modifier = Modifier,
+    tint: Color = PanelyInkColors.Ink,
+    size: Dp = IconConstants.DefaultSize,
+) {
+    Canvas(modifier = modifier.size(size)) {
+        val s = this.size
+        val stroke = IconConstants.Stroke.toPx()
+        val left = s.width * 0.28f
+        val right = s.width * 0.72f
+        val top = s.height * 0.16f
+        val bottom = s.height * 0.84f
+        val notchY = s.height * 0.64f
+        val path = Path().apply {
+            moveTo(left, top)
+            lineTo(right, top)
+            lineTo(right, bottom)
+            lineTo(s.width * 0.50f, notchY)
+            lineTo(left, bottom)
+            close()
+        }
+        drawPath(path = path, color = tint, style = Stroke(width = stroke))
+    }
+}

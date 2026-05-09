@@ -16,8 +16,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,12 +30,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
 import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
+import io.github.sejoung.panelyink.ui.components.PanelyArrowForwardIcon
 import io.github.sejoung.panelyink.ui.components.PanelyIconButton
 import io.github.sejoung.panelyink.ui.components.PanelyTextButton
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
@@ -65,7 +73,13 @@ fun ReaderMenu(
     state: ReaderState,
     bookTitle: String,
     pageCount: Int,
+    previousBookTitle: String?,
+    nextBookTitle: String?,
+    currentPageBookmarked: Boolean,
     onJumpToPage: (Int) -> Unit,
+    onPreviousBook: () -> Unit,
+    onNextBook: () -> Unit,
+    onToggleBookmark: () -> Unit,
     onOpenSettings: () -> Unit,
     onExitToLibrary: () -> Unit,
     onClose: () -> Unit,
@@ -113,6 +127,20 @@ fun ReaderMenu(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            PanelyIconButton(
+                onClick = onPreviousBook,
+                primary = false,
+                enabled = previousBookTitle != null,
+            ) { tint ->
+                PanelyArrowBackIcon(tint = tint)
+            }
+            PanelyIconButton(
+                onClick = onNextBook,
+                primary = false,
+                enabled = nextBookTitle != null,
+            ) { tint ->
+                PanelyArrowForwardIcon(tint = tint)
+            }
             Text(
                 text = "${state.currentPage + 1} / $pageCount",
                 style = typography.caption,
@@ -143,6 +171,15 @@ fun ReaderMenu(
             Spacer(Modifier.height(spacing.space2))
 
             PanelyTextButton(
+                label = if (currentPageBookmarked) "북마크 해제" else "현재 페이지 북마크",
+                onClick = onToggleBookmark,
+                primary = currentPageBookmarked,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(Modifier.height(spacing.space1))
+
+            PanelyTextButton(
                 label = "설정 ⋯",
                 onClick = onOpenSettings,
                 primary = false,
@@ -167,6 +204,7 @@ private fun PageJump(
 ) {
     val typography = LocalPanelyInkTypography.current
     val density = LocalDensity.current
+    val spacing = LocalPanelyInkSpacing.current
 
     val handleDp = 24.dp
     val handlePx = with(density) { handleDp.toPx() }
@@ -175,6 +213,7 @@ private fun PageJump(
 
     var widthPx by remember { mutableStateOf(0) }
     var dragX by remember(currentPage, pageCount) { mutableStateOf<Float?>(null) }
+    var inputText by remember(currentPage, pageCount) { mutableStateOf((currentPage + 1).toString()) }
 
     val maxThumbPx = (widthPx - handlePx).coerceAtLeast(0f)
     val baseRatio = if (pageCount <= 1) 0f
@@ -196,60 +235,98 @@ private fun PageJump(
     val thumbDp = with(density) { thumbPx.toDp() }
     val previewPage = dragX?.let(::pointerToPage) ?: currentPage
 
+    fun commitInput() {
+        val page = inputText.toIntOrNull()?.coerceIn(1, pageCount) ?: return
+        val index = page - 1
+        if (index != currentPage) onCommit(index)
+        inputText = page.toString()
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(totalDp)
-                .onSizeChanged { widthPx = it.width }
-                .pointerInput(pageCount) {
-                    detectHorizontalDragGestures(
-                        onDragStart = { offset -> dragX = offset.x },
-                        onDragEnd = {
-                            val finalX = dragX
-                            dragX = null
-                            if (finalX != null) {
-                                val page = pointerToPage(finalX)
-                                if (page != currentPage) onCommit(page)
-                            }
-                        },
-                        onDragCancel = { dragX = null },
-                        onHorizontalDrag = { change, _ -> dragX = change.position.x },
-                    )
-                }
-                .pointerInput(pageCount) {
-                    detectTapGestures(
-                        onTap = { offset ->
-                            val page = pointerToPage(offset.x)
-                            if (page != currentPage) onCommit(page)
-                        },
-                    )
-                },
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(spacing.space2),
         ) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .fillMaxWidth()
-                    .padding(horizontal = handleDp / 2)
-                    .height(trackDp)
-                    .offset(y = (totalDp - trackDp) / 2)
-                    .background(PanelyInkColors.Hairline),
-            )
+                    .weight(1f)
+                    .height(totalDp)
+                    .onSizeChanged { widthPx = it.width }
+                    .pointerInput(pageCount) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { offset -> dragX = offset.x },
+                            onDragEnd = {
+                                val finalX = dragX
+                                dragX = null
+                                if (finalX != null) {
+                                    val page = pointerToPage(finalX)
+                                    if (page != currentPage) onCommit(page)
+                                }
+                            },
+                            onDragCancel = { dragX = null },
+                            onHorizontalDrag = { change, _ -> dragX = change.position.x },
+                        )
+                    }
+                    .pointerInput(pageCount) {
+                        detectTapGestures(
+                            onTap = { offset ->
+                                val page = pointerToPage(offset.x)
+                                if (page != currentPage) onCommit(page)
+                            },
+                        )
+                    },
+            ) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .fillMaxWidth()
+                        .padding(horizontal = handleDp / 2)
+                        .height(trackDp)
+                        .offset(y = (totalDp - trackDp) / 2)
+                        .background(PanelyInkColors.Hairline),
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = handleDp / 2)
+                        .width(thumbDp)
+                        .height(trackDp)
+                        .background(PanelyInkColors.Ink),
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .offset(x = thumbDp)
+                        .size(handleDp)
+                        .background(PanelyInkColors.Ink),
+                )
+            }
             Box(
                 modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = handleDp / 2)
-                    .width(thumbDp)
-                    .height(trackDp)
-                    .background(PanelyInkColors.Ink),
-            )
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .offset(x = thumbDp)
-                    .size(handleDp)
-                    .background(PanelyInkColors.Ink),
-            )
+                    .width(84.dp)
+                    .height(48.dp)
+                    .background(PanelyInkColors.Paper)
+                    .border(2.dp, PanelyInkColors.Ink)
+                    .padding(horizontal = spacing.space1),
+                contentAlignment = Alignment.Center,
+            ) {
+                BasicTextField(
+                    value = inputText,
+                    onValueChange = { raw ->
+                        inputText = raw.filter(Char::isDigit).take(5)
+                    },
+                    textStyle = typography.body.copy(color = PanelyInkColors.Ink),
+                    cursorBrush = SolidColor(PanelyInkColors.Ink),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { commitInput() }),
+                    modifier = Modifier.sizeIn(minWidth = 1.dp),
+                )
+            }
         }
         Spacer(Modifier.height(4.dp))
         Text(

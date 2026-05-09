@@ -185,11 +185,21 @@
 
 ## M4 — 시리즈 연속 · 북마크 · Resume 보강
 
-- [ ] 시리즈 연속 읽기 카드 (Up next / Previous)
-- [ ] 권의 마지막 페이지에서 "다음 권" 카드
-- [ ] 페이지 북마크 + 즐겨찾기
-- [ ] Quick jump (페이지 번호 입력)
-- [ ] 같은 시리즈 다음 권에 책별 설정 propagate
+- [x] Quick jump (페이지 번호 입력)
+  - `ReaderMenu` 페이지 슬라이더 옆에 번호 입력 필드 추가. `1..pageCount`로 clamp 후 `ReaderViewModel.goTo(page-1)` 호출
+- [x] 시리즈 연속 읽기 카드 (Up next / Previous)
+  - `SeriesContext.previousBook/nextBook` 기반. 메뉴 헤더에 이전/다음 권 화살표 버튼 추가
+- [x] 권의 마지막 페이지에서 "다음 권" 카드
+  - 마지막 페이지 + `nextBook != null`일 때 하단 카드 표시. 탭하면 같은 siblings 안에서 current만 교체해 새 권으로 진입
+- [x] 페이지 북마크
+  - Room v4→v5 마이그레이션: `bookmark(book_id, page_index, created_at)` 테이블 추가
+  - `BookmarkDao` / `RoomBookmarkRepository` 추가
+  - Reader 메뉴에서 현재 페이지 북마크 추가/해제
+  - 즐겨찾기/북마크 목록 화면은 후속
+- [x] 같은 시리즈 다음 권에 책별 설정 propagate
+  - 시리즈 이전/다음 권 이동 시 현재 `ReaderState`의 `BookSettings`를 다음 Reader 진입에 전달
+  - 대상 책에 저장된 설정이 이미 있으면 기존 설정 우선, 없으면 전달받은 설정을 초기값으로 사용 후 저장
+- [ ] Resume 보강 — 정의 필요
 
 ---
 

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,12 +25,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
@@ -39,17 +42,19 @@ import io.github.sejoung.panelyink.MainActivity
 import io.github.sejoung.panelyink.core.position.PositionRepository
 import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
+import io.github.sejoung.panelyink.data.db.BookmarkRepository
 import io.github.sejoung.panelyink.data.db.BookSettingsRepository
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
+import io.github.sejoung.panelyink.data.db.RoomBookmarkRepository
 import io.github.sejoung.panelyink.data.db.RoomBookSettingsRepository
 import io.github.sejoung.panelyink.data.db.RoomPositionRepository
 import io.github.sejoung.panelyink.data.preferences.SharedPrefsAppPreferencesRepository
 import io.github.sejoung.panelyink.library.BookEntry
-import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
-import io.github.sejoung.panelyink.ui.components.PanelyIconButton
+import io.github.sejoung.panelyink.ui.components.PanelyArrowForwardIcon
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
 import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
+import kotlinx.coroutines.launch
 
 /**
  * 본문 리더 진입 화면.
@@ -64,19 +69,21 @@ import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
 @Composable
 fun ReaderScreen(
     context: SeriesContext,
+    propagatedBookSettings: BookSettings? = null,
     onBack: () -> Unit,
     /**
      * 시리즈 형제 권으로 이동 — 호스트가 새 [SeriesContext]를 만들어 [ReaderScreen]을 다시
      * 부르는 식으로 처리. M4 시리즈 연속 읽기 카드 / "다음 권" 카드에서 사용.
      * 인자로 받은 [BookEntry]는 [SeriesContext.siblings] 안에 있어야 의미가 있다.
      */
-    onNavigate: (BookEntry) -> Unit = {},
+    onNavigate: (BookEntry, BookSettings) -> Unit = { _, _ -> },
 ) {
     val entry = context.current
     val appContext = LocalContext.current.applicationContext
     val db = remember(appContext) { PanelyDatabase.getInstance(appContext) }
     val positionRepo: PositionRepository = remember(db) { RoomPositionRepository(db) }
     val bookSettingsRepo: BookSettingsRepository = remember(db) { RoomBookSettingsRepository(db) }
+    val bookmarkRepo: BookmarkRepository = remember(db) { RoomBookmarkRepository(db) }
     val appPrefsRepo: AppPreferencesRepository = remember(appContext) {
         SharedPrefsAppPreferencesRepository(appContext)
     }
@@ -121,6 +128,7 @@ fun ReaderScreen(
                 ?: 0
             // 책별 설정도 같이 로드 — 없으면 DEFAULTS. 책당 1행이라 가벼움.
             val bookSettings = bookSettingsRepo.load(session.bookId)
+                ?: propagatedBookSettings
                 ?: BookSettings.DEFAULTS
             // 전역 prefs(흑백 반전, 풀리프레시 주기) — SharedPreferences 1회 read.
             val appPrefs = appPrefsRepo.load()
@@ -160,7 +168,10 @@ fun ReaderScreen(
                 initialAppPreferences = s.appPreferences,
                 positionRepo = positionRepo,
                 bookSettingsRepo = bookSettingsRepo,
+                bookmarkRepo = bookmarkRepo,
                 appPrefsRepo = appPrefsRepo,
+                context = context,
+                onNavigate = onNavigate,
                 onExit = onBack,
             )
         }
@@ -178,7 +189,10 @@ private fun ReaderContent(
     initialAppPreferences: AppPreferences,
     positionRepo: PositionRepository,
     bookSettingsRepo: BookSettingsRepository,
+    bookmarkRepo: BookmarkRepository,
     appPrefsRepo: AppPreferencesRepository,
+    context: SeriesContext,
+    onNavigate: (BookEntry, BookSettings) -> Unit,
     onExit: () -> Unit,
 ) {
     // ViewModelStore에 캐시되지 않도록 remember(session)로 묶는다 — 책을 닫고
@@ -206,6 +220,8 @@ private fun ReaderContent(
     var view by remember { mutableStateOf<ReaderView?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
+    var bookmarkedPages by remember(session) { mutableStateOf<Set<Int>>(emptySet()) }
+    val uiScope = rememberCoroutineScope()
 
     // ← back 우선순위: settings(자체 BackHandler) → menu → ReaderScreen 최상단(라이브러리로).
     // settingsOpen=true일 땐 ReaderSettingsScreen 안의 BackHandler가 잡으므로 여긴 비활성.
@@ -273,6 +289,10 @@ private fun ReaderContent(
         viewModel.decoded.collect { view?.invalidate() }
     }
 
+    LaunchedEffect(session) {
+        bookmarkedPages = bookmarkRepo.loadPages(session.bookId).toSet()
+    }
+
     // 풀리프레시 generation 변경 — N페이지마다 검정 1프레임으로 잔상 정리(M2).
     // 첫 진입 시 generation=0 → LaunchedEffect 발화는 일어나지만 0 → 분기로 무시.
     LaunchedEffect(state.fullRefreshGeneration, view) {
@@ -328,14 +348,49 @@ private fun ReaderContent(
                 onNext = viewModel::goNext,
                 onMenu = { menuOpen = true },
             )
+            val nextBook = context.nextBook
+            if (
+                nextBook != null &&
+                state.currentPage == viewModel.pageCount - 1 &&
+                !settingsOpen
+            ) {
+                NextBookCard(
+                    title = nextBook.displayName,
+                    onClick = {
+                        onNavigate(nextBook, state.toBookSettings())
+                    },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
         } else {
             ReaderMenu(
                 state = state,
                 bookTitle = bookTitle,
                 pageCount = viewModel.pageCount,
+                previousBookTitle = context.previousBook?.displayName,
+                nextBookTitle = context.nextBook?.displayName,
+                currentPageBookmarked = state.currentPage in bookmarkedPages,
                 onJumpToPage = { page ->
                     viewModel.goTo(page)
                     menuOpen = false
+                },
+                onPreviousBook = {
+                    context.previousBook?.let { onNavigate(it, state.toBookSettings()) }
+                },
+                onNextBook = {
+                    context.nextBook?.let { onNavigate(it, state.toBookSettings()) }
+                },
+                onToggleBookmark = {
+                    val page = state.currentPage
+                    uiScope.launch {
+                        if (page in bookmarkedPages) {
+                            bookmarkRepo.remove(session.bookId, page)
+                            bookmarkedPages = bookmarkedPages - page
+                        } else {
+                            bookmarkRepo.add(session.bookId, page)
+                            bookmarkedPages = bookmarkedPages + page
+                        }
+                    }
                 },
                 onOpenSettings = {
                     settingsOpen = true
@@ -369,6 +424,53 @@ private fun ReaderContent(
         }
     }
 }
+
+@Composable
+private fun NextBookCard(
+    title: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val typography = LocalPanelyInkTypography.current
+    val spacing = LocalPanelyInkSpacing.current
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(PanelyInkColors.Paper)
+            .border(2.dp, PanelyInkColors.Ink)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = spacing.space3, vertical = spacing.space2),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spacing.space2),
+    ) {
+        Text(
+            text = "다음 권",
+            style = typography.body,
+            color = PanelyInkColors.Ink,
+        )
+        Text(
+            text = title,
+            style = typography.caption,
+            color = PanelyInkColors.Mute,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        PanelyArrowForwardIcon(tint = PanelyInkColors.Ink)
+    }
+}
+
+private fun ReaderState.toBookSettings(): BookSettings = BookSettings(
+    fitMode = fitMode,
+    direction = direction,
+    trimEnabled = trimEnabled,
+    contrast = contrast,
+)
 
 @Composable
 private fun TapRegions(
