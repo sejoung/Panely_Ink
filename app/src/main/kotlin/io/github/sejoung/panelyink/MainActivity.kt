@@ -1,5 +1,6 @@
 package io.github.sejoung.panelyink
 
+import android.content.Context
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
@@ -12,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import io.github.sejoung.panelyink.core.preferences.AppLocale
 import io.github.sejoung.panelyink.library.ui.LibraryScreen
 import io.github.sejoung.panelyink.reader.model.BookSettings
 import io.github.sejoung.panelyink.reader.ui.ReaderScreen
@@ -31,6 +33,10 @@ import io.github.sejoung.panelyink.ui.theme.PanelyInkTokens
 class MainActivity : ComponentActivity() {
 
     var keyDispatcher: ((KeyEvent) -> Boolean)? = null
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocale.wrapFromPreferences(newBase))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

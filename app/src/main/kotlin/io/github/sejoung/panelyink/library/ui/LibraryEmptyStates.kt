@@ -41,14 +41,14 @@ internal fun LibraryEmptyState(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             val title = when {
                 scanning -> stringResourceCompat(R.string.library_scanning)
-                inFolder -> "이 폴더에는 항목이 없습니다"
-                hasRoots -> "루트 폴더에 .cbz / .zip 파일이 없습니다"
+                inFolder -> stringResourceCompat(R.string.library_empty_folder_title)
+                hasRoots -> stringResourceCompat(R.string.library_empty_root_title)
                 else -> stringResourceCompat(R.string.library_empty_title)
             }
             val body = when {
                 scanning -> ""
-                inFolder -> "한 단계 위로 돌아가거나 다른 폴더를 추가하세요."
-                hasRoots -> "다른 폴더를 추가하거나 파일 확장자를 확인하세요."
+                inFolder -> stringResourceCompat(R.string.library_empty_folder_body)
+                hasRoots -> stringResourceCompat(R.string.library_empty_root_body)
                 else -> stringResourceCompat(R.string.library_empty_body)
             }
             Text(
@@ -69,7 +69,7 @@ internal fun LibraryEmptyState(
             if (!scanning && !inFolder) {
                 Spacer(Modifier.height(spacing.space3))
                 PanelyTextButton(
-                    label = "폴더 추가",
+                    label = stringResourceCompat(R.string.library_add_folder),
                     onClick = onAddFolder,
                     primary = !hasRoots,
                 )
@@ -97,7 +97,7 @@ internal fun SearchEmptyState(query: String) {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "검색 결과가 없습니다",
+                text = stringResourceCompat(R.string.library_search_empty_title),
                 style = typography.display,
                 color = PanelyInkColors.Ink,
                 textAlign = TextAlign.Center,
@@ -105,7 +105,7 @@ internal fun SearchEmptyState(query: String) {
             if (query.isNotBlank()) {
                 Spacer(Modifier.height(spacing.space2))
                 Text(
-                    text = "'$query' 와 일치하는 항목이 이 폴더에 없음",
+                    text = stringResourceCompat(R.string.library_search_empty_body, query),
                     style = typography.body,
                     color = PanelyInkColors.Mute,
                     textAlign = TextAlign.Center,

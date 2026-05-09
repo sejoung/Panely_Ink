@@ -19,9 +19,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.ui.components.PanelyTextButton
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
@@ -57,19 +59,19 @@ fun ConfirmResetDialog(
         ) {
             Column {
                 Text(
-                    text = "전체 초기화",
+                    text = stringResource(R.string.settings_reset_title),
                     style = typography.title,
                     color = PanelyInkColors.Ink,
                 )
                 Spacer(Modifier.height(spacing.space2))
                 Text(
-                    text = "라이브러리 폴더, 읽기 진행률, 책별 설정, 풀리프레시/반전 설정, 표지 캐시가 모두 삭제됩니다.",
+                    text = stringResource(R.string.settings_reset_confirm_body),
                     style = typography.body,
                     color = PanelyInkColors.Ink,
                 )
                 Spacer(Modifier.height(spacing.space1))
                 Text(
-                    text = "이 작업은 되돌릴 수 없습니다.",
+                    text = stringResource(R.string.settings_reset_confirm_warning),
                     style = typography.body,
                     color = PanelyInkColors.Mute,
                 )
@@ -79,13 +81,13 @@ fun ConfirmResetDialog(
                     horizontalArrangement = Arrangement.spacedBy(spacing.space1),
                 ) {
                     PanelyTextButton(
-                        label = "취소",
+                        label = stringResource(R.string.common_cancel),
                         onClick = onDismiss,
                         primary = true,
                         modifier = Modifier.weight(1f),
                     )
                     PanelyTextButton(
-                        label = "초기화",
+                        label = stringResource(R.string.common_reset),
                         onClick = onConfirm,
                         primary = false,
                         modifier = Modifier.weight(1f),

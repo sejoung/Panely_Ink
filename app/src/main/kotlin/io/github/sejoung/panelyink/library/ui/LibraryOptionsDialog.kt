@@ -23,9 +23,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.ui.components.PanelyTextButton
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
@@ -65,45 +67,45 @@ fun LibraryOptionsDialog(
         ) {
             Column {
                 Text(
-                    text = "보기 옵션",
+                    text = stringResource(R.string.library_options_title),
                     style = typography.title,
                     color = PanelyInkColors.Ink,
                 )
 
                 Spacer(Modifier.height(spacing.space2))
 
-                SectionLabel("정렬")
+                SectionLabel(stringResource(R.string.library_options_sort))
                 Spacer(Modifier.height(spacing.space1))
                 OptionRow(
-                    label = "이름순",
+                    label = stringResource(R.string.library_sort_name),
                     isSelected = selectedSort == SortMode.Name,
                     onClick = { onSortChange(SortMode.Name) },
                 )
                 Spacer(Modifier.height(spacing.space1))
                 OptionRow(
-                    label = "최근 본 책",
+                    label = stringResource(R.string.library_sort_last_opened),
                     isSelected = selectedSort == SortMode.LastOpened,
                     onClick = { onSortChange(SortMode.LastOpened) },
                 )
 
                 Spacer(Modifier.height(spacing.space2))
 
-                SectionLabel("표시")
+                SectionLabel(stringResource(R.string.library_options_view))
                 Spacer(Modifier.height(spacing.space1))
                 OptionRow(
-                    label = "목록",
+                    label = stringResource(R.string.library_view_list),
                     isSelected = selectedView == ViewMode.List,
                     onClick = { onViewChange(ViewMode.List) },
                 )
                 Spacer(Modifier.height(spacing.space1))
                 OptionRow(
-                    label = "표지",
+                    label = stringResource(R.string.library_view_cover),
                     isSelected = selectedView == ViewMode.Cover,
                     onClick = { onViewChange(ViewMode.Cover) },
                 )
                 Spacer(Modifier.height(spacing.space1))
                 OptionRow(
-                    label = "그리드",
+                    label = stringResource(R.string.library_view_grid),
                     isSelected = selectedView == ViewMode.Grid,
                     onClick = { onViewChange(ViewMode.Grid) },
                 )
@@ -113,7 +115,7 @@ fun LibraryOptionsDialog(
                     horizontalArrangement = Arrangement.End,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    PanelyTextButton(label = "닫기", onClick = onDismiss, primary = true)
+                    PanelyTextButton(label = stringResource(R.string.common_close), onClick = onDismiss, primary = true)
                 }
             }
         }

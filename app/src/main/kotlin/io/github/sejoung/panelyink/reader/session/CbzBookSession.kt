@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
+import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.core.archive.CbzArchive
 import io.github.sejoung.panelyink.core.archive.CbzPage
 import io.github.sejoung.panelyink.core.fit.TrimRect
@@ -174,7 +175,7 @@ class CbzBookSession private constructor(
                 }
                 if (archive.pages.isEmpty()) {
                     archive.close()
-                    throw IOException("이미지 엔트리가 없습니다: ${entry.displayName}")
+                    throw IOException(ctx.getString(R.string.reader_error_no_images, entry.displayName))
                 }
                 // bookId 체계: nested entry는 부모 URI + entry name으로 unique. resume/
                 // BookSettings/CoverMeta가 nested 책별로 저장됨.

@@ -24,7 +24,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.core.render.ContrastMatrix
 import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
@@ -80,7 +82,7 @@ fun ReaderSettingsScreen(
                 PanelyArrowBackIcon(tint = tint)
             }
             Text(
-                text = "설정",
+                text = stringResource(R.string.reader_settings_title),
                 style = typography.title,
                 color = PanelyInkColors.Ink,
             )
@@ -101,10 +103,10 @@ fun ReaderSettingsScreen(
                 .padding(horizontal = spacing.space3, vertical = spacing.space2),
         ) {
             // ── 그룹 1: 페이지 레이아웃 ─────────────────────────────
-            GroupHeader("페이지 레이아웃")
+            GroupHeader(stringResource(R.string.reader_group_page_layout))
             Spacer(Modifier.height(spacing.space2))
 
-            SectionLabel("화면 맞춤")
+            SectionLabel(stringResource(R.string.reader_fit))
             Spacer(Modifier.height(spacing.space1))
             FitSegments(
                 selected = state.fitMode,
@@ -113,7 +115,7 @@ fun ReaderSettingsScreen(
 
             Spacer(Modifier.height(spacing.space2))
 
-            SectionLabel("읽기 방향")
+            SectionLabel(stringResource(R.string.reader_direction))
             Spacer(Modifier.height(spacing.space1))
             DirectionSegments(
                 selected = state.direction,
@@ -122,7 +124,7 @@ fun ReaderSettingsScreen(
 
             Spacer(Modifier.height(spacing.space2))
 
-            SectionLabel("자동 여백 트리밍")
+            SectionLabel(stringResource(R.string.reader_trim))
             Spacer(Modifier.height(spacing.space1))
             TrimSegments(
                 enabled = state.trimEnabled,
@@ -132,10 +134,10 @@ fun ReaderSettingsScreen(
             GroupSeparator(spacing.space4)
 
             // ── 그룹 2: 화질 ────────────────────────────────────
-            GroupHeader("화질")
+            GroupHeader(stringResource(R.string.reader_group_image))
             Spacer(Modifier.height(spacing.space2))
 
-            SectionLabel("대비")
+            SectionLabel(stringResource(R.string.reader_contrast))
             Spacer(Modifier.height(spacing.space1))
             ContrastSlider(
                 contrast = state.contrast,
@@ -145,7 +147,7 @@ fun ReaderSettingsScreen(
 
             Spacer(Modifier.height(spacing.space2))
 
-            SectionLabel("흑백 반전")
+            SectionLabel(stringResource(R.string.settings_invert))
             Spacer(Modifier.height(spacing.space1))
             InvertSegments(
                 enabled = state.invertEnabled,
@@ -157,11 +159,11 @@ fun ReaderSettingsScreen(
             // ── 그룹 3: 디스플레이 (현재 책에 즉시 영향) ─────────
             // 풀리프레시 주기는 디바이스 특성이라 라이브러리 앱 설정에서 전역 관리.
             // 여기엔 "현재 책에 한 번 깜빡임"만 둠.
-            GroupHeader("디스플레이")
+            GroupHeader(stringResource(R.string.reader_group_display))
             Spacer(Modifier.height(spacing.space2))
 
             PanelyTextButton(
-                label = "지금 풀리프레시",
+                label = stringResource(R.string.reader_full_refresh_now),
                 onClick = onTriggerFullRefresh,
                 primary = false,
                 modifier = Modifier.fillMaxWidth(),

@@ -34,8 +34,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.core.position.BookProgress
 import io.github.sejoung.panelyink.core.position.PositionKey
 import io.github.sejoung.panelyink.ui.components.PanelyBookIcon
@@ -417,7 +419,11 @@ private fun CountText(count: Int?) {
     if (count != null) {
         val typography = LocalPanelyInkTypography.current
         Text(
-            text = if (count == 0) "비어있음" else "${count}권",
+            text = if (count == 0) {
+                stringResource(R.string.common_empty)
+            } else {
+                stringResource(R.string.library_book_count, count)
+            },
             style = typography.caption,
             color = PanelyInkColors.Mute,
         )
@@ -434,7 +440,13 @@ private fun ProgressBadge(progress: BookProgress?) {
 @Composable
 private fun CountBadge(count: Int?) {
     if (count != null) {
-        Badge(text = if (count == 0) "비어있음" else "${count}권")
+        Badge(
+            text = if (count == 0) {
+                stringResource(R.string.common_empty)
+            } else {
+                stringResource(R.string.library_book_count, count)
+            },
+        )
     }
 }
 

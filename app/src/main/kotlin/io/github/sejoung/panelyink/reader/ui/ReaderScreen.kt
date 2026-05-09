@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.sejoung.panelyink.core.position.PositionRepository
@@ -40,6 +41,7 @@ import io.github.sejoung.panelyink.data.db.RoomBookSettingsRepository
 import io.github.sejoung.panelyink.data.db.RoomPositionRepository
 import io.github.sejoung.panelyink.data.preferences.SharedPrefsAppPreferencesRepository
 import io.github.sejoung.panelyink.library.model.BookEntry
+import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
 import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
@@ -68,7 +70,8 @@ fun ReaderScreen(
     onNavigate: (BookEntry, BookSettings) -> Unit = { _, _ -> },
 ) {
     val entry = context.current
-    val appContext = LocalContext.current.applicationContext
+    val localContext = LocalContext.current
+    val appContext = localContext.applicationContext
     val db = remember(appContext) { PanelyDatabase.getInstance(appContext) }
     val positionRepo: PositionRepository = remember(db) { RoomPositionRepository(db) }
     val bookSettingsRepo: BookSettingsRepository = remember(db) { RoomBookSettingsRepository(db) }
@@ -80,15 +83,15 @@ fun ReaderScreen(
 
     ReaderSystemBarsEffect()
 
-    var loadingStep by remember { mutableStateOf("책을 여는 중…") }
+    var loadingStep by remember { mutableStateOf(localContext.getString(R.string.reader_loading_opening)) }
     // produceState 키는 nested 책까지 구분하는 [BookEntry.bookIdSource]를 사용 — 일반 책은
     // documentUri와 동일, ZIP-of-CBZ 자식은 `${uri}#${entry}`라 형제 권 간 이동 시 새 책으로 정확히 재진입.
     val sessionState by produceState<SessionState>(SessionState.Loading, entry.bookIdSource) {
         value = try {
             Log.d(TAG, "ReaderScreen open: ${entry.displayName}")
-            loadingStep = "페이지 목록 스캔 중…"
+            loadingStep = localContext.getString(R.string.reader_loading_scan_pages)
             val session = CbzBookSession.open(appContext, entry)
-            loadingStep = "위치 복원 중…"
+            loadingStep = localContext.getString(R.string.reader_loading_restore_position)
             // Room에서 마지막 페이지를 미리 로드 — ReaderViewModel 생성 시점이 동기라
             // 여기서 비동기로 받아 Ready에 묶어서 넘긴다. 페이지 수 줄어든 책은 clamp.
             val resumed = positionRepo.load(session.bookId)
@@ -101,7 +104,7 @@ fun ReaderScreen(
                 ?: BookSettings.DEFAULTS
             // 전역 prefs(흑백 반전, 풀리프레시 주기) — SharedPreferences 1회 read.
             val appPrefs = appPrefsRepo.load()
-            loadingStep = "첫 페이지 디코드 중… (${session.pageCount}쪽)"
+            loadingStep = localContext.getString(R.string.reader_loading_decode_first_page, session.pageCount)
             session.decode(resumed)
             Log.d(TAG, "ReaderScreen ready (resume page=$resumed)")
             SessionState.Ready(
@@ -116,7 +119,7 @@ fun ReaderScreen(
         } catch (t: Throwable) {
             Log.e(TAG, "ReaderScreen open failed: ${entry.displayName}", t)
             val cls = t.javaClass.simpleName
-            val msg = t.message ?: "(메시지 없음)"
+            val msg = t.message ?: localContext.getString(R.string.reader_error_no_message)
             SessionState.Failed("$cls: $msg")
         }
     }

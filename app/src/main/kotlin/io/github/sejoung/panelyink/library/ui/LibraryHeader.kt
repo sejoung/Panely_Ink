@@ -168,7 +168,7 @@ private fun SearchHeader(
             )
             if (query.isEmpty()) {
                 Text(
-                    text = "이름으로 검색",
+                    text = stringResourceCompat(R.string.library_search_placeholder),
                     style = typography.body,
                     color = PanelyInkColors.Mute,
                 )

@@ -24,8 +24,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
 import io.github.sejoung.panelyink.ui.components.PanelyArrowForwardIcon
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
@@ -123,14 +125,14 @@ private fun AdjacentBookPrompt(
     Box(modifier = modifier) {
         when {
             nextBook != null -> AdjacentBookCard(
-                label = "다음 권",
+                label = stringResource(R.string.reader_next_book),
                 title = nextBook.displayName,
                 forward = true,
                 onClick = { onNavigate(nextBook, state.toBookSettings()) },
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
             previousBook != null -> AdjacentBookCard(
-                label = "이전 권",
+                label = stringResource(R.string.reader_previous_book),
                 title = previousBook.displayName,
                 forward = false,
                 onClick = { onNavigate(previousBook, state.toBookSettings()) },

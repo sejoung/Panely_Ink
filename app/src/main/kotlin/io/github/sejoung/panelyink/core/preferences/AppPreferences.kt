@@ -1,6 +1,10 @@
 package io.github.sejoung.panelyink.core.preferences
 
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.res.Configuration
 import io.github.sejoung.panelyink.reader.ReaderViewModel
+import java.util.Locale
 
 /**
  * 앱 전역 표시/디스플레이 설정 — 디바이스 특성/환경 의존 옵션.
@@ -16,12 +20,47 @@ import io.github.sejoung.panelyink.reader.ReaderViewModel
 data class AppPreferences(
     val fullRefreshInterval: Int,
     val invertEnabled: Boolean,
+    val languageTag: String,
 ) {
     companion object {
         val DEFAULTS: AppPreferences = AppPreferences(
             fullRefreshInterval = ReaderViewModel.FULL_REFRESH_INTERVAL_DEFAULT,
             invertEnabled = false,
+            languageTag = AppLanguage.English.tag,
         )
+    }
+}
+
+enum class AppLanguage(val tag: String) {
+    English("en"),
+    Korean("ko"),
+    System("system");
+
+    companion object {
+        fun fromTag(tag: String?): AppLanguage =
+            entries.firstOrNull { it.tag == tag } ?: English
+    }
+}
+
+object AppLocale {
+    const val PREFS_NAME = "panely_ink_app_prefs"
+    const val KEY_LANGUAGE_TAG = "language_tag"
+
+    fun wrapFromPreferences(context: Context): Context {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val tag = prefs.getString(KEY_LANGUAGE_TAG, AppPreferences.DEFAULTS.languageTag)
+        return wrap(context, tag)
+    }
+
+    fun wrap(context: Context, languageTag: String?): Context {
+        val language = AppLanguage.fromTag(languageTag)
+        if (language == AppLanguage.System) return context
+        val locale = Locale.forLanguageTag(language.tag)
+        Locale.setDefault(locale)
+        val config = Configuration(context.resources.configuration)
+        config.setLocale(locale)
+        config.setLayoutDirection(locale)
+        return ContextWrapper(context.createConfigurationContext(config))
     }
 }
 
@@ -32,4 +71,5 @@ interface AppPreferencesRepository {
     suspend fun load(): AppPreferences
     suspend fun setFullRefreshInterval(value: Int)
     suspend fun setInvertEnabled(value: Boolean)
+    suspend fun setLanguageTag(value: String)
 }

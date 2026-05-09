@@ -29,6 +29,10 @@ internal fun HairlineDivider() {
 internal fun stringResourceCompat(id: Int): String =
     androidx.compose.ui.res.stringResource(id)
 
+@Composable
+internal fun stringResourceCompat(id: Int, vararg formatArgs: Any): String =
+    androidx.compose.ui.res.stringResource(id, *formatArgs)
+
 internal fun formatBytes(bytes: Long): String {
     if (bytes <= 0) return "-"
     val mb = bytes / 1024.0 / 1024.0

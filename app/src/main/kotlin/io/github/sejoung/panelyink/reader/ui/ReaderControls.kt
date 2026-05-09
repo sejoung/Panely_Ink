@@ -36,8 +36,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.core.render.ContrastMatrix
 import io.github.sejoung.panelyink.ui.components.PanelyTextButton
@@ -86,9 +88,9 @@ internal fun FitSegments(
     onSelect: (FitMode) -> Unit,
 ) {
     val options = listOf(
-        FitMode.FitScreen to "화면",
-        FitMode.FitWidth to "가로",
-        FitMode.FitHeight to "세로",
+        FitMode.FitScreen to stringResource(R.string.reader_fit_screen),
+        FitMode.FitWidth to stringResource(R.string.reader_fit_width),
+        FitMode.FitHeight to stringResource(R.string.reader_fit_height),
     )
     Segments(
         options = options,
@@ -105,8 +107,8 @@ internal fun DirectionSegments(
 ) {
     // M1.5에서 VerticalScroll 추가. 지금은 LTR/RTL 두 개만 노출.
     val options = listOf(
-        ReadingDirection.Ltr to "좌→우",
-        ReadingDirection.Rtl to "우→좌",
+        ReadingDirection.Ltr to stringResource(R.string.reader_direction_ltr),
+        ReadingDirection.Rtl to stringResource(R.string.reader_direction_rtl),
     )
     Segments(
         options = options,
@@ -122,8 +124,8 @@ internal fun TrimSegments(
     onSelect: (Boolean) -> Unit,
 ) {
     val options = listOf(
-        true to "자동",
-        false to "끔",
+        true to stringResource(R.string.reader_trim_auto),
+        false to stringResource(R.string.common_off),
     )
     Segments(
         options = options,
@@ -139,8 +141,8 @@ internal fun InvertSegments(
     onSelect: (Boolean) -> Unit,
 ) {
     val options = listOf(
-        false to "끔",
-        true to "켬",
+        false to stringResource(R.string.common_off),
+        true to stringResource(R.string.common_on),
     )
     Segments(
         options = options,
@@ -161,7 +163,7 @@ internal fun FullRefreshIntervalSegments(
         3 to "3",
         5 to "5",
         10 to "10",
-        0 to "끔",
+        0 to stringResource(R.string.common_off),
     )
     Segments(
         options = options,
@@ -327,7 +329,7 @@ internal fun ContrastSlider(
                 modifier = Modifier.weight(1f),
             )
             PanelyTextButton(
-                label = "원본",
+                label = stringResource(R.string.common_original),
                 onClick = onReset,
                 primary = false,
             )

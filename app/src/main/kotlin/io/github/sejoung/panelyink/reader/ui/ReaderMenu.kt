@@ -41,10 +41,12 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
+import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
 import io.github.sejoung.panelyink.ui.components.PanelyArrowForwardIcon
 import io.github.sejoung.panelyink.ui.components.PanelyIconButton
@@ -167,7 +169,7 @@ fun ReaderMenu(
                 .pointerInput(Unit) { detectTapGestures { } }
                 .padding(horizontal = spacing.space3, vertical = spacing.space2),
         ) {
-            SectionLabel("페이지 점프")
+            SectionLabel(stringResource(R.string.reader_page_jump))
             Spacer(Modifier.height(spacing.space1))
             PageJump(
                 pageCount = pageCount,
@@ -178,7 +180,11 @@ fun ReaderMenu(
             Spacer(Modifier.height(spacing.space2))
 
             PanelyTextButton(
-                label = if (currentPageBookmarked) "북마크 해제" else "현재 페이지 북마크",
+                label = if (currentPageBookmarked) {
+                    stringResource(R.string.reader_bookmark_remove)
+                } else {
+                    stringResource(R.string.reader_bookmark_current)
+                },
                 onClick = onToggleBookmark,
                 primary = currentPageBookmarked,
                 modifier = Modifier.fillMaxWidth(),
@@ -187,7 +193,7 @@ fun ReaderMenu(
             Spacer(Modifier.height(spacing.space1))
 
             PanelyTextButton(
-                label = "설정 ⋯",
+                label = stringResource(R.string.reader_settings_more),
                 onClick = onOpenSettings,
                 primary = false,
                 modifier = Modifier.fillMaxWidth(),

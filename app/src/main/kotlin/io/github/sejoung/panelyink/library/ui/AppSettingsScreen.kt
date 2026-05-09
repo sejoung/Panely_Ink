@@ -31,14 +31,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.github.sejoung.panelyink.R
+import io.github.sejoung.panelyink.core.preferences.AppLanguage
 import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
 import io.github.sejoung.panelyink.data.preferences.SharedPrefsAppPreferencesRepository
 import io.github.sejoung.panelyink.reader.ui.FullRefreshIntervalSegments
 import io.github.sejoung.panelyink.reader.ui.GroupHeader
 import io.github.sejoung.panelyink.reader.ui.InvertSegments
+import io.github.sejoung.panelyink.reader.ui.Segments
 import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
 import io.github.sejoung.panelyink.ui.components.PanelyIconButton
 import io.github.sejoung.panelyink.ui.components.PanelyTextButton
@@ -70,7 +74,8 @@ fun AppSettingsScreen(
 
     val typography = LocalPanelyInkTypography.current
     val spacing = LocalPanelyInkSpacing.current
-    val ctx = LocalContext.current.applicationContext
+    val localContext = LocalContext.current
+    val ctx = localContext.applicationContext
     val repo: AppPreferencesRepository = remember(ctx) {
         SharedPrefsAppPreferencesRepository(ctx)
     }
@@ -97,7 +102,7 @@ fun AppSettingsScreen(
                 PanelyArrowBackIcon(tint = tint)
             }
             Text(
-                text = "앱 설정",
+                text = stringResource(R.string.settings_app_title),
                 style = typography.title,
                 color = PanelyInkColors.Ink,
             )
@@ -116,7 +121,7 @@ fun AppSettingsScreen(
                 modifier = Modifier.fillMaxSize().padding(spacing.space3),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(text = "로딩 중…", style = typography.body, color = PanelyInkColors.Mute)
+                Text(text = stringResource(R.string.common_loading), style = typography.body, color = PanelyInkColors.Mute)
             }
             return@Column
         }
@@ -127,10 +132,25 @@ fun AppSettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = spacing.space3, vertical = spacing.space2),
         ) {
-            GroupHeader("디스플레이")
+            GroupHeader(stringResource(R.string.settings_language))
+            Spacer(Modifier.height(spacing.space2))
+            LanguageSegments(
+                languageTag = current.languageTag,
+                onSelect = { language ->
+                    prefs = current.copy(languageTag = language.tag)
+                    scope.launch {
+                        repo.setLanguageTag(language.tag)
+                        resolveActivity(localContext)?.recreate()
+                    }
+                },
+            )
+
+            GroupSeparator(spacing.space4)
+
+            GroupHeader(stringResource(R.string.settings_display))
             Spacer(Modifier.height(spacing.space2))
 
-            SectionLabel("풀리프레시 주기 (페이지)")
+            SectionLabel(stringResource(R.string.settings_full_refresh_interval))
             Spacer(Modifier.height(spacing.space1))
             FullRefreshIntervalSegments(
                 interval = current.fullRefreshInterval,
@@ -142,7 +162,7 @@ fun AppSettingsScreen(
 
             Spacer(Modifier.height(spacing.space3))
 
-            SectionLabel("흑백 반전")
+            SectionLabel(stringResource(R.string.settings_invert))
             Spacer(Modifier.height(spacing.space1))
             InvertSegments(
                 enabled = current.invertEnabled,
@@ -162,16 +182,16 @@ fun AppSettingsScreen(
             Spacer(Modifier.height(spacing.space4))
 
             // 캐시 — 표지 추출 디스크 캐시. 사용자가 명시 정리 가능.
-            GroupHeader("캐시")
+            GroupHeader(stringResource(R.string.settings_cache))
             Spacer(Modifier.height(spacing.space2))
             Text(
-                text = "표지 캐시는 자동으로 80MB 이하로 정리됩니다. 깨진 책 재시도가 필요하거나 강제로 비우려면 아래 버튼을 누르세요.",
+                text = stringResource(R.string.settings_cover_cache_body),
                 style = typography.body,
                 color = PanelyInkColors.Mute,
             )
             Spacer(Modifier.height(spacing.space2))
             PanelyTextButton(
-                label = "표지 캐시 비우기",
+                label = stringResource(R.string.settings_clear_cover_cache),
                 onClick = onClearCoverCache,
                 primary = false,
                 modifier = Modifier.fillMaxWidth(),
@@ -188,11 +208,11 @@ fun AppSettingsScreen(
 
             // 폴더 관리 — 추가/제거 모두 여기. 이전엔 별도 ManageRootsDialog였고
             // 추가는 헤더 + 아이콘에 분리됐지만 둘 다 흡수해 한 곳에 모음(2026-05-08).
-            GroupHeader("폴더")
+            GroupHeader(stringResource(R.string.settings_folders))
             Spacer(Modifier.height(spacing.space2))
             if (roots.isEmpty()) {
                 Text(
-                    text = "추가된 폴더가 없습니다.",
+                    text = stringResource(R.string.settings_no_folders),
                     style = typography.body,
                     color = PanelyInkColors.Mute,
                 )
@@ -204,7 +224,7 @@ fun AppSettingsScreen(
 
             Spacer(Modifier.height(spacing.space2))
             PanelyTextButton(
-                label = "폴더 추가",
+                label = stringResource(R.string.library_add_folder),
                 onClick = onAddRoot,
                 primary = roots.isEmpty(),
                 modifier = Modifier.fillMaxWidth(),
@@ -212,7 +232,7 @@ fun AppSettingsScreen(
             Spacer(Modifier.height(spacing.space1))
             // 시스템 SAF picker는 우리가 제어 못 함 — 사용자에게 취소 방법 안내.
             Text(
-                text = "시스템 폴더 선택기에서는 시스템 뒤로 키로 취소할 수 있습니다.",
+                text = stringResource(R.string.settings_picker_cancel_hint),
                 style = typography.caption,
                 color = PanelyInkColors.Mute,
             )
@@ -227,16 +247,16 @@ fun AppSettingsScreen(
             Spacer(Modifier.height(spacing.space4))
 
             // 위험 영역 — 신규 사용자 상태로 복귀(Room/Prefs/SAF/캐시 모두 비움).
-            GroupHeader("초기화")
+            GroupHeader(stringResource(R.string.settings_reset_group))
             Spacer(Modifier.height(spacing.space2))
             Text(
-                text = "라이브러리 폴더, 진행률, 책별 설정, 표지 캐시 등 모든 데이터를 비웁니다. 되돌릴 수 없습니다.",
+                text = stringResource(R.string.settings_reset_body),
                 style = typography.body,
                 color = PanelyInkColors.Mute,
             )
             Spacer(Modifier.height(spacing.space2))
             PanelyTextButton(
-                label = "전체 초기화",
+                label = stringResource(R.string.settings_reset_all),
                 onClick = { resetDialogOpen = true },
                 primary = false,
                 modifier = Modifier.fillMaxWidth(),
@@ -282,9 +302,27 @@ private fun RootRow(uri: Uri, onRemove: () -> Unit) {
         )
         Spacer(Modifier.height(spacing.space1))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            PanelyTextButton(label = "제거", onClick = onRemove, primary = false)
+            PanelyTextButton(label = stringResource(R.string.library_remove_folder), onClick = onRemove, primary = false)
         }
     }
+}
+
+@Composable
+private fun LanguageSegments(
+    languageTag: String,
+    onSelect: (AppLanguage) -> Unit,
+) {
+    val options = listOf(
+        AppLanguage.English to stringResource(R.string.settings_language_english),
+        AppLanguage.Korean to stringResource(R.string.settings_language_korean),
+        AppLanguage.System to stringResource(R.string.settings_language_system),
+    )
+    Segments(
+        options = options,
+        isSelected = { it == AppLanguage.fromTag(languageTag) },
+        labelOf = { value -> options.first { it.first == value }.second },
+        onSelect = onSelect,
+    )
 }
 
 @Composable
@@ -295,4 +333,16 @@ private fun SectionLabel(text: String) {
         style = typography.caption,
         color = PanelyInkColors.Mute,
     )
+}
+
+@Composable
+private fun GroupSeparator(verticalSpace: androidx.compose.ui.unit.Dp) {
+    Spacer(Modifier.height(verticalSpace))
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(PanelyInkColors.Hairline),
+    )
+    Spacer(Modifier.height(verticalSpace))
 }

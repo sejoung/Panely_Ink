@@ -2,6 +2,7 @@ package io.github.sejoung.panelyink.data.preferences
 
 import android.content.Context
 import androidx.core.content.edit
+import io.github.sejoung.panelyink.core.preferences.AppLocale
 import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +31,10 @@ class SharedPrefsAppPreferencesRepository(
                 KEY_INVERT_ENABLED,
                 AppPreferences.DEFAULTS.invertEnabled,
             ),
+            languageTag = prefs.getString(
+                AppLocale.KEY_LANGUAGE_TAG,
+                AppPreferences.DEFAULTS.languageTag,
+            ) ?: AppPreferences.DEFAULTS.languageTag,
         )
     }
 
@@ -41,8 +46,12 @@ class SharedPrefsAppPreferencesRepository(
         prefs.edit { putBoolean(KEY_INVERT_ENABLED, value) }
     }
 
+    override suspend fun setLanguageTag(value: String) = withContext(Dispatchers.IO) {
+        prefs.edit { putString(AppLocale.KEY_LANGUAGE_TAG, value) }
+    }
+
     companion object {
-        private const val PREFS_NAME = "panely_ink_app_prefs"
+        private const val PREFS_NAME = AppLocale.PREFS_NAME
         private const val KEY_FULL_REFRESH_INTERVAL = "full_refresh_interval"
         private const val KEY_INVERT_ENABLED = "invert_enabled"
     }
