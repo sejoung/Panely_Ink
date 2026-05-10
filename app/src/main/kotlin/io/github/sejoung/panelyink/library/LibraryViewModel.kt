@@ -29,6 +29,7 @@ import io.github.sejoung.panelyink.library.data.LibraryPathCodec
 import io.github.sejoung.panelyink.library.data.LibraryRepository
 import io.github.sejoung.panelyink.library.data.NestedZipExtractor
 import io.github.sejoung.panelyink.library.data.PrefetchedBookData
+import io.github.sejoung.panelyink.library.data.SeriesLookup
 import io.github.sejoung.panelyink.library.data.prefetchBookData
 import io.github.sejoung.panelyink.library.data.sortLibraryEntries
 import io.github.sejoung.panelyink.library.model.BookEntry
@@ -688,8 +689,40 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
           it.displayName.endsWith(".zip", ignoreCase = true)
       }
     if (candidates.isEmpty()) return
+
+    // cache hit pre-filter: 이전에 검사된 책은 launch/semaphore/IO 없이 동기로 처리.
+    // hit 결과들은 한 번의 entries copy로 합쳐 recompose 1회로 끝낸다. 미검사(miss)만
+    // 코루틴으로 보내 실제 ZIP open을 돌린다 — 폴더 안 .zip 50권이 모두 캐시된 경우
+    // 이전엔 50회 launch + semaphore acquire를 낭비했음.
+    val cachedHits = mutableMapOf<android.net.Uri, FolderEntry>()
+    val misses = mutableListOf<BookEntry>()
+    for (book in candidates) {
+      when (val lookup = repo.seriesCacheLookup(book)) {
+        is SeriesLookup.Hit -> {
+          // result=null은 "검사했고 시리즈 아님" — swap 불필요.
+          lookup.result?.let { cachedHits[book.documentUri] = it }
+        }
+
+        SeriesLookup.Miss -> misses += book
+        SeriesLookup.NotApplicable -> { /* filter에서 이미 제외돼 도달 불가 */ }
+      }
+    }
+
+    if (cachedHits.isNotEmpty()) {
+      val current = _state.value.entries
+      val updated = current.map { e ->
+        if (e is BookEntry && e.nestedEntryName == null) {
+          cachedHits[e.documentUri] ?: e
+        } else e
+      }
+      if (updated != current) {
+        _state.value = _state.value.copy(entries = updated)
+      }
+    }
+
+    if (misses.isEmpty()) return
     inspectJob = viewModelScope.launch {
-      for (book in candidates) {
+      for (book in misses) {
         launch {
           val result = inspectSemaphore.withPermit { repo.inspectZipForSeries(book) }
             ?: return@launch

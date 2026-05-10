@@ -67,6 +67,26 @@ class LibraryRepository(private val context: Context) {
     }
   }
 
+  /**
+   * `inspectZipForSeries` cache 동기 조회. 호출자가 IO/코루틴 비용 없이 cache 상태를
+   * 미리 분기하기 위해 사용 — `batchInspectSeries`가 hit/miss를 갈라 hit은 즉시 entries
+   * swap, miss만 launch + semaphore로 실제 ZIP open을 돌리도록 한다.
+   *
+   * - [SeriesLookup.Hit]: cache에 결과(시리즈 FolderEntry 또는 null=일반 zip)가 있음
+   * - [SeriesLookup.Miss]: 미검사 — 호출자가 [inspectZipForSeries]로 진행
+   * - [SeriesLookup.NotApplicable]: 이미 nested entry라 검사 대상 X
+   */
+  fun seriesCacheLookup(book: BookEntry): SeriesLookup {
+    if (book.nestedEntryName != null) return SeriesLookup.NotApplicable
+    return synchronized(cacheLock) {
+      if (seriesCache.containsKey(book.documentUri)) {
+        SeriesLookup.Hit(seriesCache[book.documentUri])
+      } else {
+        SeriesLookup.Miss
+      }
+    }
+  }
+
   /** 사용자가 추가한 SAF 트리 [Uri]들을 첫 화면용 root 폴더 행으로 변환. */
   suspend fun listRoots(rootUris: List<Uri>): List<FolderEntry> = withContext(Dispatchers.IO) {
     rootUris.mapNotNull { uri ->
@@ -423,3 +443,11 @@ data class IndexedBookEntry(
   val siblings: List<BookEntry>,
   val groupKey: String,
 )
+
+/** [LibraryRepository.seriesCacheLookup] 결과. */
+sealed interface SeriesLookup {
+  /** cache hit. [result]=null은 "이미 검사했고 시리즈 아님"을 의미. */
+  data class Hit(val result: FolderEntry?) : SeriesLookup
+  data object Miss : SeriesLookup
+  data object NotApplicable : SeriesLookup
+}
