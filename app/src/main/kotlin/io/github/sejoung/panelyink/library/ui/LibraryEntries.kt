@@ -201,7 +201,11 @@ private fun BookGridCell(
   onRequestProgress: (BookEntry) -> Unit,
 ) {
   val typography = LocalPanelyInkTypography.current
-  LaunchedEffect(entry.documentUri, cover == null) {
+  // documentUri만 키로 — `cover == null`은 키에서 제외. ViewModel의 LRU가 evict해서
+  // cover가 null로 바뀌면 effect 재발화 → 재요청 → cache 채움 → 다른 항목 evict → ...
+  // 무한 thrash 루프의 트리거가 됐다. requestCover 자체가 idempotent해서 한 번 호출이면
+  // 충분.
+  LaunchedEffect(entry.documentUri) {
     onRequestCover(entry)
     onRequestProgress(entry)
   }
@@ -234,7 +238,8 @@ private fun FolderGridCell(
   onRequestCover: (FolderEntry) -> Unit,
 ) {
   val typography = LocalPanelyInkTypography.current
-  LaunchedEffect(entry.documentUri, cover == null) {
+  // BookGridCell과 동일 이유 — `cover == null` 트리거 제거로 thrash 방어.
+  LaunchedEffect(entry.documentUri) {
     onRequestCount(entry)
     onRequestCover(entry)
   }
@@ -270,7 +275,9 @@ private fun FolderRow(
   val typography = LocalPanelyInkTypography.current
   val spacing = LocalPanelyInkSpacing.current
 
-  LaunchedEffect(entry.documentUri, showCover, cover == null) {
+  // `cover == null` 키 제거 — LRU evict로 cover가 null로 바뀌면 effect 재발화 → 재요청
+  // → 다른 항목 evict → ... thrash 루프. requestCover는 idempotent.
+  LaunchedEffect(entry.documentUri, showCover) {
     onRequestCount(entry)
     if (showCover) onRequestCover(entry)
   }
@@ -313,7 +320,8 @@ private fun BookRow(
   val typography = LocalPanelyInkTypography.current
   val spacing = LocalPanelyInkSpacing.current
 
-  LaunchedEffect(entry.documentUri, cover == null) {
+  // BookGridCell과 동일 — `cover == null` 트리거 제거.
+  LaunchedEffect(entry.documentUri) {
     onRequestCover(entry)
     onRequestProgress(entry)
   }

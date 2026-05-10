@@ -646,6 +646,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         setPath(listOf(target))
         val children = repo.listChildren(target)
         val sorted = sortLibraryEntries(children, _state.value.sortMode, positionRepo)
+        pruneCoversToVisibleBooks(sorted)
         _state.value = _state.value.copy(entries = sorted, scanning = false)
         applyPrefetchedBookData(prefetchBookData(sorted, positionRepo, coverMetaRepo))
         applyCachedEntryCovers(sorted)
@@ -653,6 +654,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
       } else {
         pendingAutoDescend = false
         // root 자체는 폴더라 sortMode와 무관하게 이름순(repo가 이미 정렬).
+        pruneCoversToVisibleBooks(rootEntries)
         _state.value = _state.value.copy(entries = rootEntries, scanning = false)
       }
     }
@@ -664,10 +666,47 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
       _state.value = _state.value.copy(scanning = true)
       val children = repo.listChildren(folder)
       val sorted = sortLibraryEntries(children, _state.value.sortMode, positionRepo)
+      pruneCoversToVisibleBooks(sorted)
       _state.value = _state.value.copy(entries = sorted, scanning = false)
       applyPrefetchedBookData(prefetchBookData(sorted, positionRepo, coverMetaRepo))
       applyCachedEntryCovers(sorted)
       batchInspectSeries()
+    }
+  }
+
+  /**
+   * 폴더 이동 시 state.covers를 새 폴더에 보이는 책+폴더-첫책 bookId 집합으로 좁힌다.
+   *
+   * cover state는 hot path에서 additive로 갱신되어 같은 폴더에서 무한 루프(LRU evict ↔
+   * `LaunchedEffect(cover == null)` 재발화)를 막는 대신, 폴더 간 이동에서 누적되는 메모리를
+   * 이 함수가 폴더 단위로 회수한다. coverMemoryCache는 그대로 둠 — 다음 방문 시 디스크
+   * skip path로 즉시 복원.
+   */
+  private fun pruneCoversToVisibleBooks(entries: List<LibraryEntry>) {
+    val current = _state.value.covers
+    if (current.isEmpty()) return
+    val visibleBookIds = mutableSetOf<String>()
+    for (entry in entries) {
+      when (entry) {
+        is BookEntry -> visibleBookIds += BookIdentity.fromEntry(entry).value
+        is FolderEntry -> {
+          // 폴더 행은 firstBook 표지를 보여줄 수 있으므로 그 bookId도 보존.
+          _state.value.folderFirstBook[entry.documentUri]?.let { visibleBookIds += it }
+          // 가상 폴더(ZIP-of-CBZ)의 자식 책 표지도 다음 화면에서 즉시 필요하면 nestedBooks
+          // 첫 책을 보존. 나머지는 진입 후 복원.
+          entry.nestedBooks?.firstOrNull()?.let {
+            visibleBookIds += BookIdentity.fromEntry(it).value
+          }
+        }
+      }
+    }
+    if (visibleBookIds.isEmpty()) {
+      _state.value = _state.value.copy(covers = emptyMap())
+      return
+    }
+    val pruned = current.filterKeys { it in visibleBookIds }
+    if (pruned.size != current.size) {
+      _state.value = _state.value.copy(covers = pruned)
     }
   }
 
@@ -772,8 +811,12 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     status: CoverStatus,
   ) {
     if (image != null) coverMemoryCache[bookId] = image
+    // state.covers는 additive — coverMemoryCache.toMap()로 reassign하면 LRU evict가
+    // 시각 항목까지 떨어뜨려 LaunchedEffect(cover == null) 재발화 → 무한 reload 루프.
+    // 메모리 bound는 [pruneCoversToVisibleBooks]가 폴더 이동 시점에 처리.
+    val newCovers = if (image != null) _state.value.covers + (bookId to image) else _state.value.covers
     _state.value = _state.value.copy(
-      covers = if (image != null) coverMemoryCache.toMap() else _state.value.covers,
+      covers = newCovers,
       coverStatus = _state.value.coverStatus + (bookId to status),
     )
   }
@@ -787,8 +830,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     covers.forEach { (bookId, image) ->
       coverMemoryCache[bookId] = image
     }
+    // additive — applyCoverUpdateNow와 동일 이유. 무한 루프 방어.
     _state.value = _state.value.copy(
-      covers = if (covers.isNotEmpty()) coverMemoryCache.toMap() else _state.value.covers,
+      covers = if (covers.isNotEmpty()) _state.value.covers + covers else _state.value.covers,
       coverStatus = if (status.isNotEmpty()) _state.value.coverStatus + status else _state.value.coverStatus,
     )
   }
@@ -829,12 +873,12 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
     val hits = memoryHits + diskHits
     if (hits.isEmpty()) return
-    // coverMemoryCache가 LRU evict한 키는 state.covers에서도 빠져야 한다 — 단순 `+`로
-    // 합치면 evicted 비트맵이 state에 살아남아 GC가 회수 못 함. flushCoverUpdates와 같은
-    // 정책으로 cache snapshot을 source of truth로 삼아 reassign.
+    // state.covers는 additive. cache snapshot으로 reassign하면 LRU evict가 시각 항목을
+    // 떨어뜨려 BookGridCell.LaunchedEffect(cover == null) 재발화 → 재요청 → 다른 항목
+    // evict → ... 무한 루프. 메모리 bound는 폴더 이동 시 [pruneCoversToVisibleBooks]가 처리.
     hits.forEach { (bookId, image) -> coverMemoryCache[bookId] = image }
     _state.value = _state.value.copy(
-      covers = coverMemoryCache.toMap(),
+      covers = _state.value.covers + hits.toMap(),
       coverStatus = _state.value.coverStatus + hits.associate { it.first to CoverStatus.OK },
     )
   }
