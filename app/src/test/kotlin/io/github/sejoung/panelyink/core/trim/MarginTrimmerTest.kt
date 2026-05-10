@@ -104,4 +104,88 @@ class MarginTrimmerTest {
         )
         assertEquals(TrimRect(12, 12, 25, 25), withLowered)
     }
+
+    // -------------------------------
+    // rowProvider 변형 (메모리 효율 API)
+    // -------------------------------
+
+    /** [pixels]에서 한 행을 buffer로 복사하는 row provider — Bitmap.getPixels의 JVM 모방. */
+    private fun rowProviderFor(pixels: IntArray, width: Int): (Int, IntArray) -> Unit =
+        { y, buffer -> System.arraycopy(pixels, y * width, buffer, 0, width) }
+
+    @Test
+    fun rowProvider_centerRectMatchesIntArrayApi() {
+        val pixels = canvas(100, 100, rectX = 20, rectY = 20, rectW = 60, rectH = 60)
+        val viaProvider = MarginTrimmer.detect(
+            rowProvider = rowProviderFor(pixels, 100),
+            width = 100,
+            height = 100,
+        )
+        val viaArray = MarginTrimmer.detect(pixels, 100, 100)
+        assertEquals("rowProvider must match IntArray API", viaArray, viaProvider)
+        assertEquals(TrimRect(20, 20, 60, 60), viaProvider)
+    }
+
+    @Test
+    fun rowProvider_allWhiteReturnsOriginal() {
+        val pixels = IntArray(50 * 50) { W }
+        val trim = MarginTrimmer.detect(
+            rowProvider = rowProviderFor(pixels, 50),
+            width = 50,
+            height = 50,
+        )
+        assertEquals(TrimRect(0, 0, 50, 50), trim)
+    }
+
+    @Test
+    fun rowProvider_leftMarginOnly() {
+        val pixels = canvas(100, 100, rectX = 30, rectY = 0, rectW = 70, rectH = 100)
+        val trim = MarginTrimmer.detect(
+            rowProvider = rowProviderFor(pixels, 100),
+            width = 100,
+            height = 100,
+        )
+        assertEquals(TrimRect(30, 0, 70, 100), trim)
+    }
+
+    @Test
+    fun rowProvider_neverAllocatesFullPixelArray() {
+        // 메모리 효율 변형의 핵심 약속 — 호출자는 width 길이의 buffer 1개만 받는다.
+        // provider가 받은 buffer의 size가 항상 width인지 확인.
+        val pixels = canvas(64, 64, rectX = 8, rectY = 8, rectW = 48, rectH = 48)
+        val seenBufferSizes = mutableSetOf<Int>()
+        MarginTrimmer.detect(
+            rowProvider = { y, buffer ->
+                seenBufferSizes += buffer.size
+                System.arraycopy(pixels, y * 64, buffer, 0, 64)
+            },
+            width = 64,
+            height = 64,
+        )
+        // 모든 호출이 동일한 width 길이 buffer를 사용
+        assertEquals(setOf(64), seenBufferSizes)
+    }
+
+    @Test
+    fun rowProvider_calledIdempotentlyForSameRowAcrossPhases() {
+        // 컬럼 스캔 단계가 row를 다시 읽기 때문에 같은 y가 두 번 호출될 수 있다.
+        // provider가 idempotent해야 한다는 계약을 명시적으로 검증.
+        val pixels = canvas(40, 40, rectX = 10, rectY = 10, rectW = 20, rectH = 20)
+        val callsByY = mutableMapOf<Int, Int>()
+        val trim = MarginTrimmer.detect(
+            rowProvider = { y, buffer ->
+                callsByY.merge(y, 1, Int::plus)
+                System.arraycopy(pixels, y * 40, buffer, 0, 40)
+            },
+            width = 40,
+            height = 40,
+        )
+        assertEquals(TrimRect(10, 10, 20, 20), trim)
+        // body 행(10..29)은 row scan + column scan 두 번 호출되는 것이 정상.
+        // 이 테스트의 목적은 idempotency 위반(예: 캐싱 누락) 시 결과가 망가지지 않는지 검증.
+        // 위에서 결과가 정확함이 이미 확인됨.
+        kotlin.check(callsByY.values.any { it >= 2 }) {
+            "expected at least one row to be visited multiple times for column scan"
+        }
+    }
 }
