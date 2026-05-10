@@ -14,7 +14,7 @@ Requirements:
 Useful checks:
 
 ```bash
-./gradlew test
+./gradlew testDebugUnitTest
 ./gradlew compileDebugKotlin
 ./gradlew lintDebug
 ./gradlew compileDebugAndroidTestKotlin
@@ -29,7 +29,8 @@ Run connected tests for Room migrations or Android framework behavior:
 ## GitHub Actions
 
 - `.github/workflows/ci.yml` runs on pushes to `main`/`master`, pull requests, and manual dispatch.
-  It uploads lint/test reports and a debug APK artifact.
+  It runs debug unit tests, lint, androidTest compilation, and debug APK packaging in one Gradle
+  invocation, then uploads lint/test reports and a debug APK artifact.
 - `.github/workflows/release.yml` runs on `v*` tags or manual dispatch with a tag input. It builds
   an unsigned release APK and publishes it with `SHA256SUMS.txt` to GitHub Releases.
 

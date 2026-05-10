@@ -176,7 +176,7 @@ fi
 
 if [[ "$skip_checks" == false ]]; then
   echo "release: running checks"
-  ./gradlew test lintDebug compileDebugAndroidTestKotlin
+  ./gradlew testDebugUnitTest lintDebug compileDebugAndroidTestKotlin
 else
   echo "release: skipping checks"
 fi

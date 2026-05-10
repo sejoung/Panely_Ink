@@ -11,6 +11,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -37,20 +40,8 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      - name: Compile debug Kotlin
-        run: ./gradlew compileDebugKotlin
-
-      - name: Run unit tests
-        run: ./gradlew test
-
-      - name: Run lint
-        run: ./gradlew lintDebug
-
-      - name: Compile androidTest Kotlin
-        run: ./gradlew compileDebugAndroidTestKotlin
-
-      - name: Build debug APK
-        run: ./gradlew assembleDebug
+      - name: Run CI checks
+        run: ./gradlew testDebugUnitTest lintDebug compileDebugAndroidTestKotlin assembleDebug
 
       - name: Upload lint report
         if: always()
@@ -58,6 +49,7 @@ jobs:
         with:
           name: lint-report
           path: app/build/reports/lint-results-debug.html
+          retention-days: 7
           if-no-files-found: ignore
 
       - name: Upload test reports
@@ -66,6 +58,7 @@ jobs:
         with:
           name: test-reports
           path: app/build/reports/tests/
+          retention-days: 7
           if-no-files-found: ignore
 
       - name: Upload debug APK
@@ -73,4 +66,5 @@ jobs:
         with:
           name: panely-ink-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+          retention-days: 7
           if-no-files-found: error
