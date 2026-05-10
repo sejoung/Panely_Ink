@@ -43,6 +43,8 @@
     <string name="settings_language_english">English</string>
     <string name="settings_language_korean">Korean</string>
     <string name="settings_language_system">System</string>
+    <string name="settings_reader_defaults">Reader Defaults</string>
+    <string name="settings_default_reading_direction">Default reading direction</string>
     <string name="settings_display">Display</string>
     <string name="settings_full_refresh_interval">Full refresh interval (pages)</string>
     <string name="settings_invert">Invert black/white</string>
@@ -83,7 +85,7 @@
     <string name="reader_fit_screen">Screen</string>
     <string name="reader_fit_width">Width</string>
     <string name="reader_fit_height">Height</string>
-    <string name="reader_direction">Reading direction</string>
+    <string name="reader_direction">This book\'s reading direction</string>
     <string name="reader_direction_ltr">Left→Right</string>
     <string name="reader_direction_rtl">Right→Left</string>
     <string name="reader_trim">Auto trim margins</string>

@@ -4,12 +4,14 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.res.Configuration
 import io.github.sejoung.panelyink.reader.ReaderViewModel
+import io.github.sejoung.panelyink.reader.model.ReadingDirection
 import java.util.Locale
 
 /**
  * 앱 전역 표시/디스플레이 설정 — 디바이스 특성/환경 의존 옵션.
  *
  * 책별 저장이 자연스럽지 않은 옵션들을 모음:
+ * - [defaultReadingDirection]: 새 책 첫 진입 시 적용할 기본 읽기 방향
  * - [fullRefreshInterval]: e-ink 디바이스 자체의 잔상 정책. 책마다 달라야 할 이유가 약함
  * - [invertEnabled]: 야간/조명 환경에 따라 토글 — 환경 의존이라 모든 책에 일관
  *
@@ -18,12 +20,14 @@ import java.util.Locale
  * 전역 저장소에 저장되어 모든 책에 즉시 반영.
  */
 data class AppPreferences(
+    val defaultReadingDirection: ReadingDirection,
     val fullRefreshInterval: Int,
     val invertEnabled: Boolean,
     val languageTag: String,
 ) {
     companion object {
         val DEFAULTS: AppPreferences = AppPreferences(
+            defaultReadingDirection = ReadingDirection.Ltr,
             fullRefreshInterval = ReaderViewModel.FULL_REFRESH_INTERVAL_DEFAULT,
             invertEnabled = false,
             languageTag = AppLanguage.English.tag,
@@ -69,6 +73,7 @@ object AppLocale {
  */
 interface AppPreferencesRepository {
     suspend fun load(): AppPreferences
+    suspend fun setDefaultReadingDirection(value: ReadingDirection)
     suspend fun setFullRefreshInterval(value: Int)
     suspend fun setInvertEnabled(value: Boolean)
     suspend fun setLanguageTag(value: String)

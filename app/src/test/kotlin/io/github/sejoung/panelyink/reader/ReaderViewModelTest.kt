@@ -74,6 +74,7 @@ class ReaderViewModelTest {
             pageCount = 100,
             decoder = FakePageDecoder(),
             initialAppPreferences = AppPreferences(
+                defaultReadingDirection = ReadingDirection.Rtl,
                 fullRefreshInterval = 10,
                 invertEnabled = true,
                 languageTag = "ko",

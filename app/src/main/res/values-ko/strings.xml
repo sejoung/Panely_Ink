@@ -43,6 +43,8 @@
     <string name="settings_language_english">English</string>
     <string name="settings_language_korean">한국어</string>
     <string name="settings_language_system">시스템</string>
+    <string name="settings_reader_defaults">리더 기본값</string>
+    <string name="settings_default_reading_direction">기본 읽기 방향</string>
     <string name="settings_display">디스플레이</string>
     <string name="settings_full_refresh_interval">풀리프레시 주기 (페이지)</string>
     <string name="settings_invert">흑백 반전</string>
@@ -83,7 +85,7 @@
     <string name="reader_fit_screen">화면</string>
     <string name="reader_fit_width">가로</string>
     <string name="reader_fit_height">세로</string>
-    <string name="reader_direction">읽기 방향</string>
+    <string name="reader_direction">이 책의 읽기 방향</string>
     <string name="reader_direction_ltr">좌→우</string>
     <string name="reader_direction_rtl">우→좌</string>
     <string name="reader_trim">자동 여백 트리밍</string>

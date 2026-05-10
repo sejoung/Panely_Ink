@@ -12,7 +12,7 @@ Implemented:
 - CBZ/ZIP reader without full archive copy
 - ZIP-of-CBZ series detection and nested opening
 - single-page Canvas reader
-- LTR/RTL reading direction
+- LTR/RTL reading direction with an app-level default and per-book override
 - tap zones and hardware key input
 - first/last page boundary navigation to adjacent volumes
 - resume, progress, per-book settings, current-book bookmarks, and all-bookmarks screen

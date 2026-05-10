@@ -108,7 +108,7 @@ SharedPreferences stores:
 
 - selected library roots and current path
 - library sort/view mode
-- global app preferences such as language, invert, and full-refresh interval
+- global app preferences such as language, default reading direction, invert, and full-refresh interval
 
 Reader position/settings writes are debounced and finalized on reader disposal.
 

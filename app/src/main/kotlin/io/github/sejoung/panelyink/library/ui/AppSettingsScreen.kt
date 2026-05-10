@@ -33,6 +33,7 @@ import io.github.sejoung.panelyink.core.preferences.AppLanguage
 import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
 import io.github.sejoung.panelyink.data.preferences.SharedPrefsAppPreferencesRepository
+import io.github.sejoung.panelyink.reader.ui.DirectionSegments
 import io.github.sejoung.panelyink.reader.ui.FullRefreshIntervalSegments
 import io.github.sejoung.panelyink.reader.ui.GroupHeader
 import io.github.sejoung.panelyink.reader.ui.InvertSegments
@@ -49,8 +50,8 @@ import kotlinx.coroutines.launch
  * 앱 전역 설정 화면 — 라이브러리에서 진입. 모든 책에 공통 적용되는 옵션만.
  *
  * 책별 설정([io.github.sejoung.panelyink.reader.ui.ReaderSettingsScreen])과 분리:
- * - 디바이스 특성/환경 의존(풀리프레시 주기, 흑백 반전, 언어) → 여기
- * - 책 내용에 대한 사용자 취향(맞춤/방향/트리밍/대비) → 책 메뉴
+ * - 앱 기본값/디바이스 특성/환경 의존(기본 읽기 방향, 풀리프레시 주기, 흑백 반전, 언어) → 여기
+ * - 현재 책에 대한 사용자 취향(맞춤/방향/트리밍/대비) → 책 메뉴
  *
  * 흑백 반전은 리더 설정에서도 토글할 수 있지만 저장소는 같은 전역 설정이다.
  *
@@ -144,6 +145,21 @@ fun AppSettingsScreen(
             repo.setLanguageTag(language.tag)
             resolveActivity(localContext)?.recreate()
           }
+        },
+      )
+
+      GroupSeparator(spacing.space4)
+
+      GroupHeader(stringResource(R.string.settings_reader_defaults))
+      Spacer(Modifier.height(spacing.space2))
+
+      SectionLabel(stringResource(R.string.settings_default_reading_direction))
+      Spacer(Modifier.height(spacing.space1))
+      DirectionSegments(
+        selected = current.defaultReadingDirection,
+        onSelect = { value ->
+          prefs = current.copy(defaultReadingDirection = value)
+          scope.launch { repo.setDefaultReadingDirection(value) }
         },
       )
 

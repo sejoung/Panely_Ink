@@ -32,7 +32,7 @@ Panely Ink is under active development. The core reader and local library are us
 - CBZ/ZIP reading through SAF without copying the whole archive
 - ZIP-of-CBZ series detection and nested archive opening
 - Single-page reader with Canvas rendering
-- LTR/RTL reading direction
+- LTR/RTL reading direction with an app-level default and per-book override
 - Hardware page keys, volume keys, D-pad, and tap zones
 - Resume, progress badges, per-book settings, current-book bookmarks, and all-bookmarks view
 - Cover extraction with disk + Room metadata + in-memory LRU cache

@@ -5,6 +5,8 @@ import androidx.core.content.edit
 import io.github.sejoung.panelyink.core.preferences.AppLocale
 import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
+import io.github.sejoung.panelyink.reader.model.ReadingDirection
+import io.github.sejoung.panelyink.reader.model.deserializeDirection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -23,6 +25,12 @@ class SharedPrefsAppPreferencesRepository(
 
     override suspend fun load(): AppPreferences = withContext(Dispatchers.IO) {
         AppPreferences(
+            defaultReadingDirection = deserializeDirection(
+                prefs.getString(
+                    KEY_DEFAULT_READING_DIRECTION,
+                    AppPreferences.DEFAULTS.defaultReadingDirection.name,
+                ) ?: AppPreferences.DEFAULTS.defaultReadingDirection.name,
+            ),
             fullRefreshInterval = prefs.getInt(
                 KEY_FULL_REFRESH_INTERVAL,
                 AppPreferences.DEFAULTS.fullRefreshInterval,
@@ -36,6 +44,10 @@ class SharedPrefsAppPreferencesRepository(
                 AppPreferences.DEFAULTS.languageTag,
             ) ?: AppPreferences.DEFAULTS.languageTag,
         )
+    }
+
+    override suspend fun setDefaultReadingDirection(value: ReadingDirection) = withContext(Dispatchers.IO) {
+        prefs.edit { putString(KEY_DEFAULT_READING_DIRECTION, value.name) }
     }
 
     override suspend fun setFullRefreshInterval(value: Int) = withContext(Dispatchers.IO) {
@@ -52,6 +64,7 @@ class SharedPrefsAppPreferencesRepository(
 
     companion object {
         private const val PREFS_NAME = AppLocale.PREFS_NAME
+        private const val KEY_DEFAULT_READING_DIRECTION = "default_reading_direction"
         private const val KEY_FULL_REFRESH_INTERVAL = "full_refresh_interval"
         private const val KEY_INVERT_ENABLED = "invert_enabled"
     }

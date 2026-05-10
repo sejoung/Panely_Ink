@@ -94,19 +94,22 @@ fun ReaderScreen(
       loadingStep = localContext.getString(R.string.reader_loading_scan_pages)
       val session = CbzBookSession.open(appContext, entry)
       loadingStep = localContext.getString(R.string.reader_loading_restore_position)
-      // Room에서 마지막 페이지를 미리 로드 — ReaderViewModel 생성 시점이 동기라
+      // Room에서 마지막 페이지를 미리 로드한다. ReaderViewModel 생성 시점이 동기라
       // 여기서 비동기로 받아 Ready에 묶어서 넘긴다. 페이지 수 줄어든 책은 clamp.
       val resumed = initialPageOverride?.coerceIn(0, session.pageCount - 1)
         ?: positionRepo.load(session.bookId)
           ?.pageIndex
           ?.coerceIn(0, session.pageCount - 1)
         ?: 0
-      // 책별 설정도 같이 로드 — 없으면 DEFAULTS. 책당 1행이라 가벼움.
+      // 전역 prefs(기본 읽기 방향, 흑백 반전, 풀리프레시 주기)는 SharedPreferences 1회 read.
+      val appPrefs = appPrefsRepo.load()
+      // 책별 설정이 없으면 전역 기본 읽기 방향을 적용한다. 책당 1행이라 가벼움.
+      val defaultBookSettings = BookSettings.DEFAULTS.copy(
+        direction = appPrefs.defaultReadingDirection,
+      )
       val bookSettings = bookSettingsRepo.load(session.bookId)
         ?: propagatedBookSettings
-        ?: BookSettings.DEFAULTS
-      // 전역 prefs(흑백 반전, 풀리프레시 주기) — SharedPreferences 1회 read.
-      val appPrefs = appPrefsRepo.load()
+        ?: defaultBookSettings
       loadingStep =
         localContext.getString(R.string.reader_loading_decode_first_page, session.pageCount)
       session.decode(resumed)

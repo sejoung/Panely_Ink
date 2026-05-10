@@ -1,6 +1,7 @@
 package io.github.sejoung.panelyink.core.preferences
 
 import io.github.sejoung.panelyink.reader.ReaderViewModel
+import io.github.sejoung.panelyink.reader.model.ReadingDirection
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -8,6 +9,7 @@ class AppPreferencesTest {
 
     @Test
     fun defaultsUseEnglishAndReaderFullRefreshDefault() {
+        assertEquals(ReadingDirection.Ltr, AppPreferences.DEFAULTS.defaultReadingDirection)
         assertEquals(AppLanguage.English.tag, AppPreferences.DEFAULTS.languageTag)
         assertEquals(
             ReaderViewModel.FULL_REFRESH_INTERVAL_DEFAULT,
