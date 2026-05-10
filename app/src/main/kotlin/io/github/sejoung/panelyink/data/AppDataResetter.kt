@@ -17,8 +17,9 @@ import java.io.File
  * 1. SAF 영속 권한 — `panely_ink_prefs.library_root_uris`에 등록된 모든 root에 대해
  *    `releasePersistableUriPermission`. 이 단계가 prefs 비우기보다 **먼저** 실행되어야
  *    URI 목록을 잃지 않음.
- * 2. SharedPreferences — `panely_ink_prefs`(라이브러리), `panely_ink_app_prefs`(전역),
- *    `panely_ink_positions`(v0.x 호환 잔여) 모두 clear.
+ * 2. SharedPreferences — `panely_ink_prefs`(라이브러리), `panely_ink_app_prefs`(전역) clear.
+ *    `panely_ink_positions`(v0.x 호환)은 [PositionMigration]이 첫 실행에서 이미 통째로
+ *    삭제했지만, 외부 백업 복원 등으로 잔존할 가능성 대비해 defensive하게 같이 삭제.
  * 3. Room DB — `clearAllTables()`로 position/book_settings/bookmark/cover_meta/book_index 모든 행 삭제.
  *    스키마는 보존(테이블 자체는 유지).
  * 4. 디스크 캐시 — `filesDir/covers` 디렉토리 재귀 삭제.
@@ -55,12 +56,17 @@ object AppDataResetter {
             }
         }.onFailure { Log.w(TAG, "SAF release stage failed", it) }
 
-        // 2. SharedPreferences 비우기
-        listOf(PREFS_LIBRARY, PREFS_APP, PREFS_LEGACY_POSITIONS).forEach { name ->
+        // 2. SharedPreferences 비우기. 활성 prefs는 clear()로 비우고, v0.x 박제 파일은
+        // deleteSharedPreferences로 통째 삭제 — clear()는 빈 파일을 새로 만드는 부수효과가
+        // 있어 박제 파일을 다시 살려놓는 회귀를 만든다.
+        listOf(PREFS_LIBRARY, PREFS_APP).forEach { name ->
             runCatching {
                 app.getSharedPreferences(name, Context.MODE_PRIVATE).edit { clear() }
             }.onFailure { Log.w(TAG, "clear prefs $name failed", it) }
         }
+        runCatching {
+            app.deleteSharedPreferences(PREFS_LEGACY_POSITIONS)
+        }.onFailure { Log.w(TAG, "delete legacy prefs failed", it) }
 
         // 3. Room 모든 테이블 비우기 (스키마 보존)
         runCatching { db.clearAllTables() }
