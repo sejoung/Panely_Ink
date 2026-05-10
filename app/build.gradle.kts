@@ -14,8 +14,8 @@ android {
         // Meebook M7 = Android 11 (API 30). PRD §3 single target.
         minSdk = 30
         targetSdk = 34
-        versionCode = 4
-        versionName = "0.2.0"
+        versionCode = 5
+        versionName = "0.2.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
