@@ -52,7 +52,7 @@ Invalidated by:
 Location:
 
 ```text
-filesDir/covers/<bookId>.png
+filesDir/covers/<bookId>.jpg
 ```
 
 Stores:
@@ -102,7 +102,7 @@ Stores:
 
 Limit:
 
-- 96 entries
+- device-memory based byte budget (smaller on low-RAM devices)
 
 Used by:
 
@@ -113,6 +113,25 @@ Invalidated by:
 
 - LRU eviction
 - app settings "clear cover cache"
+- `resetAllData()`
+
+## Book Index
+
+Location: Room `book_index`
+
+Stores:
+
+- recently scanned `bookId -> BookEntry` metadata
+- sibling group keys for opening a bookmarked book with adjacent volumes
+
+Used by:
+
+- all-bookmarks screen before falling back to SAF scans
+- bookmark orphan cleanup after root changes or explicit refresh
+
+Invalidated by:
+
+- replacement after a full root scan
 - `resetAllData()`
 
 ## Reader Page Bitmap Cache

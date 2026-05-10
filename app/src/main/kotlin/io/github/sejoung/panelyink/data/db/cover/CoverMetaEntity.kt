@@ -14,7 +14,7 @@ import androidx.room.PrimaryKey
  *   페이지로 변경 옵션
  * - **LRU 정리**: [extractedAt]으로 오래된 표지부터 정리
  *
- * 디스크 파일 경로(`filesDir/covers/<bookId>.png`)는 결정적이라 컬럼 안 둠 — bookId
+ * 디스크 파일 경로(`filesDir/covers/<bookId>.jpg`)는 결정적이라 컬럼 안 둠 — bookId
  * 만으로 위치 계산. 파일이 사라지면 status=OK여도 재추출.
  */
 @Entity(tableName = "cover_meta")

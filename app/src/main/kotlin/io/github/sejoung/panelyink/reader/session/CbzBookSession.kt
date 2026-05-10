@@ -67,9 +67,14 @@ class CbzBookSession private constructor(
   }
 
   /** 캐시에 [pageIndex] 비트맵을 넣는다. 이미 있으면 재사용. */
-  suspend fun decode(pageIndex: Int): Bitmap = withContext(Dispatchers.IO) {
+  suspend fun decode(pageIndex: Int, trimEnabled: Boolean = true): Bitmap = withContext(Dispatchers.IO) {
     decodeLock.withLock {
-      cache.get(pageIndex)?.let { return@withContext it }
+      cache.get(pageIndex)?.let { bitmap ->
+        if (trimEnabled && !trimCache.containsKey(pageIndex)) {
+          trimCache[pageIndex] = computeTrim(bitmap)
+        }
+        return@withContext bitmap
+      }
       require(pageIndex in pages.indices) { "page $pageIndex out of range [$pageCount]" }
       val name = pages[pageIndex].name
       val t0 = System.currentTimeMillis()
@@ -105,10 +110,9 @@ class CbzBookSession private constructor(
       )
 
       cache.put(pageIndex, bitmap)
-      // 자동 여백 트리밍(M2) — 같은 IO 스레드에서 한 번만 계산. 1500x2000 픽셀
-      // 기준 ~수십 ms로 디코드 자체(100~500ms)에 비하면 작음. 계산이 끝나면
-      // 다음 onDraw가 trim을 사용한다.
-      if (!trimCache.containsKey(pageIndex)) {
+      // 자동 여백 트리밍은 사용자가 켠 경우에만 계산한다. 꺼진 상태에서는 큰 IntArray
+      // 할당과 전체 픽셀 스캔을 생략해 페이지 전환 비용을 줄인다.
+      if (trimEnabled && !trimCache.containsKey(pageIndex)) {
         trimCache[pageIndex] = computeTrim(bitmap)
       }
       bitmap
@@ -136,9 +140,10 @@ class CbzBookSession private constructor(
       pageIndex: Int,
       viewportWidth: Int,
       viewportHeight: Int,
+      trimEnabled: Boolean,
     ): DecodedPage {
       setViewportHint(viewportWidth, viewportHeight)
-      val bitmap = this@CbzBookSession.decode(pageIndex)
+      val bitmap = this@CbzBookSession.decode(pageIndex, trimEnabled)
       return DecodedPage(
         pageIndex = pageIndex,
         width = bitmap.width,

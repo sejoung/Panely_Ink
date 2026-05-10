@@ -20,7 +20,7 @@ import kotlinx.coroutines.withContext
  * - 디코드는 [BitmapFactory.inSampleSize]로 한 변 [targetMaxPx] 이하까지만 다운스케일 —
  *   메모리/시간 1/N². 표지는 만화 본문보다 더 작아도 인식 가능하므로 충분히 작게.
  *
- * 결과는 호출자가 디스크에 PNG로 저장(`CoverCache.saveBitmap`)하고 in-memory에도 유지.
+ * 결과는 호출자가 디스크 썸네일로 저장(`CoverCache.saveBitmap`)하고 in-memory에도 유지.
  */
 object CoverExtractor {
 

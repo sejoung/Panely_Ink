@@ -201,7 +201,7 @@ private fun BookGridCell(
   onRequestProgress: (BookEntry) -> Unit,
 ) {
   val typography = LocalPanelyInkTypography.current
-  LaunchedEffect(entry.documentUri) {
+  LaunchedEffect(entry.documentUri, cover == null) {
     onRequestCover(entry)
     onRequestProgress(entry)
   }
@@ -234,7 +234,7 @@ private fun FolderGridCell(
   onRequestCover: (FolderEntry) -> Unit,
 ) {
   val typography = LocalPanelyInkTypography.current
-  LaunchedEffect(entry.documentUri) {
+  LaunchedEffect(entry.documentUri, cover == null) {
     onRequestCount(entry)
     onRequestCover(entry)
   }
@@ -270,7 +270,7 @@ private fun FolderRow(
   val typography = LocalPanelyInkTypography.current
   val spacing = LocalPanelyInkSpacing.current
 
-  LaunchedEffect(entry.documentUri) {
+  LaunchedEffect(entry.documentUri, showCover, cover == null) {
     onRequestCount(entry)
     if (showCover) onRequestCover(entry)
   }
@@ -313,7 +313,7 @@ private fun BookRow(
   val typography = LocalPanelyInkTypography.current
   val spacing = LocalPanelyInkSpacing.current
 
-  LaunchedEffect(entry.documentUri) {
+  LaunchedEffect(entry.documentUri, cover == null) {
     onRequestCover(entry)
     onRequestProgress(entry)
   }

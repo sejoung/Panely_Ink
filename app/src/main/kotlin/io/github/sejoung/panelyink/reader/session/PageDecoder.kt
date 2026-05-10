@@ -19,6 +19,7 @@ interface PageDecoder {
         pageIndex: Int,
         viewportWidth: Int,
         viewportHeight: Int,
+        trimEnabled: Boolean,
     ): DecodedPage
 }
 

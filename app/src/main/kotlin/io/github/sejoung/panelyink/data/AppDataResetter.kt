@@ -19,7 +19,7 @@ import java.io.File
  *    URI 목록을 잃지 않음.
  * 2. SharedPreferences — `panely_ink_prefs`(라이브러리), `panely_ink_app_prefs`(전역),
  *    `panely_ink_positions`(v0.x 호환 잔여) 모두 clear.
- * 3. Room DB — `clearAllTables()`로 position/book_settings/bookmark/cover_meta 모든 행 삭제.
+ * 3. Room DB — `clearAllTables()`로 position/book_settings/bookmark/cover_meta/book_index 모든 행 삭제.
  *    스키마는 보존(테이블 자체는 유지).
  * 4. 디스크 캐시 — `filesDir/covers` 디렉토리 재귀 삭제.
  *

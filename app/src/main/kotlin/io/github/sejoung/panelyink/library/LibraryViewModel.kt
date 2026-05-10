@@ -1,6 +1,7 @@
 package io.github.sejoung.panelyink.library
 
 import android.app.Application
+import android.app.ActivityManager
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.graphics.ImageBitmap
@@ -15,6 +16,8 @@ import io.github.sejoung.panelyink.data.db.PanelyDatabase
 import io.github.sejoung.panelyink.data.db.bookmark.BookBookmark
 import io.github.sejoung.panelyink.data.db.bookmark.BookmarkRepository
 import io.github.sejoung.panelyink.data.db.bookmark.RoomBookmarkRepository
+import io.github.sejoung.panelyink.data.db.bookindex.BookIndexRepository
+import io.github.sejoung.panelyink.data.db.bookindex.RoomBookIndexRepository
 import io.github.sejoung.panelyink.data.db.cover.CoverStatus
 import io.github.sejoung.panelyink.data.db.cover.RoomCoverMetaRepository
 import io.github.sejoung.panelyink.data.db.position.RoomPositionRepository
@@ -66,6 +69,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
   private val positionRepo = RoomPositionRepository(db)
   private val coverMetaRepo = RoomCoverMetaRepository(db)
   private val bookmarkRepo: BookmarkRepository = RoomBookmarkRepository(db)
+  private val bookIndexRepo: BookIndexRepository = RoomBookIndexRepository(db)
 
   private val _state = MutableStateFlow(LibraryState())
   val state: StateFlow<LibraryState> = _state.asStateFlow()
@@ -123,12 +127,34 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
   private var coverFlushJob: Job? = null
 
   private val coverMemoryCache = object : LinkedHashMap<String, ImageBitmap>(
-    COVER_MEMORY_MAX_ENTRIES,
+    16,
     0.75f,
     true,
   ) {
-    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ImageBitmap>?): Boolean =
-      size > COVER_MEMORY_MAX_ENTRIES
+    private var currentBytes = 0L
+    private val maxBytes = coverMemoryCacheMaxBytes(application)
+
+    override fun put(key: String, value: ImageBitmap): ImageBitmap? {
+      val previous = super.put(key, value)
+      if (previous != null) currentBytes -= previous.estimatedBytes
+      currentBytes += value.estimatedBytes
+      trimToSize()
+      return previous
+    }
+
+    override fun clear() {
+      super.clear()
+      currentBytes = 0L
+    }
+
+    private fun trimToSize() {
+      val iterator = entries.iterator()
+      while (currentBytes > maxBytes && iterator.hasNext()) {
+        val eldest = iterator.next()
+        currentBytes -= eldest.value.estimatedBytes
+        iterator.remove()
+      }
+    }
   }
 
   /**
@@ -455,7 +481,14 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
    */
   fun requestFolderCover(folder: FolderEntry) {
     val key = folder.documentUri
-    if (_state.value.folderFirstBook.containsKey(key)) return
+    val knownBookId = _state.value.folderFirstBook[key]
+    if (knownBookId != null) {
+      if (_state.value.covers.containsKey(knownBookId)) return
+      _state.value.folderFirstBookEntries[key]?.let { firstBook ->
+        requestCover(firstBook)
+      }
+      return
+    }
     if (folderCoverJobs.containsKey(key)) return
     val job = viewModelScope.launch {
       try {
@@ -465,6 +498,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
           val bookId = BookIdentity.fromEntry(firstBook).value
           _state.value = _state.value.copy(
             folderFirstBook = _state.value.folderFirstBook + (key to bookId),
+            folderFirstBookEntries = _state.value.folderFirstBookEntries + (key to firstBook),
           )
           // 그 책의 표지 추출 — covers map 공유. 책 행과 폴더 행이 같은 비트맵 사용.
           requestCover(firstBook)
@@ -520,6 +554,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
   fun requestCover(book: BookEntry) {
     val bookId = BookIdentity.fromEntry(book).value
     if (_state.value.covers.containsKey(bookId)) return
+    coverMemoryCache[bookId]?.let { image ->
+      _state.value = _state.value.copy(covers = _state.value.covers + (bookId to image))
+      return
+    }
     if (coverJobs.containsKey(bookId)) return
     // batch 캐시 hit: status=FAILED면 즉시 종료, 추가 Room query 없음.
     if (_state.value.coverStatus[bookId] == CoverStatus.FAILED) return
@@ -580,7 +618,11 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
           }
         }?.asImageBitmap()
         val newStatus = if (image != null) CoverStatus.OK else CoverStatus.FAILED
-        queueCoverUpdate(bookId, image, newStatus)
+        if (done) {
+          applyCoverUpdateNow(bookId, image, newStatus)
+        } else {
+          queueCoverUpdate(bookId, image, newStatus)
+        }
       } finally {
         // cancel/예외 케이스에도 dedup map 정리 — 다음 요청에서 재시도 가능.
         coverJobs.remove(bookId)
@@ -605,6 +647,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val sorted = sortLibraryEntries(children, _state.value.sortMode, positionRepo)
         _state.value = _state.value.copy(entries = sorted, scanning = false)
         applyPrefetchedBookData(prefetchBookData(sorted, positionRepo, coverMetaRepo))
+        applyCachedEntryCovers(sorted)
         batchInspectSeries()
       } else {
         pendingAutoDescend = false
@@ -622,6 +665,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
       val sorted = sortLibraryEntries(children, _state.value.sortMode, positionRepo)
       _state.value = _state.value.copy(entries = sorted, scanning = false)
       applyPrefetchedBookData(prefetchBookData(sorted, positionRepo, coverMetaRepo))
+      applyCachedEntryCovers(sorted)
       batchInspectSeries()
     }
   }
@@ -646,21 +690,23 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     if (candidates.isEmpty()) return
     inspectJob = viewModelScope.launch {
       for (book in candidates) {
-        val result = inspectSemaphore.withPermit { repo.inspectZipForSeries(book) }
-        if (result == null) continue
-        // 결과 도착 시점의 최신 entries에서 swap — 그 사이 사용자가 폴더 이동했으면
-        // entries가 다른 목록이라 swap이 일치하지 않을 수 있는데, listJob.cancel +
-        // inspectJob.cancel로 새 폴더에선 새 inspect가 시작되므로 이전 결과는 무시 OK.
-        val current = _state.value.entries
-        val updated = current.map { e ->
-          if (
-            e is BookEntry &&
-            e.nestedEntryName == null &&
-            e.documentUri == book.documentUri
-          ) result else e
-        }
-        if (updated !== current) {
-          _state.value = _state.value.copy(entries = updated)
+        launch {
+          val result = inspectSemaphore.withPermit { repo.inspectZipForSeries(book) }
+            ?: return@launch
+          // 결과 도착 시점의 최신 entries에서 swap — 그 사이 사용자가 폴더 이동했으면
+          // entries가 다른 목록이라 swap이 일치하지 않을 수 있는데, listJob.cancel +
+          // inspectJob.cancel로 새 폴더에선 새 inspect가 시작되므로 이전 결과는 무시 OK.
+          val current = _state.value.entries
+          val updated = current.map { e ->
+            if (
+              e is BookEntry &&
+              e.nestedEntryName == null &&
+              e.documentUri == book.documentUri
+            ) result else e
+          }
+          if (updated != current) {
+            _state.value = _state.value.copy(entries = updated)
+          }
         }
       }
     }
@@ -687,6 +733,18 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
+  private fun applyCoverUpdateNow(
+    bookId: String,
+    image: ImageBitmap?,
+    status: CoverStatus,
+  ) {
+    if (image != null) coverMemoryCache[bookId] = image
+    _state.value = _state.value.copy(
+      covers = if (image != null) coverMemoryCache.toMap() else _state.value.covers,
+      coverStatus = _state.value.coverStatus + (bookId to status),
+    )
+  }
+
   private fun flushCoverUpdates() {
     if (pendingCovers.isEmpty() && pendingCoverStatus.isEmpty()) return
     val covers = pendingCovers.toMap()
@@ -711,14 +769,59 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
+  private suspend fun applyCachedEntryCovers(entries: List<LibraryEntry>) {
+    val directBookIds = entries
+      .filterIsInstance<BookEntry>()
+      .map { BookIdentity.fromEntry(it).value }
+    val folderBookIds = entries
+      .filterIsInstance<FolderEntry>()
+      .mapNotNull { folder -> _state.value.folderFirstBook[folder.documentUri] }
+    val knownBookIds = (directBookIds + folderBookIds)
+      .filterNot { bookId -> _state.value.covers.containsKey(bookId) }
+      .distinct()
+    if (knownBookIds.isEmpty()) return
+
+    val memoryHits = knownBookIds.mapNotNull { bookId ->
+      coverMemoryCache[bookId]?.let { bookId to it }
+    }
+    val memoryHitIds = memoryHits.mapTo(mutableSetOf()) { it.first }
+    val diskIds = knownBookIds.filterNot { it in memoryHitIds }
+    val app = getApplication<Application>()
+    val diskHits = withContext(Dispatchers.IO) {
+      diskIds.mapNotNull { bookId ->
+        CoverCache.loadBitmap(CoverCache.cacheFile(app, bookId))
+          ?.asImageBitmap()
+          ?.let { bookId to it }
+      }
+    }
+    val hits = memoryHits + diskHits
+    if (hits.isEmpty()) return
+    hits.forEach { (bookId, image) -> coverMemoryCache[bookId] = image }
+    _state.value = _state.value.copy(
+      covers = _state.value.covers + hits.toMap(),
+      coverStatus = _state.value.coverStatus + hits.associate { it.first to CoverStatus.OK },
+    )
+  }
+
   private suspend fun loadGlobalBookmarkItems(): List<GlobalBookmarkItem> {
     val bookmarks = bookmarkRepo.loadAll()
     if (bookmarks.isEmpty()) return emptyList()
     val requestedBookIds = bookmarks.mapTo(mutableSetOf()) { it.bookId }
     val cached = globalBookmarkBookIndex.filterKeys { it in requestedBookIds }
     val missingBookIds = requestedBookIds - cached.keys
-    if (missingBookIds.isNotEmpty()) {
-      repo.findBooksByIds(_state.value.roots, missingBookIds).forEach { indexed ->
+    val indexedHits = if (missingBookIds.isNotEmpty()) {
+      bookIndexRepo.loadByIds(missingBookIds)
+    } else {
+      emptyList()
+    }
+    indexedHits.forEach { indexed ->
+      globalBookmarkBookIndex[BookIdentity.fromEntry(indexed.book).value] = indexed
+    }
+    val scanMissingBookIds = requestedBookIds - globalBookmarkBookIndex.keys
+    if (scanMissingBookIds.isNotEmpty()) {
+      repo.findBooksByIds(_state.value.roots, scanMissingBookIds).also { found ->
+        bookIndexRepo.upsertAll(found)
+      }.forEach { indexed ->
         globalBookmarkBookIndex[BookIdentity.fromEntry(indexed.book).value] = indexed
       }
     }
@@ -753,6 +856,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     bookmarkPruneJob = viewModelScope.launch {
       delay(BOOKMARK_PRUNE_DEBOUNCE_MS)
       val indexedBooks = repo.listAllBooks(_state.value.roots)
+      bookIndexRepo.replaceKnownBooks(indexedBooks)
       val existingBookIds = indexedBooks
         .mapTo(mutableSetOf()) { BookIdentity.fromEntry(it.book).value }
       bookmarkRepo.removeOrphans(existingBookIds)
@@ -780,7 +884,6 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
   companion object {
     private const val COVER_FLUSH_DEBOUNCE_MS = 100L
     private const val BOOKMARK_PRUNE_DEBOUNCE_MS = 500L
-    private const val COVER_MEMORY_MAX_ENTRIES = 96
     private const val PREFS_NAME = "panely_ink_prefs"
     private const val KEY_ROOTS = "library_root_uris"
     private const val KEY_PATH = "library_last_path"
@@ -788,6 +891,21 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     private const val KEY_VIEW = "library_view_mode"
   }
 }
+
+private val ImageBitmap.estimatedBytes: Long
+  get() = width.toLong() * height.toLong() * 4L
+
+private fun coverMemoryCacheMaxBytes(application: Application): Long {
+  val manager = application.getSystemService(ActivityManager::class.java)
+  val memoryClassMb = manager?.memoryClass ?: DEFAULT_MEMORY_CLASS_MB
+  val capMb = if (manager?.isLowRamDevice == true) LOW_RAM_COVER_CACHE_MB else MAX_COVER_CACHE_MB
+  return minOf((memoryClassMb / 12).coerceAtLeast(MIN_COVER_CACHE_MB), capMb) * 1024L * 1024L
+}
+
+private const val DEFAULT_MEMORY_CLASS_MB = 256
+private const val MIN_COVER_CACHE_MB = 8
+private const val LOW_RAM_COVER_CACHE_MB = 12
+private const val MAX_COVER_CACHE_MB = 24
 
 /**
  * 라이브러리 화면이 관찰하는 불변 상태.
@@ -809,6 +927,8 @@ data class LibraryState(
    * [covers]에서 같은 bookId로 lookup해 재사용(메모리 중복 X). 빈 폴더는 키 없음.
    */
   val folderFirstBook: Map<Uri, String> = emptyMap(),
+  /** folder.documentUri → 첫 책 엔트리. 표지 캐시가 비워졌을 때 재추출 요청에 사용. */
+  val folderFirstBookEntries: Map<Uri, BookEntry> = emptyMap(),
   /** bookId → 책 진행률(현재 페이지 + 전체). 미열람/모름 책은 키 없음. */
   val bookProgress: Map<String, BookProgress> = emptyMap(),
   /**

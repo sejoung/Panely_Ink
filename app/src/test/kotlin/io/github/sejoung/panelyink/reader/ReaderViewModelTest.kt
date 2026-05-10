@@ -193,6 +193,24 @@ class ReaderViewModelTest {
     }
 
     @Test
+    fun trimEnabledIsPassedToDecoderAndEnablingRetriggersPreload() = runTest {
+        val decoder = FakePageDecoder()
+        val vm = ReaderViewModel("b", 10, decoder)
+        vm.setTrimEnabled(false)
+        vm.onViewportChanged(800, 1200)
+        runCurrent()
+        assertTrue(decoder.trimFlags.isNotEmpty())
+        assertTrue(decoder.trimFlags.all { !it })
+
+        decoder.trimFlags.clear()
+        vm.setTrimEnabled(true)
+        runCurrent()
+        assertTrue(decoder.trimFlags.isNotEmpty())
+        assertTrue(decoder.trimFlags.all { it })
+        vm.close()
+    }
+
+    @Test
     fun goToCancelsInflightPreload() = runTest {
         val gate = CompletableDeferred<Unit>()
         // 첫 호출만 막아서 cancel 검증
@@ -406,14 +424,17 @@ private class FakePageDecoder(
 ) : PageDecoder {
     val calls = mutableListOf<Int>()
     val viewports = mutableListOf<Pair<Int, Int>>()
+    val trimFlags = mutableListOf<Boolean>()
 
     override suspend fun decode(
         pageIndex: Int,
         viewportWidth: Int,
         viewportHeight: Int,
+        trimEnabled: Boolean,
     ): DecodedPage {
         calls += pageIndex
         viewports += viewportWidth to viewportHeight
+        trimFlags += trimEnabled
         if (pageIndex in suspendOn && gate != null) gate.await()
         return DecodedPage(pageIndex, viewportWidth, viewportHeight, Any())
     }

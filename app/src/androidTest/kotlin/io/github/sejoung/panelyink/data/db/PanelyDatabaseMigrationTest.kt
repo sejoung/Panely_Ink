@@ -33,7 +33,7 @@ class PanelyDatabaseMigrationTest {
         createVersion5Database()
 
         val roomDb = Room.databaseBuilder(context, PanelyDatabase::class.java, DB_NAME)
-            .addMigrations(PanelyDatabase.MIGRATION_5_6)
+            .addMigrations(PanelyDatabase.MIGRATION_5_6, PanelyDatabase.MIGRATION_6_7)
             .allowMainThreadQueries()
             .build()
 
@@ -59,6 +59,49 @@ class PanelyDatabaseMigrationTest {
             assertEquals(0, cursor.getInt(cursor.getColumnIndexOrThrow("trim_enabled")))
             assertEquals(1.25f, cursor.getFloat(cursor.getColumnIndexOrThrow("contrast")))
             assertEquals(1234L, cursor.getLong(cursor.getColumnIndexOrThrow("updated_at")))
+        }
+
+        roomDb.close()
+    }
+
+    @Test
+    fun migration6To7AddsBookIndexAndBookmarkCreatedAtIndex() {
+        createVersion6Database()
+
+        val roomDb = Room.databaseBuilder(context, PanelyDatabase::class.java, DB_NAME)
+            .addMigrations(PanelyDatabase.MIGRATION_6_7)
+            .allowMainThreadQueries()
+            .build()
+
+        val db = roomDb.openHelper.readableDatabase
+        db.query("PRAGMA table_info(`book_index`)").use { cursor ->
+            val names = mutableSetOf<String>()
+            val nameIndex = cursor.getColumnIndexOrThrow("name")
+            while (cursor.moveToNext()) {
+                names += cursor.getString(nameIndex)
+            }
+            assertEquals(
+                setOf(
+                    "book_id",
+                    "document_uri",
+                    "display_name",
+                    "size_bytes",
+                    "mime_type",
+                    "root_uri",
+                    "nested_entry_name",
+                    "group_key",
+                    "indexed_at",
+                ),
+                names,
+            )
+        }
+        db.query("PRAGMA index_list(`bookmark`)").use { cursor ->
+            val names = mutableSetOf<String>()
+            val nameIndex = cursor.getColumnIndexOrThrow("name")
+            while (cursor.moveToNext()) {
+                names += cursor.getString(nameIndex)
+            }
+            assertEquals(true, "index_bookmark_created_at" in names)
         }
 
         roomDb.close()
@@ -128,6 +171,59 @@ class PanelyDatabaseMigrationTest {
                     `full_refresh_interval`,
                     `updated_at`
                 ) VALUES ('book', 'FitWidth', 'Rtl', 0, 1.25, 1, 3, 1234)
+                """.trimIndent(),
+            )
+        }
+    }
+
+    private fun createVersion6Database() {
+        val file = context.getDatabasePath(DB_NAME)
+        file.parentFile?.mkdirs()
+        SQLiteDatabase.openOrCreateDatabase(file, null).use { db ->
+            db.version = 6
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `position` (
+                    `book_id` TEXT NOT NULL,
+                    `page_index` INTEGER NOT NULL,
+                    `page_count` INTEGER NOT NULL DEFAULT 0,
+                    `updated_at` INTEGER NOT NULL,
+                    PRIMARY KEY(`book_id`)
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `book_settings` (
+                    `book_id` TEXT NOT NULL,
+                    `fit_mode` TEXT NOT NULL,
+                    `direction` TEXT NOT NULL,
+                    `trim_enabled` INTEGER NOT NULL,
+                    `contrast` REAL NOT NULL,
+                    `updated_at` INTEGER NOT NULL,
+                    PRIMARY KEY(`book_id`)
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `cover_meta` (
+                    `book_id` TEXT NOT NULL,
+                    `status` TEXT NOT NULL,
+                    `source_page_index` INTEGER NOT NULL,
+                    `extracted_at` INTEGER NOT NULL,
+                    PRIMARY KEY(`book_id`)
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `bookmark` (
+                    `book_id` TEXT NOT NULL,
+                    `page_index` INTEGER NOT NULL,
+                    `created_at` INTEGER NOT NULL,
+                    PRIMARY KEY(`book_id`, `page_index`)
+                )
                 """.trimIndent(),
             )
         }

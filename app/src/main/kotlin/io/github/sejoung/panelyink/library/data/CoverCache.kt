@@ -8,7 +8,7 @@ import java.io.File
 import java.io.FileOutputStream
 
 /**
- * 표지 썸네일 디스크 캐시 — `filesDir/covers/<bookId>.png`.
+ * 표지 썸네일 디스크 캐시 — `filesDir/covers/<bookId>.jpg`.
  *
  * `filesDir`(외부 cacheDir 아님)을 쓰는 이유: cacheDir은 Android가 임의 시점에 비울 수
  * 있어 라이브러리 첫 진입마다 재추출 비용이 발생한다. 표지는 사용자 데이터의 일부로
@@ -20,7 +20,7 @@ import java.io.FileOutputStream
 object CoverCache {
 
   private const val DIR = "covers"
-  private const val EXT = "png"
+  private const val EXT = "jpg"
   private const val TAG = "PanelyInk.CoverCache"
 
   fun cacheFile(context: Context, bookId: String): File {
@@ -38,10 +38,10 @@ object CoverCache {
     }.getOrNull()
   }
 
-  /** PNG로 무손실 압축 저장. 200KB 미만이라 압축 시간은 무시할 수준. */
+  /** JPEG로 저장. 라이브러리 썸네일은 무손실보다 저장 시간/용량이 더 중요하다. */
   fun saveBitmap(file: File, bitmap: Bitmap): Boolean = runCatching {
     FileOutputStream(file).use { out ->
-      bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+      bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
     }
     true
   }.getOrElse {
@@ -50,4 +50,6 @@ object CoverCache {
     runCatching { if (file.exists()) file.delete() }
     false
   }
+
+  private const val JPEG_QUALITY = 86
 }

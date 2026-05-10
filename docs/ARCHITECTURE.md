@@ -103,6 +103,7 @@ Room stores:
 - cover metadata
 - per-book settings
 - bookmarks
+- scanned book index for fast all-bookmark resolution
 
 SharedPreferences stores:
 

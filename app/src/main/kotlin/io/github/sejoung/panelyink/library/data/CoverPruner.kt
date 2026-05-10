@@ -27,7 +27,7 @@ object CoverPruner {
   const val DEFAULT_MAX_BYTES: Long = 80L * 1024 * 1024 // 80MB
 
   private const val DIR = "covers"
-  private const val EXT = "png"
+  private const val EXT = "jpg"
   private const val TAG = "PanelyInk.CoverPruner"
 
   /**
@@ -56,7 +56,7 @@ object CoverPruner {
 
     // 1단계: orphan(메타 없는 디스크 파일) 정리
     for (file in allFiles) {
-      if (file.nameWithoutExtension !in knownIds) {
+      if (file.extension != EXT || file.nameWithoutExtension !in knownIds) {
         if (file.delete()) deleted++
       }
     }
@@ -64,7 +64,7 @@ object CoverPruner {
 
     // 2단계: 남은 파일의 사이즈 합. 한도 미만이면 종료.
     val remaining = allFiles.filter {
-      it.exists() && it.nameWithoutExtension in knownIds
+      it.exists() && it.extension == EXT && it.nameWithoutExtension in knownIds
     }
     var total = remaining.sumOf { it.length() }
     if (total <= maxBytes) {

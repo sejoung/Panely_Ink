@@ -261,7 +261,13 @@ class LibraryRepository(private val context: Context) {
           }
           if (seriesFolder != null) {
             val nestedBooks = seriesFolder.nestedBooks.orEmpty()
-            indexed += nestedBooks.map { IndexedBookEntry(book = it, siblings = nestedBooks) }
+            indexed += nestedBooks.map {
+              IndexedBookEntry(
+                book = it,
+                siblings = nestedBooks,
+                groupKey = seriesFolder.documentUri.toString(),
+              )
+            }
           } else {
             directBooks += entry
           }
@@ -269,7 +275,13 @@ class LibraryRepository(private val context: Context) {
       }
     }
 
-    indexed += directBooks.map { IndexedBookEntry(book = it, siblings = directBooks) }
+    indexed += directBooks.map {
+      IndexedBookEntry(
+        book = it,
+        siblings = directBooks,
+        groupKey = folder.documentUri.toString(),
+      )
+    }
     for (child in childFolders) {
       indexed += listAllBooksIn(child, depth = depth + 1, maxDepth = maxDepth)
     }
@@ -306,7 +318,11 @@ class LibraryRepository(private val context: Context) {
             for (nested in nestedBooks) {
               val bookId = BookIdentity.fromEntry(nested).value
               if (remaining.remove(bookId)) {
-                found += IndexedBookEntry(book = nested, siblings = nestedBooks)
+                found += IndexedBookEntry(
+                  book = nested,
+                  siblings = nestedBooks,
+                  groupKey = seriesFolder.documentUri.toString(),
+                )
                 if (remaining.isEmpty()) break
               }
             }
@@ -320,7 +336,11 @@ class LibraryRepository(private val context: Context) {
     for (book in directBooks) {
       val bookId = BookIdentity.fromEntry(book).value
       if (remaining.remove(bookId)) {
-        found += IndexedBookEntry(book = book, siblings = directBooks)
+        found += IndexedBookEntry(
+          book = book,
+          siblings = directBooks,
+          groupKey = folder.documentUri.toString(),
+        )
         if (remaining.isEmpty()) return
       }
     }
@@ -401,4 +421,5 @@ class LibraryRepository(private val context: Context) {
 data class IndexedBookEntry(
   val book: BookEntry,
   val siblings: List<BookEntry>,
+  val groupKey: String,
 )

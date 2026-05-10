@@ -161,6 +161,7 @@ class ReaderViewModel(
   fun setTrimEnabled(enabled: Boolean) {
     if (enabled == state.value.trimEnabled) return
     _state.value = _state.value.copy(trimEnabled = enabled)
+    if (enabled) triggerPreload()
   }
 
   /**
@@ -202,7 +203,7 @@ class ReaderViewModel(
     preloadJob = scope.launch {
       for (idx in s.preloadWindow.byProximityTo(s.currentPage)) {
         if (generation != preloadGeneration || !currentCoroutineContext().isActive) return@launch
-        decoder.decode(idx, s.viewportWidth, s.viewportHeight)
+        decoder.decode(idx, s.viewportWidth, s.viewportHeight, s.trimEnabled)
         if (generation != preloadGeneration || !currentCoroutineContext().isActive) return@launch
         _decoded.emit(idx)
       }

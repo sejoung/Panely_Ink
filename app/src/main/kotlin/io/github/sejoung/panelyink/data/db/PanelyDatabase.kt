@@ -8,6 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import io.github.sejoung.panelyink.data.db.bookmark.BookmarkDao
 import io.github.sejoung.panelyink.data.db.bookmark.BookmarkEntity
+import io.github.sejoung.panelyink.data.db.bookindex.BookIndexDao
+import io.github.sejoung.panelyink.data.db.bookindex.BookIndexEntity
 import io.github.sejoung.panelyink.data.db.cover.CoverMetaDao
 import io.github.sejoung.panelyink.data.db.cover.CoverMetaEntity
 import io.github.sejoung.panelyink.data.db.position.PositionDao
@@ -26,6 +28,7 @@ import io.github.sejoung.panelyink.data.db.settings.BookSettingsEntity
  * - v4: `cover_meta` 테이블 추가 (표지 추출 상태/시점, 깨진 책 재시도 방지)
  * - v5: `bookmark` 테이블 추가 (책별 페이지 북마크)
  * - v6: `book_settings`에서 전역 prefs로 분리된 orphan 컬럼 제거
+ * - v7: `book_index` 테이블 추가 + bookmark.created_at 정렬 인덱스
  *
  * 싱글톤 보장: [PanelyDatabase.getInstance]가 더블 체크 락. 안드로이드 앱에서 DB는 프로세스당 1개.
  */
@@ -35,8 +38,9 @@ import io.github.sejoung.panelyink.data.db.settings.BookSettingsEntity
     BookSettingsEntity::class,
     CoverMetaEntity::class,
     BookmarkEntity::class,
+    BookIndexEntity::class,
   ],
-  version = 6,
+  version = 7,
   exportSchema = false,
 )
 abstract class PanelyDatabase : RoomDatabase() {
@@ -45,6 +49,7 @@ abstract class PanelyDatabase : RoomDatabase() {
   abstract fun bookSettingsDao(): BookSettingsDao
   abstract fun coverMetaDao(): CoverMetaDao
   abstract fun bookmarkDao(): BookmarkDao
+  abstract fun bookIndexDao(): BookIndexDao
 
   companion object {
     private const val DB_NAME = "panely_ink.db"
@@ -164,6 +169,32 @@ abstract class PanelyDatabase : RoomDatabase() {
       }
     }
 
+    /** v6 → v7: 전체 북마크 빠른 resolve용 책 인덱스와 북마크 최신순 정렬 인덱스. */
+    internal val MIGRATION_6_7 = object : Migration(6, 7) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+          """
+                    CREATE TABLE IF NOT EXISTS `book_index` (
+                        `book_id` TEXT NOT NULL,
+                        `document_uri` TEXT NOT NULL,
+                        `display_name` TEXT NOT NULL,
+                        `size_bytes` INTEGER NOT NULL,
+                        `mime_type` TEXT,
+                        `root_uri` TEXT NOT NULL,
+                        `nested_entry_name` TEXT,
+                        `group_key` TEXT NOT NULL,
+                        `indexed_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`book_id`)
+                    )
+                    """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_book_index_root_uri` ON `book_index` (`root_uri`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_book_index_group_key` ON `book_index` (`group_key`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_book_index_indexed_at` ON `book_index` (`indexed_at`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_bookmark_created_at` ON `bookmark` (`created_at`)")
+      }
+    }
+
     @Volatile
     private var instance: PanelyDatabase? = null
 
@@ -180,6 +211,7 @@ abstract class PanelyDatabase : RoomDatabase() {
             MIGRATION_3_4,
             MIGRATION_4_5,
             MIGRATION_5_6,
+            MIGRATION_6_7,
           )
           .build()
           .also { instance = it }

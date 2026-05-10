@@ -112,7 +112,7 @@ fun ReaderScreen(
         ?: defaultBookSettings
       loadingStep =
         localContext.getString(R.string.reader_loading_decode_first_page, session.pageCount)
-      session.decode(resumed)
+      session.decode(resumed, trimEnabled = bookSettings.trimEnabled)
       Log.d(TAG, "ReaderScreen ready (resume page=$resumed)")
       SessionState.Ready(
         session = session,
