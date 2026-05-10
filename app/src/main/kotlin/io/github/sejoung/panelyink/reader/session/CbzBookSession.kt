@@ -1,6 +1,7 @@
 package io.github.sejoung.panelyink.reader.session
 
 import android.content.Context
+import android.app.ActivityManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
@@ -24,7 +25,7 @@ import kotlin.concurrent.withLock
  *
  * 보유:
  * - random-access [CbzArchive] (ZipFile + ParcelFileDescriptor)
- * - [BitmapPageCache] (PRD §9: 100MB 상한)
+ * - [BitmapPageCache] (기기 메모리 등급 기반 상한)
  * - viewport hint — [decode] 시 inSampleSize 계산에 사용
  *
  * 디코드 파이프라인:
@@ -182,7 +183,7 @@ class CbzBookSession private constructor(
         val session = CbzBookSession(
           bookId = BookIdentity.fromEntry(entry).value,
           archive = archive,
-          cache = BitmapPageCache(maxBytes = 100L * 1024 * 1024),
+          cache = BitmapPageCache(maxBytes = pageCacheMaxBytes(ctx)),
         )
         // 첫 디코드는 viewport가 아직 잡히기 전에 일어날 수 있다 — displayMetrics를 fallback으로.
         val dm = ctx.resources.displayMetrics
@@ -191,6 +192,19 @@ class CbzBookSession private constructor(
       }
   }
 }
+
+private fun pageCacheMaxBytes(context: Context): Long {
+  val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+  val memoryClassMb = manager?.memoryClass ?: DEFAULT_MEMORY_CLASS_MB
+  val fractionMb = (memoryClassMb / 4).coerceAtLeast(MIN_PAGE_CACHE_MB)
+  val capMb = if (manager?.isLowRamDevice == true) LOW_RAM_PAGE_CACHE_MB else MAX_PAGE_CACHE_MB
+  return minOf(fractionMb, capMb) * 1024L * 1024L
+}
+
+private const val DEFAULT_MEMORY_CLASS_MB = 256
+private const val MIN_PAGE_CACHE_MB = 32
+private const val LOW_RAM_PAGE_CACHE_MB = 48
+private const val MAX_PAGE_CACHE_MB = 100
 
 /**
  * Android Bitmap loading best practice — viewport보다 작아지지 않을 때까지 2의 거듭제곱으로

@@ -37,7 +37,8 @@ import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
  * - 책 탭 → 리더 진입
  * - 헤더의 ← / 시스템 뒤로 키 / breadcrumb root 탭 → 한 단계 위
  *
- * 화면 폭이 7"(1648×1236)라 좌측 트리 사이드바 대신 한 번에 한 디렉토리.
+ * 폰부터 e-ink 태블릿까지 같은 탐색 모델을 쓰기 위해 좌측 트리 사이드바 대신
+ * 한 번에 한 디렉토리를 보여준다.
  */
 @Composable
 fun LibraryScreen(

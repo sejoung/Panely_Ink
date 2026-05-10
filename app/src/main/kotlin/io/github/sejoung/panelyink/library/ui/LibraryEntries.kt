@@ -122,7 +122,7 @@ internal fun LibraryGrid(
   val spacing = LocalPanelyInkSpacing.current
   val siblings = remember(entries) { entries.filterIsInstance<BookEntry>() }
   LazyVerticalGrid(
-    columns = GridCells.Fixed(3),
+    columns = GridCells.Adaptive(minSize = 112.dp),
     modifier = Modifier
       .fillMaxSize()
       .padding(spacing.space2),
