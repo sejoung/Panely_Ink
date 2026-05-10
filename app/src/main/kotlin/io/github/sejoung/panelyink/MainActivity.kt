@@ -75,6 +75,8 @@ class MainActivity : ComponentActivity() {
     }
   }
 
+  // ComponentActivity.dispatchKeyEvent는 androidx.core에서 @RestrictedApi로 선언돼 있어
+  // override 시 lint가 RestrictedApi 에러를 낸다. 의도된 override이므로 명시적 suppress.
   @SuppressLint("RestrictedApi")
   override fun dispatchKeyEvent(event: KeyEvent): Boolean {
     if (keyDispatcher?.invoke(event) == true) return true

@@ -43,10 +43,42 @@ object MarginTrimmer {
     ): TrimRect {
         require(width > 0 && height > 0) { "size must be positive" }
         require(pixels.size >= width * height) { "pixel array smaller than width*height" }
+        return detect(
+            rowProvider = { y, buffer ->
+                val rowOffset = y * width
+                System.arraycopy(pixels, rowOffset, buffer, 0, width)
+            },
+            width = width,
+            height = height,
+            whitenessThreshold = whitenessThreshold,
+            rowFraction = rowFraction,
+            minRatio = minRatio,
+        )
+    }
+
+    /**
+     * 메모리 효율 변형 — 호출자가 한 행씩 [rowProvider]로 채워준다. 풀 비트맵 픽셀 배열을
+     * 미리 만들 필요가 없다(2000×3000 페이지 기준 24MB → 8KB 행 버퍼).
+     *
+     * [rowProvider]는 `(y, buffer)` 형태로 호출되며 buffer 길이는 항상 [width]. 같은 y로
+     * 두 번 호출될 수 있으므로(컬럼 스캔 단계) idempotent해야 한다.
+     */
+    fun detect(
+        rowProvider: (y: Int, buffer: IntArray) -> Unit,
+        width: Int,
+        height: Int,
+        whitenessThreshold: Int = DEFAULT_WHITENESS_THRESHOLD,
+        rowFraction: Float = DEFAULT_ROW_FRACTION,
+        minRatio: Float = DEFAULT_MIN_RATIO,
+    ): TrimRect {
+        require(width > 0 && height > 0) { "size must be positive" }
+        val rowBuffer = IntArray(width)
 
         // 위에서 아래로, 흰 행을 스킵
         var top = 0
-        while (top < height && isRowWhite(pixels, width, top, whitenessThreshold, rowFraction)) {
+        while (top < height) {
+            rowProvider(top, rowBuffer)
+            if (!isRowWhite(rowBuffer, width, whitenessThreshold, rowFraction)) break
             top++
         }
         // 모든 행이 흰색 → 트리밍 포기
@@ -54,24 +86,36 @@ object MarginTrimmer {
 
         // 아래에서 위로
         var bottom = height - 1
-        while (bottom > top && isRowWhite(pixels, width, bottom, whitenessThreshold, rowFraction)) {
+        while (bottom > top) {
+            rowProvider(bottom, rowBuffer)
+            if (!isRowWhite(rowBuffer, width, whitenessThreshold, rowFraction)) break
             bottom--
         }
 
-        // 왼쪽: top..bottom 구간 내에서만 검사 (위/아래 여백 행은 무관)
+        // 컬럼 스캔: top..bottom 행을 한 번 더 훑으며 각 x에 대해 흰 픽셀 수 카운트.
+        // 하나의 행 버퍼를 재사용 — 메모리는 여전히 IntArray(width).
+        val rowCount = bottom - top + 1
+        val whiteCountPerColumn = IntArray(width)
+        for (y in top..bottom) {
+            rowProvider(y, rowBuffer)
+            for (x in 0 until width) {
+                if (isWhite(rowBuffer[x], whitenessThreshold)) {
+                    whiteCountPerColumn[x]++
+                }
+            }
+        }
+
         var left = 0
-        while (left < width && isColumnWhite(
-                pixels, width, left, top, bottom, whitenessThreshold, rowFraction,
-            )
+        while (left < width &&
+            whiteCountPerColumn[left].toFloat() / rowCount >= rowFraction
         ) {
             left++
         }
         if (left >= width) return TrimRect(0, 0, width, height)
 
         var right = width - 1
-        while (right > left && isColumnWhite(
-                pixels, width, right, top, bottom, whitenessThreshold, rowFraction,
-            )
+        while (right > left &&
+            whiteCountPerColumn[right].toFloat() / rowCount >= rowFraction
         ) {
             right--
         }
@@ -86,35 +130,16 @@ object MarginTrimmer {
     }
 
     private fun isRowWhite(
-        pixels: IntArray,
+        rowBuffer: IntArray,
         width: Int,
-        y: Int,
         threshold: Int,
         rowFraction: Float,
     ): Boolean {
-        val rowOffset = y * width
         var whites = 0
         for (x in 0 until width) {
-            if (isWhite(pixels[rowOffset + x], threshold)) whites++
+            if (isWhite(rowBuffer[x], threshold)) whites++
         }
         return whites.toFloat() / width >= rowFraction
-    }
-
-    private fun isColumnWhite(
-        pixels: IntArray,
-        width: Int,
-        x: Int,
-        top: Int,
-        bottom: Int,
-        threshold: Int,
-        rowFraction: Float,
-    ): Boolean {
-        val rows = bottom - top + 1
-        var whites = 0
-        for (y in top..bottom) {
-            if (isWhite(pixels[y * width + x], threshold)) whites++
-        }
-        return whites.toFloat() / rows >= rowFraction
     }
 
     /** ARGB int에서 평균 brightness가 [threshold] 이상이면 흰색 취급. */

@@ -221,13 +221,21 @@ internal fun ReaderHardwareKeyHandler(
   onNavigate: (BookEntry, BookSettings) -> Unit,
 ) {
   val activity = LocalContext.current.findMainActivity()
+  // dispatcher는 boundary(첫/마지막 페이지)에서만 형제 권 점프 분기를 새로 잡으면 된다.
+  // currentPage 자체를 key로 두면 매 페이지 전환마다 클로저를 재할당해 GC 압박이 누적된다.
+  // BookSettings는 형제 권으로 propagate되므로 변경 시에는 dispatcher도 재구성.
+  val atFirstPage = state.currentPage == 0
+  val atLastPage = state.currentPage == viewModel.pageCount - 1
+  val propagatedSettings = state.toBookSettings()
   DisposableEffect(
     activity,
     viewModel,
     menuOpen,
     settingsOpen,
     bookmarksOpen,
-    state.currentPage,
+    atFirstPage,
+    atLastPage,
+    propagatedSettings,
     context.previousBook,
     context.nextBook,
   ) {

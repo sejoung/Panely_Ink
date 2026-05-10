@@ -1,6 +1,7 @@
 package io.github.sejoung.panelyink.data.db.bookmark
 
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
+import io.github.sejoung.panelyink.data.db.forEachChunk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -56,9 +57,14 @@ class RoomBookmarkRepository(
     override suspend fun removeOrphans(existingBookIds: Set<String>) = withContext(Dispatchers.IO) {
         if (existingBookIds.isEmpty()) {
             dao.deleteAll()
-        } else {
-            dao.deleteNotIn(existingBookIds.toList())
+            return@withContext
         }
+        // 1000+ 책 라이브러리 대응: NOT IN(:list)는 host param 한도(999)에 걸리고 청크
+        // 분할로 직접 모방할 수도 없다(각 청크에서 다른 청크 ID가 NOT IN에 잡혀 잘못 삭제).
+        // 저장된 book_id 전체를 가져와 keep set 차집합을 계산 후 IN-chunk로 삭제.
+        val stored = dao.loadDistinctBookIds()
+        val orphans = stored.filterNot { it in existingBookIds }
+        orphans.forEachChunk { chunk -> dao.deleteByBookIds(chunk) }
     }
 }
 

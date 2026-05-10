@@ -122,17 +122,26 @@ class CbzArchive private constructor(
             Log.d(TAG, "channel size=${runCatching { channel.size() }.getOrDefault(-1L)} bytes, statSize=${pfd.statSize}")
 
             val tZf0 = System.currentTimeMillis()
+            // 1차: LFH 검증 스킵으로 빠르게 — 표준 CBZ는 이걸로 충분.
+            // 1차 실패 시 손상 zip 가능성. 채널을 처음으로 되돌리고 LFH 검증 켜고 재시도.
             val zipFile = try {
                 ZipFile.builder()
                     .setSeekableByteChannel(channel)
-                    // entry마다 LocalFileHeader 검증을 스킵 — N개 entry × random seek 누적 회피.
-                    // 표준 CBZ에서는 안전. 비표준 zip(LFH/CD 불일치)에서만 문제 가능.
                     .setIgnoreLocalFileHeader(true)
                     .get()
-            } catch (t: Throwable) {
-                runCatching { channel.close() }
-                runCatching { pfd.close() }
-                throw t
+            } catch (firstAttempt: Throwable) {
+                Log.w(TAG, "fast open failed, retrying with LFH validation", firstAttempt)
+                runCatching { channel.position(0) }
+                try {
+                    ZipFile.builder()
+                        .setSeekableByteChannel(channel)
+                        .setIgnoreLocalFileHeader(false)
+                        .get()
+                } catch (secondAttempt: Throwable) {
+                    runCatching { channel.close() }
+                    runCatching { pfd.close() }
+                    throw secondAttempt
+                }
             }
             val tZf = System.currentTimeMillis()
             Log.d(TAG, "ZipFile build: ${tZf - tZf0}ms")

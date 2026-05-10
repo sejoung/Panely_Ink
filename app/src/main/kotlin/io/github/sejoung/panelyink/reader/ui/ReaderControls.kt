@@ -3,8 +3,8 @@ package io.github.sejoung.panelyink.reader.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -262,28 +262,27 @@ internal fun ContrastSlider(
         .fillMaxWidth()
         .height(totalDp)
         .onSizeChanged { widthPx = it.width }
+        // tap과 drag를 단일 gesture loop로 통합 — Compose가 두 detector 사이의
+        // 충돌을 임의로 깨뜨릴 위험을 없애고, 사용자가 누른 그 순간부터 drag로
+        // 자연스럽게 이어지는 동작을 보장. tap은 "이동 없는 drag"의 특수 케이스로 처리.
         .pointerInput(Unit) {
-          detectHorizontalDragGestures(
-            onDragStart = { offset -> dragX = offset.x },
-            onDragEnd = {
-              val finalX = dragX
-              dragX = null
-              if (finalX != null) {
-                val v = pointerToContrast(finalX)
-                if (v != contrast) onCommit(v)
-              }
-            },
-            onDragCancel = { dragX = null },
-            onHorizontalDrag = { change, _ -> dragX = change.position.x },
-          )
-        }
-        .pointerInput(Unit) {
-          detectTapGestures(
-            onTap = { offset ->
-              val v = pointerToContrast(offset.x)
+          awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            dragX = down.position.x
+            while (true) {
+              val event = awaitPointerEvent()
+              val change = event.changes.firstOrNull { it.id == down.id } ?: break
+              dragX = change.position.x
+              change.consume()
+              if (!change.pressed) break
+            }
+            val finalX = dragX
+            dragX = null
+            if (finalX != null) {
+              val v = pointerToContrast(finalX)
               if (v != contrast) onCommit(v)
-            },
-          )
+            }
+          }
         },
     ) {
       Box(

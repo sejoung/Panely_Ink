@@ -4,6 +4,8 @@ import android.net.Uri
 import io.github.sejoung.panelyink.core.book.BookIdentity
 import io.github.sejoung.panelyink.core.sort.NaturalOrderComparator
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
+import io.github.sejoung.panelyink.data.db.flatMapInChunks
+import io.github.sejoung.panelyink.data.db.forEachChunk
 import io.github.sejoung.panelyink.library.data.IndexedBookEntry
 import io.github.sejoung.panelyink.library.model.BookEntry
 import kotlinx.coroutines.Dispatchers
@@ -24,15 +26,18 @@ class RoomBookIndexRepository(
 
   override suspend fun upsertAll(indexedBooks: List<IndexedBookEntry>) = withContext(Dispatchers.IO) {
     if (indexedBooks.isEmpty()) return@withContext
-    dao.upsertAll(indexedBooks.toEntities(clock()))
+    // upsertAll도 큰 리스트면 SQLite bind 한도에 걸릴 수 있어 청크로.
+    indexedBooks.toEntities(clock()).forEachChunk { chunk -> dao.upsertAll(chunk) }
   }
 
   override suspend fun loadByIds(bookIds: Set<String>): List<IndexedBookEntry> = withContext(Dispatchers.IO) {
     if (bookIds.isEmpty()) return@withContext emptyList()
-    val requested = dao.loadAllByIds(bookIds.toList())
+    val requested = bookIds.toList()
+      .flatMapInChunks { chunk -> dao.loadAllByIds(chunk) }
     if (requested.isEmpty()) return@withContext emptyList()
-    val groupKeys = requested.mapTo(mutableSetOf()) { it.groupKey }
-    val siblingsByGroup = dao.loadAllByGroupKeys(groupKeys.toList())
+    val groupKeys = requested.mapTo(mutableSetOf()) { it.groupKey }.toList()
+    val siblingsByGroup = groupKeys
+      .flatMapInChunks { chunk -> dao.loadAllByGroupKeys(chunk) }
       .groupBy { it.groupKey }
       .mapValues { (_, entities) ->
         entities
@@ -52,10 +57,13 @@ class RoomBookIndexRepository(
     val ids = indexedBooks.mapTo(mutableSetOf()) { BookIdentity.fromEntry(it.book).value }
     if (ids.isEmpty()) {
       dao.deleteAll()
-    } else {
-      dao.upsertAll(indexedBooks.toEntities(clock()))
-      dao.deleteNotIn(ids.toList())
+      return@withContext
     }
+    indexedBooks.toEntities(clock()).forEachChunk { chunk -> dao.upsertAll(chunk) }
+    // NOT IN 청크 분할 불가 — 저장된 ID 전체를 fetch해 차집합을 IN-chunk로 삭제.
+    val stored = dao.loadAllBookIds()
+    val orphans = stored.filterNot { it in ids }
+    orphans.forEachChunk { chunk -> dao.deleteByBookIds(chunk) }
   }
 }
 

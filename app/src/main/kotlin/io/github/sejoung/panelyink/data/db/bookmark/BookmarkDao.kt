@@ -33,6 +33,15 @@ interface BookmarkDao {
     @Query("DELETE FROM bookmark")
     suspend fun deleteAll()
 
-    @Query("DELETE FROM bookmark WHERE book_id NOT IN (:bookIds)")
-    suspend fun deleteNotIn(bookIds: List<String>)
+    /** 현재 저장된 모든 book_id (orphan 정리용 — 호출자가 chunk delete를 위해 사용). */
+    @Query("SELECT DISTINCT book_id FROM bookmark")
+    suspend fun loadDistinctBookIds(): List<String>
+
+    /**
+     * 청크 단위 삭제. SQLite host param 한도(999) 때문에 호출자(Repository)가 900개씩
+     * 잘라 호출. NOT IN 패턴은 청크별로 잘못 동작하므로(다른 청크의 ID도 NOT IN에 걸림)
+     * Repository가 keep set 차집합을 미리 계산해 IN-chunk로 삭제.
+     */
+    @Query("DELETE FROM bookmark WHERE book_id IN (:bookIds)")
+    suspend fun deleteByBookIds(bookIds: List<String>)
 }

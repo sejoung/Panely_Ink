@@ -14,11 +14,12 @@ import io.github.sejoung.panelyink.core.trim.MarginTrimmer
 import io.github.sejoung.panelyink.library.data.NestedZipExtractor
 import io.github.sejoung.panelyink.library.model.BookEntry
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
 
 /**
  * 한 권의 책에 대한 자원 모음. ReaderScreen 라이프사이클과 1:1로 묶여 관리된다.
@@ -56,7 +57,8 @@ class CbzBookSession private constructor(
    * 바뀌어도 같은 비트맵에 대한 본문 좌표는 변하지 않으므로 재계산 불필요.
    */
   private val trimCache = ConcurrentHashMap<Int, TrimRect>()
-  private val decodeLock = ReentrantLock()
+  // 코루틴 cancellation-aware. ReentrantLock과 달리 디코드가 cancel되면 락이 정상 해제.
+  private val decodeLock = Mutex()
 
   /** ReaderView가 onSizeChanged에서 갱신. 0/음수면 무시. */
   fun setViewportHint(width: Int, height: Int) {
@@ -67,8 +69,8 @@ class CbzBookSession private constructor(
   }
 
   /** 캐시에 [pageIndex] 비트맵을 넣는다. 이미 있으면 재사용. */
-  suspend fun decode(pageIndex: Int, trimEnabled: Boolean = true): Bitmap = withContext(Dispatchers.IO) {
-    decodeLock.withLock {
+  suspend fun decode(pageIndex: Int, trimEnabled: Boolean = true): Bitmap = decodeLock.withLock {
+    withContext(Dispatchers.IO) {
       cache.get(pageIndex)?.let { bitmap ->
         if (trimEnabled && !trimCache.containsKey(pageIndex)) {
           trimCache[pageIndex] = computeTrim(bitmap)
@@ -110,8 +112,8 @@ class CbzBookSession private constructor(
       )
 
       cache.put(pageIndex, bitmap)
-      // 자동 여백 트리밍은 사용자가 켠 경우에만 계산한다. 꺼진 상태에서는 큰 IntArray
-      // 할당과 전체 픽셀 스캔을 생략해 페이지 전환 비용을 줄인다.
+      // 자동 여백 트리밍은 사용자가 켠 경우에만 계산한다. 꺼진 상태에서는 행 버퍼 IntArray
+      // 할당과 픽셀 스캔을 생략해 페이지 전환 비용을 줄인다.
       if (trimEnabled && !trimCache.containsKey(pageIndex)) {
         trimCache[pageIndex] = computeTrim(bitmap)
       }
@@ -128,9 +130,15 @@ class CbzBookSession private constructor(
   private fun computeTrim(bitmap: Bitmap): TrimRect {
     val w = bitmap.width
     val h = bitmap.height
-    val pixels = IntArray(w * h)
-    bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
-    return MarginTrimmer.detect(pixels, w, h)
+    // 한 행씩 getPixels로 채워 검사 — 전체 픽셀 IntArray(2000×3000=24MB)를 한 번에
+    // 할당하지 않는다. RK3566/3GB에서 GC pause로 인한 e-ink 깜빡임 방지.
+    return MarginTrimmer.detect(
+      rowProvider = { y, buffer ->
+        bitmap.getPixels(buffer, 0, w, 0, y, w, 1)
+      },
+      width = w,
+      height = h,
+    )
   }
 
   /** [ReaderViewModel] 이 사용하는 [PageDecoder] 어댑터.
@@ -154,10 +162,16 @@ class CbzBookSession private constructor(
   }
 
   fun close() {
-    decodeLock.withLock {
-      cache.clear()
-      trimCache.clear()
-      archive.close()
+    // dispose 경로에서 호출되므로 suspend로 만들 수 없다. 진행 중인 디코드가 archive를
+    // 잡고 있는 상태에서 close가 채널을 닫으면 IOException이 새므로, runBlocking으로
+    // in-flight 디코드의 완료(또는 cancel 후 종료)를 기다린다. 이전 ReentrantLock과
+    // 동일한 블로킹 의미를 유지.
+    runBlocking {
+      decodeLock.withLock {
+        cache.clear()
+        trimCache.clear()
+        archive.close()
+      }
     }
   }
 

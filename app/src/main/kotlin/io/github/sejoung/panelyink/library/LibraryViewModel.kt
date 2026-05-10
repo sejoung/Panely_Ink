@@ -796,9 +796,12 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
     val hits = memoryHits + diskHits
     if (hits.isEmpty()) return
+    // coverMemoryCache가 LRU evict한 키는 state.covers에서도 빠져야 한다 — 단순 `+`로
+    // 합치면 evicted 비트맵이 state에 살아남아 GC가 회수 못 함. flushCoverUpdates와 같은
+    // 정책으로 cache snapshot을 source of truth로 삼아 reassign.
     hits.forEach { (bookId, image) -> coverMemoryCache[bookId] = image }
     _state.value = _state.value.copy(
-      covers = _state.value.covers + hits.toMap(),
+      covers = coverMemoryCache.toMap(),
       coverStatus = _state.value.coverStatus + hits.associate { it.first to CoverStatus.OK },
     )
   }

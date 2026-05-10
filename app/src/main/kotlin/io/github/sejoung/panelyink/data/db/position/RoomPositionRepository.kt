@@ -3,6 +3,7 @@ package io.github.sejoung.panelyink.data.db.position
 import io.github.sejoung.panelyink.core.position.BookProgress
 import io.github.sejoung.panelyink.core.position.PositionRepository
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
+import io.github.sejoung.panelyink.data.db.flatMapInChunks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -42,16 +43,17 @@ class RoomPositionRepository(
     override suspend fun loadUpdatedAtMap(bookIds: List<String>): Map<String, Long> {
         if (bookIds.isEmpty()) return emptyMap()
         return withContext(Dispatchers.IO) {
-            dao.loadUpdatedAtFor(bookIds).associate { it.bookId to it.updatedAt }
+            // 1000+ 책 라이브러리에서 SQLite host param 한도(999) 회피.
+            bookIds.flatMapInChunks { chunk -> dao.loadUpdatedAtFor(chunk) }
+                .associate { it.bookId to it.updatedAt }
         }
     }
 
     override suspend fun loadProgressMap(bookIds: List<String>): Map<String, BookProgress> {
         if (bookIds.isEmpty()) return emptyMap()
         return withContext(Dispatchers.IO) {
-            dao.loadAllByIds(bookIds).associate {
-                it.bookId to BookProgress(it.pageIndex, it.pageCount)
-            }
+            bookIds.flatMapInChunks { chunk -> dao.loadAllByIds(chunk) }
+                .associate { it.bookId to BookProgress(it.pageIndex, it.pageCount) }
         }
     }
 }

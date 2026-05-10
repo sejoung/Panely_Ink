@@ -93,6 +93,11 @@ class ReaderView(context: Context) : View(context) {
   fun setPageIndex(index: Int) {
     if (this.pageIndex == index) return
     this.pageIndex = index
+    // 사용자가 페이지를 넘겼는데 진행 중인 풀리프레시 시퀀스(검정/흰색 240ms)가 남아 있으면
+    // 새 콘텐츠가 그만큼 늦게 화면에 도달한다. 시퀀스를 즉시 abort해 입력 응답성을 우선.
+    if (refreshSequence.isNotEmpty()) {
+      refreshSequence.clear()
+    }
     invalidate()
   }
 

@@ -1,6 +1,7 @@
 package io.github.sejoung.panelyink.data.db.cover
 
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
+import io.github.sejoung.panelyink.data.db.flatMapInChunks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -83,7 +84,9 @@ class RoomCoverMetaRepository(
     override suspend fun loadMap(bookIds: List<String>): Map<String, CoverMeta> {
         if (bookIds.isEmpty()) return emptyMap()
         return withContext(Dispatchers.IO) {
-            dao.loadAllByIds(bookIds).associate { it.bookId to it.toDomain() }
+            // 1000+ 책 라이브러리에서 SQLite host param 한도(999) 회피.
+            bookIds.flatMapInChunks { chunk -> dao.loadAllByIds(chunk) }
+                .associate { it.bookId to it.toDomain() }
         }
     }
 }
