@@ -33,6 +33,7 @@ import io.github.sejoung.panelyink.core.preferences.AppLanguage
 import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
 import io.github.sejoung.panelyink.data.preferences.SharedPrefsAppPreferencesRepository
+import io.github.sejoung.panelyink.library.model.ViewMode
 import io.github.sejoung.panelyink.reader.ui.DirectionSegments
 import io.github.sejoung.panelyink.reader.ui.FullRefreshIntervalSegments
 import io.github.sejoung.panelyink.reader.ui.GroupHeader
@@ -60,8 +61,10 @@ import kotlinx.coroutines.launch
 @Composable
 fun AppSettingsScreen(
   roots: List<Uri>,
+  viewMode: ViewMode,
   onAddRoot: () -> Unit,
   onRemoveRoot: (Uri) -> Unit,
+  onViewModeChange: (ViewMode) -> Unit,
   onClearCoverCache: () -> Unit,
   onResetAllData: () -> Unit,
   onBack: () -> Unit,
@@ -146,6 +149,18 @@ fun AppSettingsScreen(
             resolveActivity(localContext)?.recreate()
           }
         },
+      )
+
+      GroupSeparator(spacing.space4)
+
+      GroupHeader(stringResource(R.string.settings_library))
+      Spacer(Modifier.height(spacing.space2))
+
+      SectionLabel(stringResource(R.string.settings_library_view_mode))
+      Spacer(Modifier.height(spacing.space1))
+      ViewModeSegments(
+        viewMode = viewMode,
+        onSelect = onViewModeChange,
       )
 
       GroupSeparator(spacing.space4)
@@ -335,13 +350,31 @@ private fun LanguageSegments(
   onSelect: (AppLanguage) -> Unit,
 ) {
   val options = listOf(
+    AppLanguage.System to stringResource(R.string.settings_language_system),
     AppLanguage.English to stringResource(R.string.settings_language_english),
     AppLanguage.Korean to stringResource(R.string.settings_language_korean),
-    AppLanguage.System to stringResource(R.string.settings_language_system),
   )
   Segments(
     options = options,
     isSelected = { it == AppLanguage.fromTag(languageTag) },
+    labelOf = { value -> options.first { it.first == value }.second },
+    onSelect = onSelect,
+  )
+}
+
+@Composable
+private fun ViewModeSegments(
+  viewMode: ViewMode,
+  onSelect: (ViewMode) -> Unit,
+) {
+  val options = listOf(
+    ViewMode.List to stringResource(R.string.library_view_list),
+    ViewMode.Cover to stringResource(R.string.library_view_cover),
+    ViewMode.Grid to stringResource(R.string.library_view_grid),
+  )
+  Segments(
+    options = options,
+    isSelected = { it == viewMode },
     labelOf = { value -> options.first { it.first == value }.second },
     onSelect = onSelect,
   )

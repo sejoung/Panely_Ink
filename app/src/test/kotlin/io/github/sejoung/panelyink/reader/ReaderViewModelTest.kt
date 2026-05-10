@@ -255,9 +255,10 @@ class ReaderViewModelTest {
     }
 
     @Test
-    fun fullRefreshTriggersEveryNthPage() {
+    fun fullRefreshTriggersEveryNthPageWhenEnabled() {
         val vm = ReaderViewModel("b", 100, FakePageDecoder())
-        // 기본 N=5. 4번까진 generation 그대로, 5번째에 1로 증가.
+        vm.setFullRefreshInterval(5)
+        // N=5. 4번까진 generation 그대로, 5번째에 1로 증가.
         repeat(4) { vm.goNext() }
         assertEquals(0, vm.state.value.fullRefreshGeneration)
         vm.goNext()
@@ -327,6 +328,7 @@ class ReaderViewModelTest {
     @Test
     fun triggerFullRefreshResetsCounter() {
         val vm = ReaderViewModel("b", 100, FakePageDecoder())
+        vm.setFullRefreshInterval(5)
         // 4페이지 진행 (자동 트리거 직전)
         repeat(4) { vm.goNext() }
         assertEquals(0, vm.state.value.fullRefreshGeneration)

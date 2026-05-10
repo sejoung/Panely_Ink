@@ -17,8 +17,8 @@ Implemented:
 - first/last page boundary navigation to adjacent volumes
 - resume, progress, per-book settings, current-book bookmarks, and all-bookmarks screen
 - cover extraction with disk, Room metadata, and memory LRU caches
-- e-ink full refresh interval, manual full refresh, trim, contrast, and invert
-- English/Korean localization with in-app language selection
+- optional e-ink full refresh interval, manual full refresh, trim, contrast, and invert
+- English/Korean localization with system-language default, English fallback, and in-app language selection
 - Room migrations and focused unit/instrumentation tests
 
 ## Before v1.0

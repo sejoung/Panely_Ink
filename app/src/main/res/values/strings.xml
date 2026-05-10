@@ -43,6 +43,8 @@
     <string name="settings_language_english">English</string>
     <string name="settings_language_korean">Korean</string>
     <string name="settings_language_system">System</string>
+    <string name="settings_library">Library</string>
+    <string name="settings_library_view_mode">View mode</string>
     <string name="settings_reader_defaults">Reader Defaults</string>
     <string name="settings_default_reading_direction">Default reading direction</string>
     <string name="settings_display">Display</string>

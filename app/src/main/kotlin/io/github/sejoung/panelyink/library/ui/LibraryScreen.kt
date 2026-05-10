@@ -186,8 +186,10 @@ fun LibraryScreen(
   if (appSettingsOpen) {
     AppSettingsScreen(
       roots = state.roots,
+      viewMode = state.viewMode,
       onAddRoot = onAddFolder,
       onRemoveRoot = viewModel::removeRoot,
+      onViewModeChange = viewModel::setViewMode,
       onClearCoverCache = viewModel::clearCoverCache,
       onResetAllData = {
         viewModel.resetAllData()

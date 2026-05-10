@@ -151,13 +151,13 @@ internal fun FullRefreshIntervalSegments(
   interval: Int,
   onSelect: (Int) -> Unit,
 ) {
-  // 0=끔, 1=매 페이지, 3/5/10=일반. 1과 10은 잔상 체감 비교용 양쪽 끝.
+  // 기본은 끔. 잔상이 신경 쓰이는 기기에서 사용자가 주기를 켠다.
   val options = listOf(
+    0 to stringResource(R.string.common_off),
     1 to "1",
     3 to "3",
     5 to "5",
     10 to "10",
-    0 to stringResource(R.string.common_off),
   )
   Segments(
     options = options,

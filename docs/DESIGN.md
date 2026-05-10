@@ -65,7 +65,7 @@ previous or next volume when a series context exists.
 
 E-ink redraw cost matters:
 
-- Page turns use partial redraws, with configurable full refresh every N pages.
+- Page turns use partial redraws by default. Users can enable configurable full refresh every N pages when their device shows noticeable ghosting.
 - Menus, dialogs, and large UI state changes should avoid animated transitions.
 - Loading states should use static text.
 - Reader full refresh is simulated with high-contrast frame changes because there is no public

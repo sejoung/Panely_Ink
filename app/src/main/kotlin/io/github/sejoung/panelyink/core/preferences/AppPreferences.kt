@@ -14,6 +14,7 @@ import java.util.Locale
  * - [defaultReadingDirection]: 새 책 첫 진입 시 적용할 기본 읽기 방향
  * - [fullRefreshInterval]: e-ink 디바이스 자체의 잔상 정책. 책마다 달라야 할 이유가 약함
  * - [invertEnabled]: 야간/조명 환경에 따라 토글 — 환경 의존이라 모든 책에 일관
+ * - [languageTag]: 기본은 시스템 언어. 지원하지 않는 시스템 언어는 기본 리소스(영어) 사용
  *
  * 책별([io.github.sejoung.panelyink.reader.model.BookSettings])과 분리. 사용자가 라이브러리
  * 앱 설정에서 변경하거나, 책 메뉴에서도 토글 가능(흑백 반전) — 어느 쪽이든 같은
@@ -30,7 +31,7 @@ data class AppPreferences(
             defaultReadingDirection = ReadingDirection.Ltr,
             fullRefreshInterval = ReaderViewModel.FULL_REFRESH_INTERVAL_DEFAULT,
             invertEnabled = false,
-            languageTag = AppLanguage.English.tag,
+            languageTag = AppLanguage.System.tag,
         )
     }
 }

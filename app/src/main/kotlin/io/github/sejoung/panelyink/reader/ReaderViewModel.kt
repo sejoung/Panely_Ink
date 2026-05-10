@@ -125,7 +125,7 @@ class ReaderViewModel(
    *
    * - 0: 자동 트리거 끔. [triggerFullRefresh]로만 동작
    * - 1: 매 페이지마다 (잔상 방어 최대, 깜빡임 빈도 ↑)
-   * - 5(기본) / 10 등: 일반 사용
+   * - 3 / 5 / 10 등: 잔상이 신경 쓰이는 기기에서 사용자 선택
    */
   fun setFullRefreshInterval(n: Int) {
     require(n >= 0) { "interval must be >= 0, got $n" }
@@ -219,8 +219,8 @@ class ReaderViewModel(
     /** PRD §6.1: ±3 프리로드. 3GB RAM·RK3566 기준 ARGB8888 8MB×7장 ≈ 56MB. */
     const val PRELOAD_RADIUS = 3
 
-    /** PRD §6.1: 기본 풀리프레시 주기 — N=5 페이지마다. */
-    const val FULL_REFRESH_INTERVAL_DEFAULT = 5
+    /** 기본 자동 풀리프레시 주기. 0이면 기기 기본 렌더링에 맡기고 자동 트리거하지 않음. */
+    const val FULL_REFRESH_INTERVAL_DEFAULT = 0
   }
 }
 

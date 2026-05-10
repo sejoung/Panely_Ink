@@ -36,9 +36,9 @@ Panely Ink is under active development. The core reader and local library are us
 - Hardware page keys, volume keys, D-pad, and tap zones
 - Resume, progress badges, per-book settings, current-book bookmarks, and all-bookmarks view
 - Cover extraction with disk + Room metadata + in-memory LRU cache
-- E-ink-oriented full refresh policy, trim, contrast, and invert controls
+- Optional e-ink full refresh policy, trim, contrast, and invert controls
 - Previous/next volume navigation and boundary key navigation
-- English and Korean UI strings, with English as the default and an in-app language setting
+- English and Korean UI strings, with system language as the default, English fallback, and an in-app language setting
 
 Planned or incomplete:
 

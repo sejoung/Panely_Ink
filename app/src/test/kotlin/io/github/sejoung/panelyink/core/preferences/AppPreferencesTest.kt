@@ -8,9 +8,9 @@ import org.junit.Test
 class AppPreferencesTest {
 
     @Test
-    fun defaultsUseEnglishAndReaderFullRefreshDefault() {
+    fun defaultsUseSystemLanguageAndReaderFullRefreshDefault() {
         assertEquals(ReadingDirection.Ltr, AppPreferences.DEFAULTS.defaultReadingDirection)
-        assertEquals(AppLanguage.English.tag, AppPreferences.DEFAULTS.languageTag)
+        assertEquals(AppLanguage.System.tag, AppPreferences.DEFAULTS.languageTag)
         assertEquals(
             ReaderViewModel.FULL_REFRESH_INTERVAL_DEFAULT,
             AppPreferences.DEFAULTS.fullRefreshInterval,

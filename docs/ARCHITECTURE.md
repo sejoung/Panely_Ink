@@ -119,7 +119,7 @@ User-facing strings live in Android XML resources:
 - `app/src/main/res/values/strings.xml`: English default
 - `app/src/main/res/values-ko/strings.xml`: Korean
 
-The selected language is stored in app preferences. English is the fallback for unknown tags.
+The selected language is stored in app preferences. The default is `system`; unsupported system languages fall back to the default English resources.
 
 ## Testing
 
