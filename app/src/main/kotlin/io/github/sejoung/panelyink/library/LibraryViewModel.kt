@@ -40,6 +40,7 @@ import io.github.sejoung.panelyink.library.model.SortMode
 import io.github.sejoung.panelyink.library.model.ViewMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -159,16 +160,6 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
-  /**
-   * 다음 [refreshRoots] 시 자동으로 단일 root 안으로 한 단계 진입할지.
-   *
-   * - init / addRoot / removeRoot 직후에 켠다(사용자가 추가/제거한 결과 root가 1개로
-   *   정리된 시점). root 1개면 첫 화면 = "폴더 1개" 짜리 의미 없는 단계라 건너뜀.
-   * - [goUp]으로 사용자가 의도적으로 root 화면에 도달했을 땐 끈다 — 무한 루프 방지.
-   * - 저장된 path가 복원되면 그쪽이 우선이라 자동 진입은 끈다.
-   */
-  private var pendingAutoDescend = false
-
   init {
     val savedRoots = prefs.getStringSet(KEY_ROOTS, emptySet()).orEmpty().map(Uri::parse)
     val savedPath = LibraryPathCodec.decode(prefs.getString(KEY_PATH, null))
@@ -183,11 +174,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
       viewMode = savedView,
     )
     if (savedPath.isNotEmpty()) {
-      // 마지막 위치 복원 — pendingAutoDescend는 비활성, 직접 children 로드.
+      // 마지막 위치 복원 — 자동 진입(autoDescend)은 비활성, 직접 children 로드.
       refreshChildren(savedPath.last())
     } else {
-      pendingAutoDescend = true
-      refreshRoots()
+      refreshRoots(autoDescend = true)
     }
   }
 
@@ -210,14 +200,14 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
       progressLoadedBookIds.clear()
       folderCoverJobs.values.forEach { it.cancel() }
       folderCoverJobs.clear()
-      coverFlushJob?.cancel()
+      // cancelAndJoin: in-flight flushCoverUpdates가 끝난 뒤 버퍼를 비워 race-free 보장.
+      coverFlushJob?.cancelAndJoin()
       pendingCovers.clear()
       pendingCoverStatus.clear()
       coverMemoryCache.clear()
 
       AppDataResetter.resetAll(getApplication(), db)
       repo.invalidateCache()
-      pendingAutoDescend = false
       _state.value = LibraryState()
     }
   }
@@ -234,7 +224,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
       NestedZipExtractor.clearAll(getApplication())
       // 진행 중인 추출 작업도 무효 — 이미 launch된 것은 끝나며 새 메타에 OK 기록됨.
       // 일관성을 위해 in-memory state + debounce 버퍼 모두 비우고 다음 lazy 요청에서 재추출.
-      coverFlushJob?.cancel()
+      // cancelAndJoin: 진행 중인 flushCoverUpdates가 있으면 끝까지 기다린 뒤 비운다.
+      // 현 시점엔 Main.immediate 단일 디스패처라 사실상 동시 실행이 불가능하지만, 미래에
+      // flushCoverUpdates가 suspend화되거나 디스패처가 바뀌어도 직렬화 의미를 유지.
+      coverFlushJob?.cancelAndJoin()
       pendingCovers.clear()
       pendingCoverStatus.clear()
       coverMemoryCache.clear()
@@ -288,10 +281,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     _state.value = _state.value.copy(roots = next)
     // 새 root 1개로 시작했으면 자동 진입. 이미 다른 root에 들어와 있다면 그대로 둔다.
     if (next.size == 1 && _state.value.path.isEmpty()) {
-      pendingAutoDescend = true
-      refreshRoots()
+      refreshRoots(autoDescend = true)
     } else if (_state.value.path.isEmpty()) {
-      refreshRoots()
+      refreshRoots(autoDescend = false)
     }
     scheduleBookmarkPruneForCurrentRoots()
   }
@@ -310,8 +302,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     val newPath = _state.value.path.takeIf { it.firstOrNull()?.rootUri != uri }.orEmpty()
     setPath(newPath, alsoUpdateRoots = next)
     if (newPath.isEmpty()) {
-      pendingAutoDescend = (next.size == 1)
-      refreshRoots()
+      refreshRoots(autoDescend = next.size == 1)
     } else {
       refreshChildren(newPath.last())
     }
@@ -381,8 +372,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     clearSearch()
     if (nextPath.isEmpty()) {
       // 사용자 의도로 root 목록까지 올라온 경우 — 자동 진입 X
-      pendingAutoDescend = false
-      refreshRoots()
+      refreshRoots(autoDescend = false)
     } else {
       refreshChildren(nextPath.last())
     }
@@ -400,7 +390,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     repo.invalidateCache()
     globalBookmarkBookIndex.clear()
     val current = _state.value.path.lastOrNull()
-    if (current == null) refreshRoots() else refreshChildren(current)
+    if (current == null) refreshRoots(autoDescend = false) else refreshChildren(current)
     scheduleBookmarkPruneForCurrentRoots()
   }
 
@@ -633,7 +623,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     coverJobs[bookId] = job
   }
 
-  private fun refreshRoots() {
+  /**
+   * @param autoDescend root가 1개일 때 그 root 안으로 자동 진입할지. 호출 시점에 호출자의
+   * 의도가 캡처되어 비동기 시점의 race를 차단한다. 이전엔 멤버 필드 `pendingAutoDescend`로
+   * 흘렸는데, addRoot/removeRoot가 빠르게 연속 호출될 때 첫 launch 본문이 두 번째 호출의
+   * 필드 변경을 보는 추적 어려운 상황을 만들었음.
+   */
+  private fun refreshRoots(autoDescend: Boolean) {
     listJob?.cancel()
     listJob = viewModelScope.launch {
       _state.value = _state.value.copy(scanning = true)
@@ -641,8 +637,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
       // 자동 진입: root 1개면 한 프레임도 root 화면을 노출하지 않고
       // 바로 그 안 children 로드 — e-ink 깜빡임 방지.
-      if (pendingAutoDescend && rootEntries.size == 1 && _state.value.path.isEmpty()) {
-        pendingAutoDescend = false
+      if (autoDescend && rootEntries.size == 1 && _state.value.path.isEmpty()) {
         val target = rootEntries.first()
         setPath(listOf(target))
         val children = repo.listChildren(target)
@@ -653,7 +648,6 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         applyCachedEntryCovers(sorted)
         batchInspectSeries()
       } else {
-        pendingAutoDescend = false
         // root 자체는 폴더라 sortMode와 무관하게 이름순(repo가 이미 정렬).
         pruneCoversToVisibleBooks(rootEntries)
         _state.value = _state.value.copy(entries = rootEntries, scanning = false)
