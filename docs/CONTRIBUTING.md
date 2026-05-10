@@ -33,6 +33,8 @@ Run connected tests for Room migrations or Android framework behavior:
   invocation, then uploads lint/test reports and a debug APK artifact.
 - `.github/workflows/release.yml` runs on `v*` tags or manual dispatch with a tag input. It builds
   an unsigned release APK and publishes it with `SHA256SUMS.txt` to GitHub Releases.
+- `.github/workflows/pages.yml` deploys `docs/` to GitHub Pages. The root page is
+  `docs/index.html`, which resolves the latest APK from GitHub Releases.
 
 Release APK signing is not configured yet. Add a signing config and GitHub Secrets before treating
 release artifacts as install-ready production builds.

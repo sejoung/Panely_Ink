@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Panely Ink Download</title>
+  <style>
+    :root {
+      --ink: #111111;
+      --paper: #ffffff;
+      --mute: #6b6b6b;
+      --hairline: #c8c8c8;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    main {
+      width: min(720px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 48px 0;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid var(--ink);
+    }
+
+    img {
+      width: 72px;
+      height: 72px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 32px;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 4px 0 0;
+      color: var(--mute);
+      font-size: 16px;
+    }
+
+    section {
+      padding: 24px 0;
+      border-bottom: 1px solid var(--hairline);
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    a.button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 48px;
+      padding: 0 18px;
+      border: 2px solid var(--ink);
+      color: var(--paper);
+      background: var(--ink);
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    a.button.secondary {
+      color: var(--ink);
+      background: var(--paper);
+    }
+
+    dl {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 8px 16px;
+      margin: 16px 0 0;
+    }
+
+    dt {
+      color: var(--mute);
+    }
+
+    dd {
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.95em;
+    }
+
+    .status {
+      color: var(--mute);
+    }
+
+    .error {
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    footer {
+      padding-top: 24px;
+      color: var(--mute);
+      font-size: 14px;
+    }
+
+    footer a {
+      color: var(--ink);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <img src="icon/panely-ink-icon.svg" alt="Panely Ink icon">
+      <div>
+        <h1>Panely Ink</h1>
+        <p class="subtitle">Latest Android APK for e-ink comic reading</p>
+      </div>
+    </header>
+
+    <section>
+      <h2>Download</h2>
+      <p id="status" class="status">Loading latest release...</p>
+      <div class="button-row">
+        <a id="download" class="button" href="https://github.com/sejoung/Panely_Ink/releases/latest">Latest release</a>
+        <a class="button secondary" href="https://github.com/sejoung/Panely_Ink/releases">All releases</a>
+      </div>
+      <dl id="release-meta" hidden>
+        <dt>Version</dt>
+        <dd id="version"></dd>
+        <dt>Published</dt>
+        <dd id="published"></dd>
+        <dt>File</dt>
+        <dd id="asset"></dd>
+      </dl>
+    </section>
+
+    <section>
+      <h2>Install Notes</h2>
+      <p>Download the APK on your Android e-ink device, open it, and allow installation from your browser or file manager when prompted.</p>
+      <p>The current release artifact is unsigned until project signing is configured.</p>
+    </section>
+
+    <section>
+      <h2>한국어</h2>
+      <p>최신 APK를 내려받아 Android e-ink 기기에서 설치하세요. 브라우저나 파일 관리자에서 알 수 없는 앱 설치 권한을 허용해야 할 수 있습니다.</p>
+      <p>현재 릴리즈 APK는 프로젝트 서명 설정 전까지 unsigned artifact입니다.</p>
+    </section>
+
+    <footer>
+      <a href="https://github.com/sejoung/Panely_Ink">GitHub</a>
+      ·
+      <a href="https://github.com/sejoung/Panely_Ink/blob/master/README.md">README</a>
+      ·
+      <a href="https://github.com/sejoung/Panely_Ink/blob/master/README.ko.md">README.ko</a>
+    </footer>
+  </main>
+
+  <script>
+    const latestReleaseUrl = "https://api.github.com/repos/sejoung/Panely_Ink/releases/latest";
+    const statusEl = document.getElementById("status");
+    const downloadEl = document.getElementById("download");
+    const metaEl = document.getElementById("release-meta");
+    const versionEl = document.getElementById("version");
+    const publishedEl = document.getElementById("published");
+    const assetEl = document.getElementById("asset");
+
+    function formatDate(value) {
+      return new Intl.DateTimeFormat(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+      }).format(new Date(value));
+    }
+
+    fetch(latestReleaseUrl, {
+      headers: { "Accept": "application/vnd.github+json" },
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error(`GitHub API ${response.status}`);
+        return response.json();
+      })
+      .then((release) => {
+        const apk = (release.assets || []).find((asset) => asset.name.toLowerCase().endsWith(".apk"));
+        if (!apk) {
+          statusEl.textContent = "No APK asset found on the latest release.";
+          statusEl.className = "error";
+          return;
+        }
+
+        downloadEl.href = apk.browser_download_url;
+        downloadEl.textContent = "Download latest APK";
+        statusEl.textContent = "Latest APK is ready.";
+        versionEl.textContent = release.tag_name || release.name || "latest";
+        publishedEl.textContent = release.published_at ? formatDate(release.published_at) : "unknown";
+        assetEl.innerHTML = `<code>${apk.name}</code>`;
+        metaEl.hidden = false;
+      })
+      .catch(() => {
+        statusEl.textContent = "Could not load release metadata. Use the latest release link.";
+        statusEl.className = "error";
+      });
+  </script>
+</body>
+</html>

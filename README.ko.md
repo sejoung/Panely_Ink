@@ -9,6 +9,7 @@
 <p align="center">
   <a href="https://github.com/sejoung/Panely_Ink/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/sejoung/Panely_Ink/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/sejoung/Panely_Ink/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/sejoung/Panely_Ink?label=release&color=111111"></a>
+  <a href="https://sejoung.github.io/Panely_Ink/"><img alt="Download" src="https://img.shields.io/badge/download-latest%20APK-111111"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-111111"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Android-111111">
   <img alt="Target" src="https://img.shields.io/badge/target-e--ink-111111">
@@ -85,12 +86,20 @@ Panely Ink는 애니메이션이나 색상이 많은 UI를 피합니다. 리더 
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
+최신 APK 다운로드 페이지:
+
+```text
+https://sejoung.github.io/Panely_Ink/
+```
+
 ## GitHub Actions
 
 - CI는 `main`/`master` 푸시, Pull Request, 수동 실행에서 동작합니다. debug 단위 테스트,
   lint, androidTest 컴파일, debug APK artifact 생성을 한 번의 Gradle 호출로 수행합니다.
 - Release는 `v*` 태그 또는 태그 입력을 받는 수동 실행에서 동작합니다. 릴리즈 검증을
   실행하고 unsigned release APK와 SHA-256 체크섬을 GitHub Release에 게시합니다.
+- Pages는 `docs/`를 GitHub Pages로 배포하고 저장소 Pages URL에서 최신 APK 다운로드
+  페이지를 제공합니다.
 
 로컬 릴리즈 헬퍼:
 

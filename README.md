@@ -9,6 +9,7 @@ Language: English | [한국어](README.ko.md)
 <p align="center">
   <a href="https://github.com/sejoung/Panely_Ink/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/sejoung/Panely_Ink/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/sejoung/Panely_Ink/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/sejoung/Panely_Ink?label=release&color=111111"></a>
+  <a href="https://sejoung.github.io/Panely_Ink/"><img alt="Download" src="https://img.shields.io/badge/download-latest%20APK-111111"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-111111"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Android-111111">
   <img alt="Target" src="https://img.shields.io/badge/target-e--ink-111111">
@@ -84,12 +85,20 @@ The debug APK is generated at:
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
+Latest APK download page:
+
+```text
+https://sejoung.github.io/Panely_Ink/
+```
+
 ## GitHub Actions
 
 - CI runs on pushes to `main`/`master`, pull requests, and manual dispatch. It runs debug unit
   tests, lint, androidTest compilation, and builds a debug APK artifact in one Gradle invocation.
 - Release runs on `v*` tags or manual dispatch with a tag input. It runs release checks, builds the
   unsigned release APK, creates SHA-256 checksums, and publishes them to a GitHub Release.
+- Pages deploys `docs/` to GitHub Pages and serves the latest APK download page at the repository
+  Pages URL.
 
 Local release helper:
 
