@@ -24,6 +24,7 @@ import io.github.sejoung.panelyink.data.db.position.RoomPositionRepository
 import io.github.sejoung.panelyink.library.data.CoverCache
 import io.github.sejoung.panelyink.library.data.CoverExtractor
 import io.github.sejoung.panelyink.library.data.CoverPruner
+import io.github.sejoung.panelyink.library.data.CoverState
 import io.github.sejoung.panelyink.library.data.IndexedBookEntry
 import io.github.sejoung.panelyink.library.data.LibraryPathCodec
 import io.github.sejoung.panelyink.library.data.LibraryRepository
@@ -685,27 +686,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
   private fun pruneCoversToVisibleBooks(entries: List<LibraryEntry>) {
     val current = _state.value.covers
     if (current.isEmpty()) return
-    val visibleBookIds = mutableSetOf<String>()
-    for (entry in entries) {
-      when (entry) {
-        is BookEntry -> visibleBookIds += BookIdentity.fromEntry(entry).value
-        is FolderEntry -> {
-          // 폴더 행은 firstBook 표지를 보여줄 수 있으므로 그 bookId도 보존.
-          _state.value.folderFirstBook[entry.documentUri]?.let { visibleBookIds += it }
-          // 가상 폴더(ZIP-of-CBZ)의 자식 책 표지도 다음 화면에서 즉시 필요하면 nestedBooks
-          // 첫 책을 보존. 나머지는 진입 후 복원.
-          entry.nestedBooks?.firstOrNull()?.let {
-            visibleBookIds += BookIdentity.fromEntry(it).value
-          }
-        }
-      }
-    }
-    if (visibleBookIds.isEmpty()) {
-      _state.value = _state.value.copy(covers = emptyMap())
-      return
-    }
-    val pruned = current.filterKeys { it in visibleBookIds }
-    if (pruned.size != current.size) {
+    val visibleBookIds = CoverState.visibleBookIdsFor(entries, _state.value.folderFirstBook)
+    val pruned = CoverState.pruneCoversToVisible(current, visibleBookIds)
+    if (pruned !== current && pruned.size != current.size) {
       _state.value = _state.value.copy(covers = pruned)
     }
   }
@@ -811,13 +794,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     status: CoverStatus,
   ) {
     if (image != null) coverMemoryCache[bookId] = image
-    // state.covers는 additive — coverMemoryCache.toMap()로 reassign하면 LRU evict가
-    // 시각 항목까지 떨어뜨려 LaunchedEffect(cover == null) 재발화 → 무한 reload 루프.
-    // 메모리 bound는 [pruneCoversToVisibleBooks]가 폴더 이동 시점에 처리.
-    val newCovers = if (image != null) _state.value.covers + (bookId to image) else _state.value.covers
+    val incoming = if (image != null) mapOf(bookId to image) else emptyMap()
     _state.value = _state.value.copy(
-      covers = newCovers,
-      coverStatus = _state.value.coverStatus + (bookId to status),
+      covers = CoverState.mergeCovers(_state.value.covers, incoming),
+      coverStatus = CoverState.mergeCoverStatuses(
+        _state.value.coverStatus,
+        mapOf(bookId to status),
+      ),
     )
   }
 
@@ -830,10 +813,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     covers.forEach { (bookId, image) ->
       coverMemoryCache[bookId] = image
     }
-    // additive — applyCoverUpdateNow와 동일 이유. 무한 루프 방어.
     _state.value = _state.value.copy(
-      covers = if (covers.isNotEmpty()) _state.value.covers + covers else _state.value.covers,
-      coverStatus = if (status.isNotEmpty()) _state.value.coverStatus + status else _state.value.coverStatus,
+      covers = CoverState.mergeCovers(_state.value.covers, covers),
+      coverStatus = CoverState.mergeCoverStatuses(_state.value.coverStatus, status),
     )
   }
 
@@ -873,13 +855,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
     val hits = memoryHits + diskHits
     if (hits.isEmpty()) return
-    // state.covers는 additive. cache snapshot으로 reassign하면 LRU evict가 시각 항목을
-    // 떨어뜨려 BookGridCell.LaunchedEffect(cover == null) 재발화 → 재요청 → 다른 항목
-    // evict → ... 무한 루프. 메모리 bound는 폴더 이동 시 [pruneCoversToVisibleBooks]가 처리.
     hits.forEach { (bookId, image) -> coverMemoryCache[bookId] = image }
     _state.value = _state.value.copy(
-      covers = _state.value.covers + hits.toMap(),
-      coverStatus = _state.value.coverStatus + hits.associate { it.first to CoverStatus.OK },
+      covers = CoverState.mergeCovers(_state.value.covers, hits.toMap()),
+      coverStatus = CoverState.mergeCoverStatuses(
+        _state.value.coverStatus,
+        hits.associate { it.first to CoverStatus.OK },
+      ),
     )
   }
 
