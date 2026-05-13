@@ -42,6 +42,7 @@ import io.github.sejoung.panelyink.reader.session.CbzBookSession
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
 import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -92,35 +93,39 @@ fun ReaderScreen(
     value = try {
       Log.d(TAG, "ReaderScreen open: ${entry.displayName}")
       loadingStep = localContext.getString(R.string.reader_loading_scan_pages)
-      val session = CbzBookSession.open(appContext, entry)
-      loadingStep = localContext.getString(R.string.reader_loading_restore_position)
-      // Room에서 마지막 페이지를 미리 로드한다. ReaderViewModel 생성 시점이 동기라
-      // 여기서 비동기로 받아 Ready에 묶어서 넘긴다. 페이지 수 줄어든 책은 clamp.
-      val resumed = initialPageOverride?.coerceIn(0, session.pageCount - 1)
-        ?: positionRepo.load(session.bookId)
-          ?.pageIndex
-          ?.coerceIn(0, session.pageCount - 1)
-        ?: 0
-      // 전역 prefs(기본 읽기 방향, 흑백 반전, 풀리프레시 주기)는 SharedPreferences 1회 read.
-      val appPrefs = appPrefsRepo.load()
-      // 책별 설정이 없으면 전역 기본 읽기 방향을 적용한다. 책당 1행이라 가벼움.
-      val defaultBookSettings = BookSettings.DEFAULTS.copy(
-        direction = appPrefs.defaultReadingDirection,
-      )
-      val bookSettings = bookSettingsRepo.load(session.bookId)
-        ?: propagatedBookSettings
-        ?: defaultBookSettings
-      loadingStep =
-        localContext.getString(R.string.reader_loading_decode_first_page, session.pageCount)
-      session.decode(resumed, trimEnabled = bookSettings.trimEnabled)
-      Log.d(TAG, "ReaderScreen ready (resume page=$resumed)")
-      SessionState.Ready(
-        session = session,
-        resumedPage = resumed,
-        bookSettings = bookSettings,
-        appPreferences = appPrefs,
-      )
-    } catch (cancel: kotlinx.coroutines.CancellationException) {
+      closeResourceOnFailure(
+        open = { CbzBookSession.open(appContext, entry) },
+        close = { it.close() },
+      ) { session ->
+        loadingStep = localContext.getString(R.string.reader_loading_restore_position)
+        // Room에서 마지막 페이지를 미리 로드한다. ReaderViewModel 생성 시점이 동기라
+        // 여기서 비동기로 받아 Ready에 묶어서 넘긴다. 페이지 수 줄어든 책은 clamp.
+        val resumed = initialPageOverride?.coerceIn(0, session.pageCount - 1)
+          ?: positionRepo.load(session.bookId)
+            ?.pageIndex
+            ?.coerceIn(0, session.pageCount - 1)
+          ?: 0
+        // 전역 prefs(기본 읽기 방향, 흑백 반전, 풀리프레시 주기)는 SharedPreferences 1회 read.
+        val appPrefs = appPrefsRepo.load()
+        // 책별 설정이 없으면 전역 기본 읽기 방향을 적용한다. 책당 1행이라 가벼움.
+        val defaultBookSettings = BookSettings.DEFAULTS.copy(
+          direction = appPrefs.defaultReadingDirection,
+        )
+        val bookSettings = bookSettingsRepo.load(session.bookId)
+          ?: propagatedBookSettings
+          ?: defaultBookSettings
+        loadingStep =
+          localContext.getString(R.string.reader_loading_decode_first_page, session.pageCount)
+        session.decode(resumed, trimEnabled = bookSettings.trimEnabled)
+        Log.d(TAG, "ReaderScreen ready (resume page=$resumed)")
+        SessionState.Ready(
+          session = session,
+          resumedPage = resumed,
+          bookSettings = bookSettings,
+          appPreferences = appPrefs,
+        )
+      }
+    } catch (cancel: CancellationException) {
       // 코루틴 취소는 다시 던져야 한다 — Failed로 잡으면 화면이 잘못 표시됨
       throw cancel
     } catch (t: Throwable) {
@@ -154,6 +159,27 @@ fun ReaderScreen(
         onExit = onBack,
       )
     }
+  }
+}
+
+internal suspend fun <T, R> closeResourceOnFailure(
+  open: suspend () -> T,
+  close: (T) -> Unit,
+  block: suspend (T) -> R,
+): R {
+  var resource: T? = null
+  try {
+    val opened = open()
+    resource = opened
+    val result = block(opened)
+    resource = null
+    return result
+  } catch (cancel: CancellationException) {
+    resource?.let { runCatching { close(it) } }
+    throw cancel
+  } catch (t: Throwable) {
+    resource?.let { runCatching { close(it) } }
+    throw t
   }
 }
 

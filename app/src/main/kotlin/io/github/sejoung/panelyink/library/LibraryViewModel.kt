@@ -1,7 +1,7 @@
 package io.github.sejoung.panelyink.library
 
-import android.app.Application
 import android.app.ActivityManager
+import android.app.Application
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.graphics.ImageBitmap
@@ -13,11 +13,11 @@ import io.github.sejoung.panelyink.core.book.BookIdentity
 import io.github.sejoung.panelyink.core.position.BookProgress
 import io.github.sejoung.panelyink.data.AppDataResetter
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
+import io.github.sejoung.panelyink.data.db.bookindex.BookIndexRepository
+import io.github.sejoung.panelyink.data.db.bookindex.RoomBookIndexRepository
 import io.github.sejoung.panelyink.data.db.bookmark.BookBookmark
 import io.github.sejoung.panelyink.data.db.bookmark.BookmarkRepository
 import io.github.sejoung.panelyink.data.db.bookmark.RoomBookmarkRepository
-import io.github.sejoung.panelyink.data.db.bookindex.BookIndexRepository
-import io.github.sejoung.panelyink.data.db.bookindex.RoomBookIndexRepository
 import io.github.sejoung.panelyink.data.db.cover.CoverStatus
 import io.github.sejoung.panelyink.data.db.cover.RoomCoverMetaRepository
 import io.github.sejoung.panelyink.data.db.position.RoomPositionRepository
@@ -193,8 +193,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
       inspectJob?.cancel()
       countingJobs.values.forEach { it.cancel() }
       countingJobs.clear()
-      coverJobs.values.forEach { it.cancel() }
-      coverJobs.clear()
+      cancelAndClearJobs(coverJobs)
       progressJobs.values.forEach { it.cancel() }
       progressJobs.clear()
       progressLoadedBookIds.clear()
@@ -218,6 +217,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
    */
   fun clearCoverCache() {
     viewModelScope.launch {
+      cancelAndClearJobs(coverJobs)
       CoverPruner.clearAll(getApplication(), coverMetaRepo)
       // ZIP-of-CBZ 임시 추출 파일도 같이 정리(cacheDir/nested) — 표지 캐시와 함께
       // 사용자 의도 "캐시 비우기"에 포함.
@@ -710,7 +710,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     // hit 결과들은 한 번의 entries copy로 합쳐 recompose 1회로 끝낸다. 미검사(miss)만
     // 코루틴으로 보내 실제 ZIP open을 돌린다 — 폴더 안 .zip 50권이 모두 캐시된 경우
     // 이전엔 50회 launch + semaphore acquire를 낭비했음.
-    val cachedHits = mutableMapOf<android.net.Uri, FolderEntry>()
+    val cachedHits = mutableMapOf<Uri, FolderEntry>()
     val misses = mutableListOf<BookEntry>()
     for (book in candidates) {
       when (val lookup = repo.seriesCacheLookup(book)) {
@@ -720,7 +720,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
 
         SeriesLookup.Miss -> misses += book
-        SeriesLookup.NotApplicable -> { /* filter에서 이미 제외돼 도달 불가 */ }
+        SeriesLookup.NotApplicable -> { /* filter에서 이미 제외돼 도달 불가 */
+        }
       }
     }
 
@@ -946,6 +947,11 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     private const val KEY_SORT = "library_sort_mode"
     private const val KEY_VIEW = "library_view_mode"
   }
+}
+
+internal fun cancelAndClearJobs(jobs: MutableMap<String, Job>) {
+  jobs.values.forEach { it.cancel() }
+  jobs.clear()
 }
 
 private val ImageBitmap.estimatedBytes: Long
