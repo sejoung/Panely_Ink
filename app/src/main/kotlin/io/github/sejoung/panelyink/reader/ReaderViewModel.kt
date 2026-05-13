@@ -220,9 +220,6 @@ class ReaderViewModel(
   companion object {
     /** PRD §6.1: ±3 프리로드. 3GB RAM·RK3566 기준 ARGB8888 8MB×7장 ≈ 56MB. */
     const val PRELOAD_RADIUS = 3
-
-    /** 기본 자동 풀리프레시 주기. 0이면 기기 기본 렌더링에 맡기고 자동 트리거하지 않음. */
-    const val FULL_REFRESH_INTERVAL_DEFAULT = 0
   }
 }
 

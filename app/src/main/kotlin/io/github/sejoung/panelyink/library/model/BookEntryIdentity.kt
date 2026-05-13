@@ -16,12 +16,3 @@ fun BookEntry.toBookRef(): BookRef = BookRef(
     rootUri = rootUri,
     nestedEntryName = nestedEntryName,
 )
-
-fun BookRef.toBookEntry(): BookEntry = BookEntry(
-    documentUri = documentUri,
-    displayName = displayName,
-    sizeBytes = sizeBytes,
-    mimeType = mimeType,
-    rootUri = rootUri,
-    nestedEntryName = nestedEntryName,
-)

@@ -197,7 +197,7 @@ Location: `LibraryViewModel.globalBookmarkBookIndex`
 
 Stores:
 
-- `bookId -> IndexedBookEntry`
+- `bookId -> IndexedBookRef`
 
 Used by:
 
