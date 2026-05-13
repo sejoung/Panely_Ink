@@ -5,11 +5,11 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.Log
 import io.github.sejoung.panelyink.core.archive.CbzArchive
-import io.github.sejoung.panelyink.core.book.BookIdentity
 import io.github.sejoung.panelyink.core.sort.NaturalOrderComparator
 import io.github.sejoung.panelyink.library.model.BookEntry
 import io.github.sejoung.panelyink.library.model.FolderEntry
 import io.github.sejoung.panelyink.library.model.LibraryEntry
+import io.github.sejoung.panelyink.library.model.bookId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -336,7 +336,7 @@ class LibraryRepository(private val context: Context) {
           if (seriesFolder != null) {
             val nestedBooks = seriesFolder.nestedBooks.orEmpty()
             for (nested in nestedBooks) {
-              val bookId = BookIdentity.fromEntry(nested).value
+              val bookId = nested.bookId.value
               if (remaining.remove(bookId)) {
                 found += IndexedBookEntry(
                   book = nested,
@@ -354,7 +354,7 @@ class LibraryRepository(private val context: Context) {
     }
 
     for (book in directBooks) {
-      val bookId = BookIdentity.fromEntry(book).value
+      val bookId = book.bookId.value
       if (remaining.remove(bookId)) {
         found += IndexedBookEntry(
           book = book,

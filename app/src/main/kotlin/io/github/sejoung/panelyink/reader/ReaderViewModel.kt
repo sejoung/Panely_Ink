@@ -3,9 +3,10 @@ package io.github.sejoung.panelyink.reader
 import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.core.position.PositionKey
 import io.github.sejoung.panelyink.core.preferences.AppPreferences
+import io.github.sejoung.panelyink.core.preferences.DEFAULT_FULL_REFRESH_INTERVAL
+import io.github.sejoung.panelyink.core.preferences.ReadingDirection
 import io.github.sejoung.panelyink.core.render.ContrastMatrix
 import io.github.sejoung.panelyink.reader.model.BookSettings
-import io.github.sejoung.panelyink.reader.model.ReadingDirection
 import io.github.sejoung.panelyink.reader.session.PageDecoder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -243,7 +244,7 @@ data class ReaderState(
   /** 자동 여백 트리밍(M2) 적용 여부. ReaderView가 onDraw에서 참조. */
   val trimEnabled: Boolean = true,
   /** 자동 풀리프레시 주기(페이지 수). 0이면 자동 비활성. UI 토글이 변경. */
-  val fullRefreshInterval: Int = ReaderViewModel.FULL_REFRESH_INTERVAL_DEFAULT,
+  val fullRefreshInterval: Int = DEFAULT_FULL_REFRESH_INTERVAL,
   /** 대비 배율(0.5..2.0). 1.0=원본. ReaderView가 ColorMatrixColorFilter로 적용. */
   val contrast: Float = ContrastMatrix.IDENTITY,
   /** 흑백 반전(macOS 다크모드 대체). contrast와 함께 적용 시 contrast → invert 순. */

@@ -5,7 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.library.model.BookEntry
 import io.github.sejoung.panelyink.reader.ReaderState
-import io.github.sejoung.panelyink.reader.model.ReadingDirection
+import io.github.sejoung.panelyink.core.preferences.ReadingDirection
 import io.github.sejoung.panelyink.reader.model.SeriesContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

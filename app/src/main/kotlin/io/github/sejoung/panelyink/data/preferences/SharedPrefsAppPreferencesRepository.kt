@@ -5,7 +5,7 @@ import androidx.core.content.edit
 import io.github.sejoung.panelyink.core.preferences.AppLocale
 import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
-import io.github.sejoung.panelyink.reader.model.ReadingDirection
+import io.github.sejoung.panelyink.core.preferences.ReadingDirection
 import io.github.sejoung.panelyink.reader.model.deserializeDirection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

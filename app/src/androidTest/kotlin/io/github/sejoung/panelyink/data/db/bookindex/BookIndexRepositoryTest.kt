@@ -4,10 +4,10 @@ import android.net.Uri
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.github.sejoung.panelyink.core.book.BookIdentity
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
 import io.github.sejoung.panelyink.library.data.IndexedBookEntry
 import io.github.sejoung.panelyink.library.model.BookEntry
+import io.github.sejoung.panelyink.library.model.bookId
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -51,7 +51,7 @@ class BookIndexRepositoryTest {
       ),
     )
 
-    val loaded = repo.loadByIds(setOf(BookIdentity.fromEntry(a).value))
+    val loaded = repo.loadByIds(setOf(a.bookId.value))
 
     assertEquals(1, loaded.size)
     assertEquals(a, loaded.single().book)
@@ -75,8 +75,8 @@ class BookIndexRepositoryTest {
       listOf(IndexedBookEntry(book = kept, siblings = listOf(kept), groupKey = "content://root")),
     )
 
-    assertEquals(1, repo.loadByIds(setOf(BookIdentity.fromEntry(kept).value)).size)
-    assertEquals(emptyList<IndexedBookEntry>(), repo.loadByIds(setOf(BookIdentity.fromEntry(removed).value)))
+    assertEquals(1, repo.loadByIds(setOf(kept.bookId.value)).size)
+    assertEquals(emptyList<IndexedBookEntry>(), repo.loadByIds(setOf(removed.bookId.value)))
   }
 
   private fun book(root: Uri, uri: String, name: String): BookEntry =

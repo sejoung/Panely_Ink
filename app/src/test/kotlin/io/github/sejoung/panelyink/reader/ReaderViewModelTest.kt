@@ -3,7 +3,8 @@ package io.github.sejoung.panelyink.reader
 import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.core.position.PositionKey
 import io.github.sejoung.panelyink.core.preferences.AppPreferences
-import io.github.sejoung.panelyink.reader.model.ReadingDirection
+import io.github.sejoung.panelyink.core.preferences.DEFAULT_FULL_REFRESH_INTERVAL
+import io.github.sejoung.panelyink.core.preferences.ReadingDirection
 import io.github.sejoung.panelyink.reader.session.DecodedPage
 import io.github.sejoung.panelyink.reader.session.PageDecoder
 import kotlinx.coroutines.CompletableDeferred
@@ -366,7 +367,7 @@ class ReaderViewModelTest {
     fun setFullRefreshIntervalUpdatesState() {
         val vm = ReaderViewModel("b", 10, FakePageDecoder())
         assertEquals(
-            ReaderViewModel.FULL_REFRESH_INTERVAL_DEFAULT,
+            DEFAULT_FULL_REFRESH_INTERVAL,
             vm.state.value.fullRefreshInterval,
         )
         vm.setFullRefreshInterval(3)

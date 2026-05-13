@@ -3,8 +3,6 @@ package io.github.sejoung.panelyink.core.preferences
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.res.Configuration
-import io.github.sejoung.panelyink.reader.ReaderViewModel
-import io.github.sejoung.panelyink.reader.model.ReadingDirection
 import java.util.Locale
 
 /**
@@ -16,7 +14,7 @@ import java.util.Locale
  * - [invertEnabled]: 야간/조명 환경에 따라 토글 — 환경 의존이라 모든 책에 일관
  * - [languageTag]: 기본은 시스템 언어. 지원하지 않는 시스템 언어는 기본 리소스(영어) 사용
  *
- * 책별([io.github.sejoung.panelyink.reader.model.BookSettings])과 분리. 사용자가 라이브러리
+ * 책별 리더 설정과 분리. 사용자가 라이브러리
  * 앱 설정에서 변경하거나, 책 메뉴에서도 토글 가능(흑백 반전) — 어느 쪽이든 같은
  * 전역 저장소에 저장되어 모든 책에 즉시 반영.
  */
@@ -29,7 +27,7 @@ data class AppPreferences(
     companion object {
         val DEFAULTS: AppPreferences = AppPreferences(
             defaultReadingDirection = ReadingDirection.Ltr,
-            fullRefreshInterval = ReaderViewModel.FULL_REFRESH_INTERVAL_DEFAULT,
+            fullRefreshInterval = DEFAULT_FULL_REFRESH_INTERVAL,
             invertEnabled = false,
             languageTag = AppLanguage.System.tag,
         )
@@ -79,3 +77,5 @@ interface AppPreferencesRepository {
     suspend fun setInvertEnabled(value: Boolean)
     suspend fun setLanguageTag(value: String)
 }
+
+const val DEFAULT_FULL_REFRESH_INTERVAL: Int = 0

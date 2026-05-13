@@ -1,6 +1,7 @@
 package io.github.sejoung.panelyink.reader.model
 
 import io.github.sejoung.panelyink.core.fit.FitMode
+import io.github.sejoung.panelyink.core.preferences.ReadingDirection
 import io.github.sejoung.panelyink.core.render.ContrastMatrix
 
 /**

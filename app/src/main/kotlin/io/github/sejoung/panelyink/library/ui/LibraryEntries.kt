@@ -32,12 +32,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.sejoung.panelyink.R
-import io.github.sejoung.panelyink.core.book.BookIdentity
 import io.github.sejoung.panelyink.core.position.BookProgress
 import io.github.sejoung.panelyink.library.model.BookEntry
 import io.github.sejoung.panelyink.library.model.FolderEntry
 import io.github.sejoung.panelyink.library.model.LibraryEntry
 import io.github.sejoung.panelyink.library.model.ViewMode
+import io.github.sejoung.panelyink.library.model.bookId
 import io.github.sejoung.panelyink.ui.components.PanelyBookIcon
 import io.github.sejoung.panelyink.ui.components.PanelyChevronRightIcon
 import io.github.sejoung.panelyink.ui.components.PanelyFolderIcon
@@ -77,7 +77,7 @@ internal fun LibraryList(
 
         is BookEntry -> {
           val bookId = remember(entry.bookIdSource) {
-            BookIdentity.fromEntry(entry).value
+            entry.bookId.value
           }
           when (viewMode) {
             ViewMode.Cover -> BookRow(
@@ -142,7 +142,7 @@ internal fun LibraryGrid(
 
         is BookEntry -> {
           val bookId = remember(entry.bookIdSource) {
-            BookIdentity.fromEntry(entry).value
+            entry.bookId.value
           }
           BookGridCell(
             entry = entry,

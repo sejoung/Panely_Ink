@@ -8,11 +8,11 @@ import android.util.Log
 import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.core.archive.CbzArchive
 import io.github.sejoung.panelyink.core.archive.CbzPage
+import io.github.sejoung.panelyink.core.archive.NestedZipExtractor
 import io.github.sejoung.panelyink.core.book.BookIdentity
 import io.github.sejoung.panelyink.core.fit.TrimRect
 import io.github.sejoung.panelyink.core.trim.MarginTrimmer
-import io.github.sejoung.panelyink.library.data.NestedZipExtractor
-import io.github.sejoung.panelyink.library.model.BookEntry
+import io.github.sejoung.panelyink.reader.model.ReadableBookRef
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
@@ -178,7 +178,7 @@ class CbzBookSession private constructor(
   companion object {
     private const val TAG = "PanelyInk.Session"
 
-    suspend fun open(context: Context, entry: BookEntry): CbzBookSession =
+    suspend fun open(context: Context, entry: ReadableBookRef): CbzBookSession =
       withContext(Dispatchers.IO) {
         val ctx = context.applicationContext
         Log.d(
@@ -200,7 +200,7 @@ class CbzBookSession private constructor(
           throw IOException(ctx.getString(R.string.reader_error_no_images, entry.displayName))
         }
         val session = CbzBookSession(
-          bookId = BookIdentity.fromEntry(entry).value,
+          bookId = BookIdentity.fromSource(entry.sourceId).value,
           archive = archive,
           cache = BitmapPageCache(maxBytes = pageCacheMaxBytes(ctx)),
         )

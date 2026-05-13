@@ -25,7 +25,7 @@ import io.github.sejoung.panelyink.library.model.BookEntry
 import io.github.sejoung.panelyink.reader.ReaderState
 import io.github.sejoung.panelyink.reader.ReaderViewModel
 import io.github.sejoung.panelyink.reader.model.BookSettings
-import io.github.sejoung.panelyink.reader.model.ReadingDirection
+import io.github.sejoung.panelyink.core.preferences.ReadingDirection
 import io.github.sejoung.panelyink.reader.model.SeriesContext
 import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
 import io.github.sejoung.panelyink.ui.components.PanelyArrowForwardIcon

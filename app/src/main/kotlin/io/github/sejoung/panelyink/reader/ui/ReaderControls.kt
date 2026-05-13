@@ -1,17 +1,12 @@
 package io.github.sejoung.panelyink.reader.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -30,13 +25,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.core.render.ContrastMatrix
-import io.github.sejoung.panelyink.reader.model.ReadingDirection
 import io.github.sejoung.panelyink.ui.components.PanelyTextButton
+import io.github.sejoung.panelyink.ui.components.Segments
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
 import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
 import kotlin.math.roundToInt
@@ -56,16 +50,6 @@ import kotlin.math.roundToInt
  * 설정 그룹의 상위 헤더(예: "페이지 레이아웃", "화질"). [SectionLabel]은 한 그룹
  * 안의 개별 섹션 라벨이므로 위계상 더 옅게 표현 — 두 단계 hierarchy.
  */
-@Composable
-internal fun GroupHeader(text: String) {
-  val typography = LocalPanelyInkTypography.current
-  Text(
-    text = text,
-    style = typography.list,
-    color = PanelyInkColors.Ink,
-  )
-}
-
 @Composable
 internal fun SectionLabel(text: String) {
   val typography = LocalPanelyInkTypography.current
@@ -95,24 +79,6 @@ internal fun FitSegments(
 }
 
 @Composable
-internal fun DirectionSegments(
-  selected: ReadingDirection,
-  onSelect: (ReadingDirection) -> Unit,
-) {
-  // M1.5에서 VerticalScroll 추가. 지금은 LTR/RTL 두 개만 노출.
-  val options = listOf(
-    ReadingDirection.Ltr to stringResource(R.string.reader_direction_ltr),
-    ReadingDirection.Rtl to stringResource(R.string.reader_direction_rtl),
-  )
-  Segments(
-    options = options,
-    isSelected = { it == selected },
-    labelOf = { options.first { p -> p.first == it }.second },
-    onSelect = onSelect,
-  )
-}
-
-@Composable
 internal fun TrimSegments(
   enabled: Boolean,
   onSelect: (Boolean) -> Unit,
@@ -127,92 +93,6 @@ internal fun TrimSegments(
     labelOf = { options.first { p -> p.first == it }.second },
     onSelect = onSelect,
   )
-}
-
-@Composable
-internal fun InvertSegments(
-  enabled: Boolean,
-  onSelect: (Boolean) -> Unit,
-) {
-  val options = listOf(
-    false to stringResource(R.string.common_off),
-    true to stringResource(R.string.common_on),
-  )
-  Segments(
-    options = options,
-    isSelected = { it == enabled },
-    labelOf = { options.first { p -> p.first == it }.second },
-    onSelect = onSelect,
-  )
-}
-
-@Composable
-internal fun FullRefreshIntervalSegments(
-  interval: Int,
-  onSelect: (Int) -> Unit,
-) {
-  // 기본은 끔. 잔상이 신경 쓰이는 기기에서 사용자가 주기를 켠다.
-  val options = listOf(
-    0 to stringResource(R.string.common_off),
-    1 to "1",
-    3 to "3",
-    5 to "5",
-    10 to "10",
-  )
-  Segments(
-    options = options,
-    isSelected = { it == interval },
-    labelOf = { options.first { p -> p.first == it }.second },
-    onSelect = onSelect,
-  )
-}
-
-/**
- * 가로로 나란한 토글. 선택된 항목은 fill 반전(Guidelines §7).
- *
- * `PanelyButton`을 weight로 채우려면 RowScope의 weight 모디파이어가 필요한데
- * 외부에서 weight 받기가 어색해, 여기서 인라인으로 동등한 시각 규칙으로 그린다.
- */
-@Composable
-internal fun <T> Segments(
-  options: List<Pair<T, String>>,
-  isSelected: (T) -> Boolean,
-  labelOf: (T) -> String,
-  onSelect: (T) -> Unit,
-) {
-  val typography = LocalPanelyInkTypography.current
-  Row(
-    modifier = Modifier
-      .fillMaxWidth()
-      .height(48.dp),
-    horizontalArrangement = Arrangement.spacedBy(8.dp),
-  ) {
-    options.forEach { (value, _) ->
-      val selected = isSelected(value)
-      val bg = if (selected) PanelyInkColors.Ink else PanelyInkColors.Paper
-      val fg = if (selected) PanelyInkColors.Paper else PanelyInkColors.Ink
-      Box(
-        modifier = Modifier
-          .weight(1f)
-          .fillMaxHeight()
-          .background(bg)
-          .border(2.dp, PanelyInkColors.Ink)
-          .clickable(
-            interactionSource = remember(value) { MutableInteractionSource() },
-            indication = null,
-            onClick = { onSelect(value) },
-          ),
-        contentAlignment = Alignment.Center,
-      ) {
-        Text(
-          text = labelOf(value),
-          style = typography.body,
-          color = fg,
-          textAlign = TextAlign.Center,
-        )
-      }
-    }
-  }
 }
 
 /**

@@ -21,9 +21,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.core.fit.FitMode
+import io.github.sejoung.panelyink.core.preferences.ReadingDirection
 import io.github.sejoung.panelyink.core.render.ContrastMatrix
 import io.github.sejoung.panelyink.reader.ReaderState
-import io.github.sejoung.panelyink.reader.model.ReadingDirection
+import io.github.sejoung.panelyink.ui.components.DirectionSegments
+import io.github.sejoung.panelyink.ui.components.GroupHeader
+import io.github.sejoung.panelyink.ui.components.InvertSegments
 import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
 import io.github.sejoung.panelyink.ui.components.PanelyIconButton
 import io.github.sejoung.panelyink.ui.components.PanelyTextButton

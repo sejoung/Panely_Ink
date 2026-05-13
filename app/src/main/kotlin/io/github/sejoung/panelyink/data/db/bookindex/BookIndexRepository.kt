@@ -1,13 +1,13 @@
 package io.github.sejoung.panelyink.data.db.bookindex
 
 import android.net.Uri
-import io.github.sejoung.panelyink.core.book.BookIdentity
 import io.github.sejoung.panelyink.core.sort.NaturalOrderComparator
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
 import io.github.sejoung.panelyink.data.db.flatMapInChunks
 import io.github.sejoung.panelyink.data.db.forEachChunk
 import io.github.sejoung.panelyink.library.data.IndexedBookEntry
 import io.github.sejoung.panelyink.library.model.BookEntry
+import io.github.sejoung.panelyink.library.model.bookId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -54,7 +54,7 @@ class RoomBookIndexRepository(
   }
 
   override suspend fun replaceKnownBooks(indexedBooks: List<IndexedBookEntry>) = withContext(Dispatchers.IO) {
-    val ids = indexedBooks.mapTo(mutableSetOf()) { BookIdentity.fromEntry(it.book).value }
+    val ids = indexedBooks.mapTo(mutableSetOf()) { it.book.bookId.value }
     if (ids.isEmpty()) {
       dao.deleteAll()
       return@withContext
@@ -71,7 +71,7 @@ private fun List<IndexedBookEntry>.toEntities(indexedAt: Long): List<BookIndexEn
   map { indexed ->
     val book = indexed.book
     BookIndexEntity(
-      bookId = BookIdentity.fromEntry(book).value,
+      bookId = book.bookId.value,
       documentUri = book.documentUri.toString(),
       displayName = book.displayName,
       sizeBytes = book.sizeBytes,

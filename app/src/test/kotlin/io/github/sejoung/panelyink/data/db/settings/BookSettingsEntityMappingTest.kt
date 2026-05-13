@@ -2,7 +2,7 @@ package io.github.sejoung.panelyink.data.db.settings
 
 import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.reader.model.BookSettings
-import io.github.sejoung.panelyink.reader.model.ReadingDirection
+import io.github.sejoung.panelyink.core.preferences.ReadingDirection
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

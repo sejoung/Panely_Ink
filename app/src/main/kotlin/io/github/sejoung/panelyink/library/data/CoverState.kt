@@ -1,10 +1,10 @@
 package io.github.sejoung.panelyink.library.data
 
-import io.github.sejoung.panelyink.core.book.BookIdentity
 import io.github.sejoung.panelyink.data.db.cover.CoverStatus
 import io.github.sejoung.panelyink.library.model.BookEntry
 import io.github.sejoung.panelyink.library.model.FolderEntry
 import io.github.sejoung.panelyink.library.model.LibraryEntry
+import io.github.sejoung.panelyink.library.model.bookId
 
 /**
  * `LibraryState.covers` / `coverStatus` 갱신 정책.
@@ -70,11 +70,11 @@ internal object CoverState {
         val ids = mutableSetOf<String>()
         for (entry in entries) {
             when (entry) {
-                is BookEntry -> ids += BookIdentity.fromEntry(entry).value
+                is BookEntry -> ids += entry.bookId.value
                 is FolderEntry -> {
                     folderFirstBook[entry.documentUri]?.let { ids += it }
                     entry.nestedBooks?.firstOrNull()?.let {
-                        ids += BookIdentity.fromEntry(it).value
+                        ids += it.bookId.value
                     }
                 }
             }

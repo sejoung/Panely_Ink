@@ -9,7 +9,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import io.github.sejoung.panelyink.core.book.BookIdentity
 import io.github.sejoung.panelyink.core.position.BookProgress
 import io.github.sejoung.panelyink.data.AppDataResetter
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
@@ -28,7 +27,7 @@ import io.github.sejoung.panelyink.library.data.CoverState
 import io.github.sejoung.panelyink.library.data.IndexedBookEntry
 import io.github.sejoung.panelyink.library.data.LibraryPathCodec
 import io.github.sejoung.panelyink.library.data.LibraryRepository
-import io.github.sejoung.panelyink.library.data.NestedZipExtractor
+import io.github.sejoung.panelyink.core.archive.NestedZipExtractor
 import io.github.sejoung.panelyink.library.data.PrefetchedBookData
 import io.github.sejoung.panelyink.library.data.SeriesLookup
 import io.github.sejoung.panelyink.library.data.prefetchBookData
@@ -38,6 +37,7 @@ import io.github.sejoung.panelyink.library.model.FolderEntry
 import io.github.sejoung.panelyink.library.model.LibraryEntry
 import io.github.sejoung.panelyink.library.model.SortMode
 import io.github.sejoung.panelyink.library.model.ViewMode
+import io.github.sejoung.panelyink.library.model.bookId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -342,7 +342,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
    */
   fun openBook(book: BookEntry, onBook: (BookEntry) -> Unit) {
     if (book.nestedEntryName != null) {
-      progressLoadedBookIds.remove(BookIdentity.fromEntry(book).value)
+      progressLoadedBookIds.remove(book.bookId.value)
       onBook(book)
       return
     }
@@ -354,7 +354,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         clearSearch()
         refreshChildren(virtualFolder)
       } else {
-        progressLoadedBookIds.remove(BookIdentity.fromEntry(book).value)
+        progressLoadedBookIds.remove(book.bookId.value)
         onBook(book)
       }
     }
@@ -487,7 +487,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         // 가상 폴더면 첫 nested 책이 곧 표지 source — repo.firstBookIn(SAF query) 생략.
         val firstBook = folder.nestedBooks?.firstOrNull() ?: repo.firstBookIn(folder)
         if (firstBook != null) {
-          val bookId = BookIdentity.fromEntry(firstBook).value
+          val bookId = firstBook.bookId.value
           _state.value = _state.value.copy(
             folderFirstBook = _state.value.folderFirstBook + (key to bookId),
             folderFirstBookEntries = _state.value.folderFirstBookEntries + (key to firstBook),
@@ -510,7 +510,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
    * 라이브러리 진입에서 % 라벨이 등장.
    */
   fun requestProgress(book: BookEntry) {
-    val bookId = BookIdentity.fromEntry(book).value
+    val bookId = book.bookId.value
     if (bookId in progressLoadedBookIds) return
     if (progressJobs.containsKey(bookId)) return
     val job = viewModelScope.launch {
@@ -544,7 +544,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
    * 첫 진입이 답답해진다. 사용자 명시 새로고침으로만 재추출(`coverMetaRepo.delete`).
    */
   fun requestCover(book: BookEntry) {
-    val bookId = BookIdentity.fromEntry(book).value
+    val bookId = book.bookId.value
     if (_state.value.covers.containsKey(bookId)) return
     coverMemoryCache[bookId]?.let { image ->
       _state.value = _state.value.copy(covers = _state.value.covers + (bookId to image))
@@ -826,7 +826,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
   private suspend fun applyCachedEntryCovers(entries: List<LibraryEntry>) {
     val directBookIds = entries
       .filterIsInstance<BookEntry>()
-      .map { BookIdentity.fromEntry(it).value }
+      .map { it.bookId.value }
     val folderBookIds = entries
       .filterIsInstance<FolderEntry>()
       .mapNotNull { folder -> _state.value.folderFirstBook[folder.documentUri] }
@@ -872,14 +872,14 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
       emptyList()
     }
     indexedHits.forEach { indexed ->
-      globalBookmarkBookIndex[BookIdentity.fromEntry(indexed.book).value] = indexed
+      globalBookmarkBookIndex[indexed.book.bookId.value] = indexed
     }
     val scanMissingBookIds = requestedBookIds - globalBookmarkBookIndex.keys
     if (scanMissingBookIds.isNotEmpty()) {
       repo.findBooksByIds(_state.value.roots, scanMissingBookIds).also { found ->
         bookIndexRepo.upsertAll(found)
       }.forEach { indexed ->
-        globalBookmarkBookIndex[BookIdentity.fromEntry(indexed.book).value] = indexed
+        globalBookmarkBookIndex[indexed.book.bookId.value] = indexed
       }
     }
     val indexedBooks = requestedBookIds.mapNotNull { globalBookmarkBookIndex[it] }
@@ -893,7 +893,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     bookmarks: List<BookBookmark>,
     indexedBooks: List<IndexedBookEntry>,
   ): List<GlobalBookmarkItem> {
-    val booksById = indexedBooks.associateBy { BookIdentity.fromEntry(it.book).value }
+    val booksById = indexedBooks.associateBy { it.book.bookId.value }
     bookmarkRepo.removeOrphans(booksById.keys)
     return bookmarks.mapNotNull { bookmark ->
       booksById[bookmark.bookId]?.let { indexed ->
@@ -915,7 +915,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
       val indexedBooks = repo.listAllBooks(_state.value.roots)
       bookIndexRepo.replaceKnownBooks(indexedBooks)
       val existingBookIds = indexedBooks
-        .mapTo(mutableSetOf()) { BookIdentity.fromEntry(it.book).value }
+        .mapTo(mutableSetOf()) { it.book.bookId.value }
       bookmarkRepo.removeOrphans(existingBookIds)
       if (_state.value.globalBookmarksOpen) {
         _state.value = _state.value.copy(globalBookmarks = loadGlobalBookmarkItems())

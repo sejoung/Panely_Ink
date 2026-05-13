@@ -34,11 +34,11 @@ import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
 import io.github.sejoung.panelyink.data.preferences.SharedPrefsAppPreferencesRepository
 import io.github.sejoung.panelyink.library.model.ViewMode
-import io.github.sejoung.panelyink.reader.ui.DirectionSegments
-import io.github.sejoung.panelyink.reader.ui.FullRefreshIntervalSegments
-import io.github.sejoung.panelyink.reader.ui.GroupHeader
-import io.github.sejoung.panelyink.reader.ui.InvertSegments
-import io.github.sejoung.panelyink.reader.ui.Segments
+import io.github.sejoung.panelyink.ui.components.DirectionSegments
+import io.github.sejoung.panelyink.ui.components.FullRefreshIntervalSegments
+import io.github.sejoung.panelyink.ui.components.GroupHeader
+import io.github.sejoung.panelyink.ui.components.InvertSegments
+import io.github.sejoung.panelyink.ui.components.Segments
 import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
 import io.github.sejoung.panelyink.ui.components.PanelyIconButton
 import io.github.sejoung.panelyink.ui.components.PanelyTextButton

@@ -37,6 +37,7 @@ import io.github.sejoung.panelyink.library.model.BookEntry
 import io.github.sejoung.panelyink.reader.ReaderViewModel
 import io.github.sejoung.panelyink.reader.input.ReaderInput
 import io.github.sejoung.panelyink.reader.model.BookSettings
+import io.github.sejoung.panelyink.reader.model.ReadableBookRef
 import io.github.sejoung.panelyink.reader.model.SeriesContext
 import io.github.sejoung.panelyink.reader.session.CbzBookSession
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
@@ -94,7 +95,7 @@ fun ReaderScreen(
       Log.d(TAG, "ReaderScreen open: ${entry.displayName}")
       loadingStep = localContext.getString(R.string.reader_loading_scan_pages)
       closeResourceOnFailure(
-        open = { CbzBookSession.open(appContext, entry) },
+        open = { CbzBookSession.open(appContext, entry.toReadableBookRef()) },
         close = { it.close() },
       ) { session ->
         loadingStep = localContext.getString(R.string.reader_loading_restore_position)
@@ -184,6 +185,14 @@ internal suspend fun <T, R> closeResourceOnFailure(
 }
 
 private const val TAG = "PanelyInk.Reader"
+
+private fun BookEntry.toReadableBookRef(): ReadableBookRef = ReadableBookRef(
+  documentUri = documentUri,
+  displayName = displayName,
+  sizeBytes = sizeBytes,
+  sourceId = bookIdSource,
+  nestedEntryName = nestedEntryName,
+)
 
 @Composable
 private fun ReaderContent(

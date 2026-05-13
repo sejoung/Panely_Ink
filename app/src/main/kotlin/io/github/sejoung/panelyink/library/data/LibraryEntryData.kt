@@ -1,6 +1,5 @@
 package io.github.sejoung.panelyink.library.data
 
-import io.github.sejoung.panelyink.core.book.BookIdentity
 import io.github.sejoung.panelyink.core.position.BookProgress
 import io.github.sejoung.panelyink.core.position.PositionRepository
 import io.github.sejoung.panelyink.core.sort.NaturalOrderComparator
@@ -10,6 +9,7 @@ import io.github.sejoung.panelyink.library.model.BookEntry
 import io.github.sejoung.panelyink.library.model.FolderEntry
 import io.github.sejoung.panelyink.library.model.LibraryEntry
 import io.github.sejoung.panelyink.library.model.SortMode
+import io.github.sejoung.panelyink.library.model.bookId
 
 internal data class PrefetchedBookData(
   val progress: Map<String, BookProgress>,
@@ -23,7 +23,7 @@ internal suspend fun prefetchBookData(
 ): PrefetchedBookData {
   val books = entries.filterIsInstance<BookEntry>()
   if (books.isEmpty()) return PrefetchedBookData(emptyMap(), emptyMap())
-  val bookIds = books.map { BookIdentity.fromEntry(it).value }
+  val bookIds = books.map { it.bookId.value }
   val progressMap = positionRepo.loadProgressMap(bookIds)
     .filterValues { it.isKnown }
   val statusMap = coverMetaRepo.loadMap(bookIds)
@@ -41,7 +41,7 @@ internal suspend fun sortLibraryEntries(
   val sortedBooks = when (mode) {
     SortMode.Name -> books
     SortMode.LastOpened -> {
-      val idsBySource = books.associate { it.bookIdSource to BookIdentity.fromEntry(it).value }
+      val idsBySource = books.associate { it.bookIdSource to it.bookId.value }
       val timestamps = positionRepo.loadUpdatedAtMap(idsBySource.values.toList())
       books.sortedWith(
         compareByDescending<BookEntry> {

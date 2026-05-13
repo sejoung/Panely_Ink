@@ -1,5 +1,6 @@
 package io.github.sejoung.panelyink.library.data
 
+import io.github.sejoung.panelyink.core.archive.NestedZipExtractor
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Test

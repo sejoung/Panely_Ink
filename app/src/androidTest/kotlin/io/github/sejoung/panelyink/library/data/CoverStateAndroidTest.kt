@@ -2,16 +2,16 @@ package io.github.sejoung.panelyink.library.data
 
 import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.github.sejoung.panelyink.core.book.BookIdentity
 import io.github.sejoung.panelyink.library.model.BookEntry
 import io.github.sejoung.panelyink.library.model.FolderEntry
+import io.github.sejoung.panelyink.library.model.bookId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * `CoverState.visibleBookIdsFor` 검증. `android.net.Uri` / `BookIdentity` 의존이 있어
+ * `CoverState.visibleBookIdsFor` 검증. `android.net.Uri` / `BookEntry.bookId` 의존이 있어
  * androidTest 트랙. 순수 Map 연산은 `CoverStateTest`(JVM)에서 검증.
  *
  * 회귀 방어 포인트: 폴더 이동 시 `pruneCoversToVisible`이 사용하는 visible 집합이
@@ -29,7 +29,7 @@ class CoverStateAndroidTest {
             folderFirstBook = emptyMap(),
         )
         assertEquals(
-            setOf(BookIdentity.fromEntry(book1).value, BookIdentity.fromEntry(book2).value),
+            setOf(book1.bookId.value, book2.bookId.value),
             ids,
         )
     }
@@ -81,7 +81,7 @@ class CoverStateAndroidTest {
             folderFirstBook = emptyMap(),
         )
         // 첫 권만 보존 — 폴더 행은 표지 1장만 보여주므로.
-        assertEquals(setOf(BookIdentity.fromEntry(firstNested).value), ids)
+        assertEquals(setOf(firstNested.bookId.value), ids)
     }
 
     @Test
@@ -123,11 +123,11 @@ class CoverStateAndroidTest {
             folderFirstBook = mapOf(plainFolder.documentUri to "folder1-first-book-id"),
         )
         assertEquals(3, ids.size)
-        assertTrue("direct book missing", ids.contains(BookIdentity.fromEntry(directBook).value))
+        assertTrue("direct book missing", ids.contains(directBook.bookId.value))
         assertTrue("folder firstBook missing", ids.contains("folder1-first-book-id"))
         assertTrue(
             "virtual folder first nested missing",
-            ids.contains(BookIdentity.fromEntry(virtualFolder.nestedBooks!!.first()).value),
+            ids.contains(virtualFolder.nestedBooks!!.first().bookId.value),
         )
     }
 
