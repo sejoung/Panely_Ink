@@ -47,6 +47,30 @@ Invalidated by:
 - `LibraryViewModel.refresh()`
 - `resetAllData()`
 
+## Nested ZIP Extraction Cache
+
+Location:
+
+```text
+cacheDir/nested/<parentHash>__<entryHash>.cbz
+```
+
+Stores:
+
+- one extracted nested archive selected from a ZIP-of-CBZ file
+
+Used by:
+
+- `CbzBookSession.open` for `BookRef` values with `nestedEntryName`
+
+Invalidated by:
+
+- Android cache eviction
+- `resetAllData()`
+
+Nested extraction has a 512 MB per-entry safety limit. Normal top-level CBZ files are not copied
+before reading.
+
 ## Cover Disk Cache
 
 Location:
@@ -57,7 +81,7 @@ filesDir/covers/<bookId>.jpg
 
 Stores:
 
-- extracted first-page cover thumbnails
+- extracted first-page cover thumbnails encoded as JPEG
 
 Used by:
 
@@ -102,7 +126,7 @@ Stores:
 
 Limit:
 
-- device-memory based byte budget (smaller on low-RAM devices)
+- device-memory based byte budget, smaller on low-RAM devices
 
 Used by:
 
@@ -117,11 +141,11 @@ Invalidated by:
 
 ## Book Index
 
-Location: Room `book_index`
+Location: Room `book_index`, accessed through `RoomBookIndexRepository`
 
 Stores:
 
-- recently scanned `bookId -> BookEntry` metadata
+- recently scanned `bookId -> BookRef` metadata
 - sibling group keys for opening a bookmarked book with adjacent volumes
 
 Used by:

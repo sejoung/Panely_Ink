@@ -18,9 +18,9 @@ Language: English | [한국어](README.ko.md)
 
 > Android e-ink devices deserve a comic reader that behaves like paper.
 
-Panely Ink is a focused CBZ/ZIP comic reader for Android e-ink devices, built first for
-the **Meebook M7**. It ports the spirit of [Panely](https://github.com/sejoung/Panely)
-to a touch-first, hardware-key-friendly, high-contrast reading experience.
+Panely Ink is a focused CBZ/ZIP comic reader for Android e-ink devices, built first for the
+**Meebook M7**. It ports the spirit of [Panely](https://github.com/sejoung/Panely) to a
+touch-first, hardware-key-friendly, high-contrast reading experience.
 
 The app is open source under the Apache 2.0 license.
 
@@ -35,17 +35,19 @@ Panely Ink is under active development. The core reader and local library are us
 - LTR/RTL reading direction with an app-level default and per-book override
 - Hardware page keys, volume keys, D-pad, and tap zones
 - Resume, progress badges, per-book settings, current-book bookmarks, and all-bookmarks view
-- Cover extraction with disk + Room metadata + in-memory LRU cache
-- Optional e-ink full refresh policy, trim, contrast, and invert controls
+- Book index for resolving all-bookmark rows and adjacent volumes
+- Cover extraction with disk JPEG cache, Room metadata, and in-memory LRU cache
+- Optional e-ink full refresh interval, manual full refresh, trim, contrast, and invert controls
 - Previous/next volume navigation and boundary key navigation
-- English and Korean UI strings, with system language as the default, English fallback, and an in-app language setting
+- English and Korean UI strings, with system language as the default, English fallback, and an
+  in-app language setting
 
 Planned or incomplete:
 
-- Gamma/sharpness and dithering
+- Gamma/sharpness and dithering decisions
 - Full library search / metadata indexing
 - Meebook-specific refresh API spike
-- Release packaging and device validation
+- Signed release packaging and device validation
 
 Remaining work is tracked in [docs/ROADMAP.md](docs/ROADMAP.md).
 
@@ -56,10 +58,10 @@ Panely Ink avoids animated, color-heavy UI. Reader chrome stays hidden until req
 - Left/right screen zones turn pages
 - Center zone opens the reader menu
 - Physical page/volume keys work without touching the screen again
-- At the first/last page, pressing the boundary key again moves to the previous/next volume when available
+- At the first/last page, pressing the boundary key again moves to the previous/next volume when
+  available
 
-The visual system is documented in
-[docs/DESIGN.md](docs/DESIGN.md).
+The visual system is documented in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Build
 
@@ -74,7 +76,8 @@ Common commands:
 ```bash
 ./gradlew :app:assembleDebug
 ./gradlew :app:installDebug
-./gradlew testDebugUnitTest
+./gradlew test
+./gradlew lintDebug
 ./gradlew compileDebugAndroidTestKotlin
 ./gradlew connectedDebugAndroidTest
 ```
@@ -115,22 +118,22 @@ release APK, creates the local tag, and asks whether to push.
 
 ```text
 app/src/main/kotlin/io/github/sejoung/panelyink/
-├── core/                 # archive, book identity, fit, position, render, sort, trim primitives
-├── data/                 # Room database packages, repositories, preferences, reset helpers
+├── core/                 # archive, book refs, fit, position, prefs, render, sort, trim
+├── data/                 # Room packages, repositories, preferences, reset helpers
 ├── library/
-│   ├── data/             # SAF scanning, covers, nested ZIP extraction, path codec
-│   ├── model/            # LibraryEntry, SortMode, ViewMode
+│   ├── data/             # SAF scanning, covers, path codec
+│   ├── model/            # LibraryEntry, BookEntry adapters, SortMode, ViewMode
 │   ├── ui/               # Library Compose screens and dialogs
 │   └── LibraryViewModel.kt
 ├── reader/
 │   ├── input/            # hardware key dispatch
-│   ├── model/            # BookSettings, ReadingDirection, SeriesContext
+│   ├── model/            # BookSettings, SeriesContext
 │   ├── session/          # CbzBookSession, PageDecoder, bitmap cache
 │   ├── ui/               # Reader Compose + Android View host
 │   └── ReaderViewModel.kt
 ├── ui/                   # theme tokens and shared components
 ├── MainActivity.kt       # screen host and key dispatcher
-└── PanelyInkApp.kt       # app startup and cache pruning
+└── PanelyInkApp.kt       # app startup, migration, cover pruning
 ```
 
 More implementation notes are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -141,13 +144,13 @@ The app relies on aggressive but explicit caching:
 
 - SAF folder scans are cached per folder until refresh/reset
 - ZIP-of-CBZ inspection results are cached, including negative results
-- Covers use Room metadata, disk PNG cache, and a bounded in-memory LRU
+- Nested ZIP entries are extracted once into `cacheDir/nested`
+- Covers use Room metadata, disk JPEG cache, and a bounded in-memory LRU
 - Global bookmarks index only the books needed for the all-bookmarks list
 - Reader pages use a 100 MB bitmap LRU per open book session
 - Page trim results are cached per decoded page
 
-Cache behavior and invalidation points are documented in
-[docs/CACHE_STRATEGY.md](docs/CACHE_STRATEGY.md).
+Cache behavior and invalidation points are documented in [docs/CACHE_STRATEGY.md](docs/CACHE_STRATEGY.md).
 
 ## Documentation
 
@@ -164,6 +167,7 @@ Issues and pull requests are welcome. The project is intentionally conservative:
 - Keep UI high-contrast and static
 - Prefer measured improvements over broad rewrites
 - Keep e-ink refresh cost in mind
+- Respect package boundaries between `core`, `library`, `reader`, and `data`
 - Add or update focused tests for behavior changes
 
 See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) before opening larger changes.

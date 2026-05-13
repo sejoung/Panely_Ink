@@ -35,17 +35,18 @@ Panely Ink는 현재 개발 중입니다. 핵심 리더와 로컬 라이브러�
 - 앱 기본값과 책별 오버라이드를 지원하는 LTR/RTL 읽기 방향
 - 물리 페이지 키, 볼륨 키, D-pad, 탭 영역
 - 이어보기, 진행률 배지, 책별 설정, 현재 책 북마크, 전체 북마크 화면
-- 디스크 캐시, Room 메타데이터, 메모리 LRU를 사용하는 표지 추출
-- 선택형 e-ink 풀리프레시 정책, 트리밍, 대비, 흑백 반전 컨트롤
+- 전체 북마크 행과 인접 권 이동을 해결하기 위한 책 인덱스
+- 디스크 JPEG 캐시, Room 메타데이터, 메모리 LRU를 사용하는 표지 추출
+- 선택형 e-ink 풀리프레시 주기, 수동 풀리프레시, 트리밍, 대비, 흑백 반전 컨트롤
 - 이전/다음 권 이동과 첫/마지막 페이지 경계 키 이동
 - 영어/한국어 UI 문자열, 시스템 언어 기본값, 영어 fallback, 앱 내 언어 설정
 
 계획 중이거나 아직 미완성인 항목:
 
-- 감마/선명도와 디더링
+- 감마/선명도와 디더링 결정
 - 전체 라이브러리 검색 / 메타데이터 인덱싱
 - Meebook 전용 refresh API 조사
-- 릴리스 패키징과 실기기 검증
+- 서명된 릴리스 패키징과 실기기 검증
 
 남은 작업은 [docs/ROADMAP.md](docs/ROADMAP.md)에 정리되어 있습니다.
 
@@ -75,7 +76,8 @@ Panely Ink는 애니메이션이나 색상이 많은 UI를 피합니다. 리더 
 ```bash
 ./gradlew :app:assembleDebug
 ./gradlew :app:installDebug
-./gradlew testDebugUnitTest
+./gradlew test
+./gradlew lintDebug
 ./gradlew compileDebugAndroidTestKotlin
 ./gradlew connectedDebugAndroidTest
 ```
@@ -116,22 +118,22 @@ release APK를 빌드한 뒤 로컬 태그를 만들고 push 여부를 물어봅
 
 ```text
 app/src/main/kotlin/io/github/sejoung/panelyink/
-├── core/                 # archive, book identity, fit, position, render, sort, trim primitives
-├── data/                 # Room database packages, repositories, preferences, reset helpers
+├── core/                 # archive, book refs, fit, position, prefs, render, sort, trim
+├── data/                 # Room packages, repositories, preferences, reset helpers
 ├── library/
-│   ├── data/             # SAF scanning, covers, nested ZIP extraction, path codec
-│   ├── model/            # LibraryEntry, SortMode, ViewMode
+│   ├── data/             # SAF scanning, covers, path codec
+│   ├── model/            # LibraryEntry, BookEntry adapters, SortMode, ViewMode
 │   ├── ui/               # Library Compose screens and dialogs
 │   └── LibraryViewModel.kt
 ├── reader/
 │   ├── input/            # hardware key dispatch
-│   ├── model/            # BookSettings, ReadingDirection, SeriesContext
+│   ├── model/            # BookSettings, SeriesContext
 │   ├── session/          # CbzBookSession, PageDecoder, bitmap cache
 │   ├── ui/               # Reader Compose + Android View host
 │   └── ReaderViewModel.kt
 ├── ui/                   # theme tokens and shared components
 ├── MainActivity.kt       # screen host and key dispatcher
-└── PanelyInkApp.kt       # app startup and cache pruning
+└── PanelyInkApp.kt       # app startup, migration, cover pruning
 ```
 
 구현 구조는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)에 더 자세히 정리되어 있습니다.
@@ -142,7 +144,8 @@ Panely Ink는 비용이 큰 작업을 줄이기 위해 명시적인 캐시를 �
 
 - SAF 폴더 스캔은 refresh/reset 전까지 폴더 단위로 캐시
 - ZIP-of-CBZ 검사 결과는 시리즈가 아닌 경우까지 캐시
-- 표지는 Room 메타데이터, 디스크 PNG 캐시, 메모리 LRU 사용
+- 중첩 ZIP entry는 `cacheDir/nested`에 한 번 추출
+- 표지는 Room 메타데이터, 디스크 JPEG 캐시, 메모리 LRU 사용
 - 전체 북마크는 전체 목록에 필요한 책만 인덱싱
 - 리더 페이지는 열린 책 세션마다 100 MB 비트맵 LRU 사용
 - 페이지 트림 결과는 디코드된 페이지 단위로 캐시
@@ -164,6 +167,7 @@ Panely Ink는 비용이 큰 작업을 줄이기 위해 명시적인 캐시를 �
 - UI는 고대비와 정적인 상태 변화를 우선합니다.
 - 넓은 리라이트보다 측정 가능한 개선을 선호합니다.
 - e-ink refresh 비용을 항상 고려합니다.
+- `core`, `library`, `reader`, `data` 패키지 경계를 지킵니다.
 - 동작 변경에는 집중된 테스트를 추가하거나 갱신합니다.
 
 큰 변경을 제안하기 전에는 [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)를 확인해 주세요.

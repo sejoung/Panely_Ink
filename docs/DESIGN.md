@@ -31,25 +31,27 @@ Avoid gradients, shadows, blur, and color-dependent states.
 - Keep interactive targets at least 48 x 48 dp.
 - Library rows should be easy to hit and scan.
 - Reader mode uses no padding unless fit/trim calculation requires it.
+- Shared controls live under `ui/components`; screen-specific controls stay with the screen.
 
 ## Reader Interaction
 
 The reader screen is split into three tap zones:
 
 ```text
-left 30%  -> previous/next depending on reading direction
+left 30%   -> previous/next depending on reading direction
 center 40% -> menu
-right 30% -> next/previous depending on reading direction
+right 30%  -> next/previous depending on reading direction
 ```
 
-Physical page keys, volume keys, D-pad keys, and the tap zones should all stay consistent with
-reading direction. At the first or last page, pressing the boundary key again may navigate to the
-previous or next volume when a series context exists.
+Physical page keys, volume keys, D-pad keys, and tap zones should all stay consistent with reading
+direction. At the first or last page, pressing the boundary key again may navigate to the previous
+or next volume when a series context exists.
 
 ## Components
 
 - Buttons are flat, high contrast, and border-driven.
 - Selection is expressed with fill inversion, not color accents.
+- Segmented controls are shared through `PanelySegments`.
 - Dialogs use `Paper` background and `Ink` border.
 - Ripple, elevation, shadow, and animated spinners are avoided.
 - Sliders apply expensive changes on release, not on every drag frame.
@@ -65,7 +67,10 @@ previous or next volume when a series context exists.
 
 E-ink redraw cost matters:
 
-- Page turns use partial redraws by default. Users can enable configurable full refresh every N pages when their device shows noticeable ghosting.
+- Page turns use partial redraws by default.
+- Users can enable configurable full refresh every N pages when their device shows noticeable
+  ghosting.
+- Users can trigger a manual full refresh from the reader controls.
 - Menus, dialogs, and large UI state changes should avoid animated transitions.
 - Loading states should use static text.
 - Reader full refresh is simulated with high-contrast frame changes because there is no public

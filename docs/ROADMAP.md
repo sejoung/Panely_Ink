@@ -11,6 +11,7 @@ Implemented:
 - library refresh button
 - CBZ/ZIP reader without full archive copy
 - ZIP-of-CBZ series detection and nested opening
+- feature-neutral `BookRef` navigation between library, reader, bookmarks, and book index
 - single-page Canvas reader
 - LTR/RTL reading direction with an app-level default and per-book override
 - tap zones and hardware key input
@@ -18,17 +19,19 @@ Implemented:
 - resume, progress, per-book settings, current-book bookmarks, and all-bookmarks screen
 - cover extraction with disk, Room metadata, and memory LRU caches
 - optional e-ink full refresh interval, manual full refresh, trim, contrast, and invert
-- English/Korean localization with system-language default, English fallback, and in-app language selection
+- English/Korean localization with system-language default, English fallback, and in-app language
+  selection
 - Room migrations and focused unit/instrumentation tests
+- CI, release, and GitHub Pages workflows for debug artifacts and unsigned release APKs
 
 ## Before v1.0
 
 - Meebook M7 real-device validation
 - Meebook refresh API spike
-- Resume definition and polish
+- Resume/progress edge-case polish
 - dithering decision
 - gamma/sharpness decision
-- release packaging and GitHub Releases APK
+- signed release packaging
 - splash screen with static icon
 
 ## Later

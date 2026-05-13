@@ -14,25 +14,47 @@ Requirements:
 Useful checks:
 
 ```bash
-./gradlew testDebugUnitTest
-./gradlew compileDebugKotlin
+./gradlew test
 ./gradlew lintDebug
 ./gradlew compileDebugAndroidTestKotlin
+./gradlew assembleDebug
 ```
 
-Run connected tests for Room migrations or Android framework behavior:
+Run connected tests for Room migrations, Android framework behavior, or SAF/URI behavior:
 
 ```bash
 ./gradlew connectedDebugAndroidTest
 ```
+
+## Architecture Guidelines
+
+- Keep shared primitives in `core`.
+- Keep persistence implementations in `data`.
+- Keep SAF scan rows and library-only UI state in `library`.
+- Keep open-book resources and page rendering in `reader`.
+- Use `core.book.BookRef` or `IndexedBookRef` when data crosses from library into reader,
+  bookmarks, or indexing.
+- Do not pass `library.model.BookEntry` deeper into reader/session code.
+- Put user-facing strings in Android string resources. English is the default; Korean lives in
+  `values-ko`.
+
+## Code Style
+
+- Follow the existing package boundaries.
+- Keep UI static and high contrast.
+- Avoid animations, shadows, gradients, and ripple effects.
+- Prefer explicit caches with documented invalidation points.
+- Keep reader hot paths out of Compose when direct `View` drawing is more predictable.
+- Add focused tests for behavioral changes.
 
 ## GitHub Actions
 
 - `.github/workflows/ci.yml` runs on pushes to `main`/`master`, pull requests, and manual dispatch.
   It runs debug unit tests, lint, androidTest compilation, and debug APK packaging in one Gradle
   invocation, then uploads lint/test reports and a debug APK artifact.
-- `.github/workflows/release.yml` runs on `v*` tags or manual dispatch with a tag input. It builds
-  an unsigned release APK and publishes it with `SHA256SUMS.txt` to GitHub Releases.
+- `.github/workflows/release.yml` runs on `v*` tags or manual dispatch with a tag input. It runs
+  release checks, builds an unsigned release APK, writes `SHA256SUMS.txt`, and publishes the files
+  to GitHub Releases.
 - `.github/workflows/pages.yml` deploys `docs/` to GitHub Pages. The root page is
   `docs/index.html`, which resolves the latest APK from GitHub Releases.
 
@@ -52,17 +74,6 @@ modes, builds the unsigned APK, writes checksums under `build/release/<tag>/`, c
 bump, and creates the local git tag. By default it asks before pushing. Use `--push` for
 non-interactive push or `--no-push` to skip the prompt.
 
-## Code Style
-
-- Follow the existing package boundaries.
-- Keep UI static and high contrast.
-- Avoid animations, shadows, gradients, and ripple effects.
-- Prefer explicit caches with documented invalidation points.
-- Keep reader hot paths out of Compose when direct `View` drawing is more predictable.
-- Put user-facing text in Android string resources. English is the default; Korean lives in
-  `values-ko`.
-- Add focused tests for behavioral changes.
-
 ## Pull Request Checklist
 
 - Explain the user-visible behavior change.
@@ -76,7 +87,7 @@ non-interactive push or `--no-push` to skip the prompt.
 - Real-device performance measurements
 - Dithering and gamma experiments
 - Full-library search and metadata indexing
-- Release workflow and signed APK packaging
+- Release signing and install-ready APK packaging
 
 ## License
 
