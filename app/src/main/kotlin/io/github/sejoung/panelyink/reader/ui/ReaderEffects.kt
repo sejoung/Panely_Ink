@@ -12,7 +12,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import io.github.sejoung.panelyink.core.position.PositionRepository
 import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
 import io.github.sejoung.panelyink.data.db.settings.BookSettingsRepository
-import io.github.sejoung.panelyink.library.model.BookEntry
+import io.github.sejoung.panelyink.core.book.BookRef
 import io.github.sejoung.panelyink.reader.ReaderState
 import io.github.sejoung.panelyink.reader.ReaderViewModel
 import io.github.sejoung.panelyink.reader.input.ReaderInput
@@ -218,7 +218,7 @@ internal fun ReaderHardwareKeyHandler(
   onCloseMenu: () -> Unit,
   onCloseSettings: () -> Unit,
   onCloseBookmarks: () -> Unit,
-  onNavigate: (BookEntry, BookSettings) -> Unit,
+  onNavigate: (BookRef, BookSettings) -> Unit,
 ) {
   val activity = LocalContext.current.findMainActivity()
   // dispatcher는 boundary(첫/마지막 페이지)에서만 형제 권 점프 분기를 새로 잡으면 된다.

@@ -2,8 +2,8 @@ package io.github.sejoung.panelyink.reader.ui
 
 import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.sejoung.panelyink.core.book.BookRef
 import io.github.sejoung.panelyink.core.fit.FitMode
-import io.github.sejoung.panelyink.library.model.BookEntry
 import io.github.sejoung.panelyink.reader.ReaderState
 import io.github.sejoung.panelyink.core.preferences.ReadingDirection
 import io.github.sejoung.panelyink.reader.model.SeriesContext
@@ -67,7 +67,7 @@ class ReaderNavigationTest {
         return SeriesContext(current = books[current], siblings = books)
     }
 
-    private fun book(index: Int): BookEntry = BookEntry(
+    private fun book(index: Int): BookRef = BookRef(
         documentUri = Uri.parse("content://books/$index.cbz"),
         displayName = "Book $index.cbz",
         sizeBytes = 1024L,

@@ -21,7 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.sejoung.panelyink.R
-import io.github.sejoung.panelyink.library.model.BookEntry
+import io.github.sejoung.panelyink.core.book.BookRef
 import io.github.sejoung.panelyink.reader.ReaderState
 import io.github.sejoung.panelyink.reader.ReaderViewModel
 import io.github.sejoung.panelyink.reader.model.BookSettings
@@ -54,7 +54,7 @@ internal fun ReaderOverlayLayer(
   onJumpToPage: (Int) -> Unit,
   onToggleBookmark: () -> Unit,
   onDeleteBookmark: (Int) -> Unit,
-  onNavigate: (BookEntry, BookSettings) -> Unit,
+  onNavigate: (BookRef, BookSettings) -> Unit,
 ) {
   if (!menuOpen && !bookmarksOpen) {
     TapRegions(
@@ -137,7 +137,7 @@ private fun AdjacentBookPrompt(
   pageCount: Int,
   context: SeriesContext,
   settingsOpen: Boolean,
-  onNavigate: (BookEntry, BookSettings) -> Unit,
+  onNavigate: (BookRef, BookSettings) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   if (settingsOpen) return

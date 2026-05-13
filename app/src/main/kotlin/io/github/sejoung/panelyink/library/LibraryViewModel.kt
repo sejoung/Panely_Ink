@@ -9,6 +9,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.sejoung.panelyink.core.book.BookRef
+import io.github.sejoung.panelyink.core.book.IndexedBookRef
 import io.github.sejoung.panelyink.core.position.BookProgress
 import io.github.sejoung.panelyink.data.AppDataResetter
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
@@ -24,7 +26,6 @@ import io.github.sejoung.panelyink.library.data.CoverCache
 import io.github.sejoung.panelyink.library.data.CoverExtractor
 import io.github.sejoung.panelyink.library.data.CoverPruner
 import io.github.sejoung.panelyink.library.data.CoverState
-import io.github.sejoung.panelyink.library.data.IndexedBookEntry
 import io.github.sejoung.panelyink.library.data.LibraryPathCodec
 import io.github.sejoung.panelyink.library.data.LibraryRepository
 import io.github.sejoung.panelyink.core.archive.NestedZipExtractor
@@ -115,7 +116,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
   private val coverSemaphore = Semaphore(permits = 2)
   private val countSemaphore = Semaphore(permits = 2)
   private val progressLoadedBookIds = mutableSetOf<String>()
-  private val globalBookmarkBookIndex = mutableMapOf<String, IndexedBookEntry>()
+  private val globalBookmarkBookIndex = mutableMapOf<String, IndexedBookRef>()
   private var bookmarkPruneJob: Job? = null
 
   /**
@@ -891,7 +892,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
   private suspend fun buildGlobalBookmarkItems(
     bookmarks: List<BookBookmark>,
-    indexedBooks: List<IndexedBookEntry>,
+    indexedBooks: List<IndexedBookRef>,
   ): List<GlobalBookmarkItem> {
     val booksById = indexedBooks.associateBy { it.book.bookId.value }
     bookmarkRepo.removeOrphans(booksById.keys)
@@ -899,8 +900,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
       booksById[bookmark.bookId]?.let { indexed ->
         GlobalBookmarkItem(
           bookId = bookmark.bookId,
-          book = indexed.book,
-          siblings = indexed.siblings,
+              book = indexed.book,
+              siblings = indexed.siblings,
           pageIndex = bookmark.pageIndex,
           createdAt = bookmark.createdAt,
         )
@@ -1012,8 +1013,8 @@ data class LibraryState(
 
 data class GlobalBookmarkItem(
   val bookId: String,
-  val book: BookEntry,
-  val siblings: List<BookEntry>,
+  val book: BookRef,
+  val siblings: List<BookRef>,
   val pageIndex: Int,
   val createdAt: Long,
 )

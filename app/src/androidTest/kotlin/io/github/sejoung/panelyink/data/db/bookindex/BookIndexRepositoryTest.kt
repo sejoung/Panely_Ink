@@ -4,10 +4,9 @@ import android.net.Uri
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.sejoung.panelyink.core.book.BookRef
+import io.github.sejoung.panelyink.core.book.IndexedBookRef
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
-import io.github.sejoung.panelyink.library.data.IndexedBookEntry
-import io.github.sejoung.panelyink.library.model.BookEntry
-import io.github.sejoung.panelyink.library.model.bookId
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -46,8 +45,8 @@ class BookIndexRepositoryTest {
     val b = book(root = root, uri = "content://root/folder/01.cbz", name = "01.cbz")
     repo.upsertAll(
       listOf(
-        IndexedBookEntry(book = a, siblings = listOf(a, b), groupKey = groupKey),
-        IndexedBookEntry(book = b, siblings = listOf(a, b), groupKey = groupKey),
+        IndexedBookRef(book = a, siblings = listOf(a, b), groupKey = groupKey),
+        IndexedBookRef(book = b, siblings = listOf(a, b), groupKey = groupKey),
       ),
     )
 
@@ -66,21 +65,21 @@ class BookIndexRepositoryTest {
     val removed = book(root = root, uri = "content://root/removed.cbz", name = "removed.cbz")
     repo.upsertAll(
       listOf(
-        IndexedBookEntry(book = kept, siblings = listOf(kept, removed), groupKey = "content://root"),
-        IndexedBookEntry(book = removed, siblings = listOf(kept, removed), groupKey = "content://root"),
+        IndexedBookRef(book = kept, siblings = listOf(kept, removed), groupKey = "content://root"),
+        IndexedBookRef(book = removed, siblings = listOf(kept, removed), groupKey = "content://root"),
       ),
     )
 
     repo.replaceKnownBooks(
-      listOf(IndexedBookEntry(book = kept, siblings = listOf(kept), groupKey = "content://root")),
+      listOf(IndexedBookRef(book = kept, siblings = listOf(kept), groupKey = "content://root")),
     )
 
     assertEquals(1, repo.loadByIds(setOf(kept.bookId.value)).size)
-    assertEquals(emptyList<IndexedBookEntry>(), repo.loadByIds(setOf(removed.bookId.value)))
+    assertEquals(emptyList<IndexedBookRef>(), repo.loadByIds(setOf(removed.bookId.value)))
   }
 
-  private fun book(root: Uri, uri: String, name: String): BookEntry =
-    BookEntry(
+  private fun book(root: Uri, uri: String, name: String): BookRef =
+    BookRef(
       documentUri = Uri.parse(uri),
       displayName = name,
       sizeBytes = 123L,

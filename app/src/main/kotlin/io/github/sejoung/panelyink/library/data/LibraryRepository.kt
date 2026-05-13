@@ -5,11 +5,13 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.Log
 import io.github.sejoung.panelyink.core.archive.CbzArchive
+import io.github.sejoung.panelyink.core.book.IndexedBookRef
 import io.github.sejoung.panelyink.core.sort.NaturalOrderComparator
 import io.github.sejoung.panelyink.library.model.BookEntry
 import io.github.sejoung.panelyink.library.model.FolderEntry
 import io.github.sejoung.panelyink.library.model.LibraryEntry
 import io.github.sejoung.panelyink.library.model.bookId
+import io.github.sejoung.panelyink.library.model.toBookRef
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -174,7 +176,7 @@ class LibraryRepository(private val context: Context) {
     listChildren(folder).firstOrNull { it is BookEntry } as? BookEntry
   }
 
-  suspend fun listAllBooks(rootUris: List<Uri>, maxDepth: Int = 16): List<IndexedBookEntry> {
+  suspend fun listAllBooks(rootUris: List<Uri>, maxDepth: Int = 16): List<IndexedBookRef> {
     val roots = listRoots(rootUris)
     return roots.flatMap { root -> listAllBooksIn(root, depth = 0, maxDepth = maxDepth) }
   }
@@ -183,10 +185,10 @@ class LibraryRepository(private val context: Context) {
     rootUris: List<Uri>,
     bookIds: Set<String>,
     maxDepth: Int = 16,
-  ): List<IndexedBookEntry> {
+  ): List<IndexedBookRef> {
     if (bookIds.isEmpty()) return emptyList()
     val remaining = bookIds.toMutableSet()
-    val found = mutableListOf<IndexedBookEntry>()
+    val found = mutableListOf<IndexedBookRef>()
     val roots = listRoots(rootUris)
     for (root in roots) {
       if (remaining.isEmpty()) break
@@ -260,12 +262,12 @@ class LibraryRepository(private val context: Context) {
     folder: FolderEntry,
     depth: Int,
     maxDepth: Int,
-  ): List<IndexedBookEntry> {
+  ): List<IndexedBookRef> {
     if (depth > maxDepth) return emptyList()
     val children = listChildren(folder)
     val directBooks = mutableListOf<BookEntry>()
     val childFolders = mutableListOf<FolderEntry>()
-    val indexed = mutableListOf<IndexedBookEntry>()
+    val indexed = mutableListOf<IndexedBookRef>()
 
     for (entry in children) {
       when (entry) {
@@ -282,9 +284,9 @@ class LibraryRepository(private val context: Context) {
           if (seriesFolder != null) {
             val nestedBooks = seriesFolder.nestedBooks.orEmpty()
             indexed += nestedBooks.map {
-              IndexedBookEntry(
-                book = it,
-                siblings = nestedBooks,
+              IndexedBookRef(
+                book = it.toBookRef(),
+                siblings = nestedBooks.map { nested -> nested.toBookRef() },
                 groupKey = seriesFolder.documentUri.toString(),
               )
             }
@@ -296,9 +298,9 @@ class LibraryRepository(private val context: Context) {
     }
 
     indexed += directBooks.map {
-      IndexedBookEntry(
-        book = it,
-        siblings = directBooks,
+      IndexedBookRef(
+        book = it.toBookRef(),
+        siblings = directBooks.map { book -> book.toBookRef() },
         groupKey = folder.documentUri.toString(),
       )
     }
@@ -311,7 +313,7 @@ class LibraryRepository(private val context: Context) {
   private suspend fun findBooksByIdsIn(
     folder: FolderEntry,
     remaining: MutableSet<String>,
-    found: MutableList<IndexedBookEntry>,
+    found: MutableList<IndexedBookRef>,
     depth: Int,
     maxDepth: Int,
   ) {
@@ -338,9 +340,9 @@ class LibraryRepository(private val context: Context) {
             for (nested in nestedBooks) {
               val bookId = nested.bookId.value
               if (remaining.remove(bookId)) {
-                found += IndexedBookEntry(
-                  book = nested,
-                  siblings = nestedBooks,
+                found += IndexedBookRef(
+                  book = nested.toBookRef(),
+                  siblings = nestedBooks.map { it.toBookRef() },
                   groupKey = seriesFolder.documentUri.toString(),
                 )
                 if (remaining.isEmpty()) break
@@ -356,9 +358,9 @@ class LibraryRepository(private val context: Context) {
     for (book in directBooks) {
       val bookId = book.bookId.value
       if (remaining.remove(bookId)) {
-        found += IndexedBookEntry(
-          book = book,
-          siblings = directBooks,
+        found += IndexedBookRef(
+          book = book.toBookRef(),
+          siblings = directBooks.map { it.toBookRef() },
           groupKey = folder.documentUri.toString(),
         )
         if (remaining.isEmpty()) return
@@ -437,12 +439,6 @@ class LibraryRepository(private val context: Context) {
     )
   }
 }
-
-data class IndexedBookEntry(
-  val book: BookEntry,
-  val siblings: List<BookEntry>,
-  val groupKey: String,
-)
 
 /** [LibraryRepository.seriesCacheLookup] 결과. */
 sealed interface SeriesLookup {

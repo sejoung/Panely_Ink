@@ -27,6 +27,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.sejoung.panelyink.library.LibraryViewModel
 import io.github.sejoung.panelyink.library.model.BookEntry
 import io.github.sejoung.panelyink.library.model.ViewMode
+import io.github.sejoung.panelyink.library.model.toBookRef
 import io.github.sejoung.panelyink.reader.model.SeriesContext
 import io.github.sejoung.panelyink.ui.theme.PanelyInkColors
 
@@ -55,7 +56,13 @@ fun LibraryScreen(
   // 클릭 시는 nestedBooks가 그대로 형제로 들어가 reader가 시리즈 연속 기능에 사용.
   val onOpenBookSafe: (BookEntry, List<BookEntry>) -> Unit = { book, siblings ->
     viewModel.openBook(book) { resolved ->
-      onOpenBook(SeriesContext(current = resolved, siblings = siblings), null)
+      onOpenBook(
+        SeriesContext(
+          current = resolved.toBookRef(),
+          siblings = siblings.map { it.toBookRef() },
+        ),
+        null,
+      )
     }
   }
 

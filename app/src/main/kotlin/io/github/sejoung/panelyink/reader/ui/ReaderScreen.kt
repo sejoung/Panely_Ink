@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.sejoung.panelyink.R
+import io.github.sejoung.panelyink.core.book.BookRef
 import io.github.sejoung.panelyink.core.position.PositionRepository
 import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
@@ -33,11 +34,9 @@ import io.github.sejoung.panelyink.data.db.position.RoomPositionRepository
 import io.github.sejoung.panelyink.data.db.settings.BookSettingsRepository
 import io.github.sejoung.panelyink.data.db.settings.RoomBookSettingsRepository
 import io.github.sejoung.panelyink.data.preferences.SharedPrefsAppPreferencesRepository
-import io.github.sejoung.panelyink.library.model.BookEntry
 import io.github.sejoung.panelyink.reader.ReaderViewModel
 import io.github.sejoung.panelyink.reader.input.ReaderInput
 import io.github.sejoung.panelyink.reader.model.BookSettings
-import io.github.sejoung.panelyink.reader.model.ReadableBookRef
 import io.github.sejoung.panelyink.reader.model.SeriesContext
 import io.github.sejoung.panelyink.reader.session.CbzBookSession
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
@@ -65,9 +64,9 @@ fun ReaderScreen(
   /**
    * 시리즈 형제 권으로 이동 — 호스트가 새 [SeriesContext]를 만들어 [ReaderScreen]을 다시
    * 부르는 식으로 처리. M4 시리즈 연속 읽기 카드 / "다음 권" 카드에서 사용.
-   * 인자로 받은 [BookEntry]는 [SeriesContext.siblings] 안에 있어야 의미가 있다.
+   * 인자로 받은 [BookRef]는 [SeriesContext.siblings] 안에 있어야 의미가 있다.
    */
-  onNavigate: (BookEntry, BookSettings) -> Unit = { _, _ -> },
+  onNavigate: (BookRef, BookSettings) -> Unit = { _, _ -> },
 ) {
   val entry = context.current
   val localContext = LocalContext.current
@@ -84,7 +83,7 @@ fun ReaderScreen(
   ReaderSystemBarsEffect()
 
   var loadingStep by remember { mutableStateOf(localContext.getString(R.string.reader_loading_opening)) }
-  // produceState 키는 nested 책까지 구분하는 [BookEntry.bookIdSource]를 사용 — 일반 책은
+  // produceState 키는 nested 책까지 구분하는 bookIdSource를 사용 — 일반 책은
   // documentUri와 동일, ZIP-of-CBZ 자식은 `${uri}#${entry}`라 형제 권 간 이동 시 새 책으로 정확히 재진입.
   val sessionState by produceState<SessionState>(
     SessionState.Loading,
@@ -95,7 +94,7 @@ fun ReaderScreen(
       Log.d(TAG, "ReaderScreen open: ${entry.displayName}")
       loadingStep = localContext.getString(R.string.reader_loading_scan_pages)
       closeResourceOnFailure(
-        open = { CbzBookSession.open(appContext, entry.toReadableBookRef()) },
+        open = { CbzBookSession.open(appContext, entry) },
         close = { it.close() },
       ) { session ->
         loadingStep = localContext.getString(R.string.reader_loading_restore_position)
@@ -186,14 +185,6 @@ internal suspend fun <T, R> closeResourceOnFailure(
 
 private const val TAG = "PanelyInk.Reader"
 
-private fun BookEntry.toReadableBookRef(): ReadableBookRef = ReadableBookRef(
-  documentUri = documentUri,
-  displayName = displayName,
-  sizeBytes = sizeBytes,
-  sourceId = bookIdSource,
-  nestedEntryName = nestedEntryName,
-)
-
 @Composable
 private fun ReaderContent(
   session: CbzBookSession,
@@ -206,7 +197,7 @@ private fun ReaderContent(
   bookmarkRepo: BookmarkRepository,
   appPrefsRepo: AppPreferencesRepository,
   context: SeriesContext,
-  onNavigate: (BookEntry, BookSettings) -> Unit,
+  onNavigate: (BookRef, BookSettings) -> Unit,
   onExit: () -> Unit,
 ) {
   // ViewModelStore에 캐시되지 않도록 remember(session)로 묶는다 — 책을 닫고
