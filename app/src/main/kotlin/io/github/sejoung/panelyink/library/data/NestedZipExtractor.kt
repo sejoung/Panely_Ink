@@ -9,6 +9,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 
 /**
  * ZIP-of-CBZ에서 nested entry를 단일 cbz 파일로 추출. PRD §6.1 "중첩 아카이브 추출
@@ -54,9 +57,15 @@ object NestedZipExtractor {
     val t0 = System.currentTimeMillis()
     val archive = CbzArchive.open(context, parentUri)
     try {
+      val declaredSize = archive.nestedEntrySize(entryName)
+      if (declaredSize > MAX_NESTED_ARCHIVE_BYTES) {
+        throw IOException(
+          "nested archive too large: $declaredSize > $MAX_NESTED_ARCHIVE_BYTES",
+        )
+      }
       archive.openNestedEntry(entryName).use { input ->
         FileOutputStream(target).use { output ->
-          input.copyTo(output)
+          copyToLimited(input, output, MAX_NESTED_ARCHIVE_BYTES)
         }
       }
     } catch (t: Throwable) {
@@ -89,4 +98,26 @@ object NestedZipExtractor {
     dir.listFiles()?.forEach { if (it.delete()) deleted++ }
     deleted
   }
+
+  internal fun copyToLimited(
+    input: InputStream,
+    output: OutputStream,
+    limitBytes: Long,
+  ): Long {
+    require(limitBytes >= 0) { "limitBytes must be >= 0" }
+    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+    var total = 0L
+    while (true) {
+      val read = input.read(buffer)
+      if (read < 0) break
+      total += read
+      if (total > limitBytes) {
+        throw IOException("nested archive too large: $total > $limitBytes")
+      }
+      output.write(buffer, 0, read)
+    }
+    return total
+  }
+
+  private const val MAX_NESTED_ARCHIVE_BYTES = 512L * 1024L * 1024L
 }

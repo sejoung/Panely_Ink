@@ -10,6 +10,7 @@ import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
 import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream
 import org.apache.commons.compress.archivers.zip.ZipFile
+import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.FileInputStream
 import java.io.IOException
@@ -63,6 +64,11 @@ class CbzArchive private constructor(
         return zipFile.getInputStream(entry)
     }
 
+    fun nestedEntrySize(entryName: String): Long {
+        val entry = entriesByName[entryName] ?: throw IOException("entry not found: $entryName")
+        return entry.size
+    }
+
     /**
      * ZIP-of-CBZ 시리즈의 가상 폴더 표지용 — 부모 ZIP에서 nested cbz를 디스크 추출 없이
      * 메모리에서 streaming으로 열고, 첫 image entry의 bytes를 반환. [NestedZipExtractor]
@@ -83,7 +89,13 @@ class CbzArchive private constructor(
                     val zipEntry: ZipArchiveEntry = zis.nextZipEntry ?: break
                     if (zipEntry.isDirectory) continue
                     if (!zipEntry.name.isImageEntry()) continue
-                    bytes = zis.readBytes()
+                    val declaredSize = zipEntry.size
+                    if (declaredSize > MAX_NESTED_COVER_IMAGE_BYTES) {
+                        throw IOException(
+                            "nested cover image too large: $declaredSize > $MAX_NESTED_COVER_IMAGE_BYTES",
+                        )
+                    }
+                    bytes = readBytesLimited(zis, MAX_NESTED_COVER_IMAGE_BYTES)
                     break
                 }
                 bytes
@@ -99,6 +111,7 @@ class CbzArchive private constructor(
 
     companion object {
         private const val TAG = "PanelyInk.Archive"
+        private const val MAX_NESTED_COVER_IMAGE_BYTES = 64L * 1024L * 1024L
 
         suspend fun open(context: Context, uri: Uri): CbzArchive = withContext(Dispatchers.IO) {
             val pfd = context.contentResolver.openFileDescriptor(uri, "r")
@@ -216,6 +229,23 @@ class CbzArchive private constructor(
             if (name.isEmpty() || name.startsWith(".") || contains("__MACOSX/")) return false
             val ext = name.substringAfterLast('.', missingDelimiterValue = "").lowercase()
             return ext in NESTED_ARCHIVE_EXTENSIONS
+        }
+
+        internal fun readBytesLimited(input: InputStream, limitBytes: Long): ByteArray {
+            require(limitBytes >= 0) { "limitBytes must be >= 0" }
+            val output = ByteArrayOutputStream()
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            var total = 0L
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                total += read
+                if (total > limitBytes) {
+                    throw IOException("nested cover image too large: $total > $limitBytes")
+                }
+                output.write(buffer, 0, read)
+            }
+            return output.toByteArray()
         }
     }
 }
