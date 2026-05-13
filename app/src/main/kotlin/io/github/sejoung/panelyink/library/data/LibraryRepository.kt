@@ -91,7 +91,7 @@ class LibraryRepository(private val context: Context) {
 
   /** 사용자가 추가한 SAF 트리 [Uri]들을 첫 화면용 root 폴더 행으로 변환. */
   suspend fun listRoots(rootUris: List<Uri>): List<FolderEntry> = withContext(Dispatchers.IO) {
-    rootUris.mapNotNull { uri ->
+    rootUris.map { uri ->
       val name = queryRootName(uri) ?: uri.lastPathSegment ?: uri.toString()
       FolderEntry(
         documentUri = uri, // tree URI 그대로 — isRoot=true 분기로 식별
