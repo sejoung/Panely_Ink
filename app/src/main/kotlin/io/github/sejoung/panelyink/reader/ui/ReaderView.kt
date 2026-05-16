@@ -225,6 +225,10 @@ class ReaderView(context: Context) : View(context) {
    * - secondary가 책 범위를 벗어나면(홀수 페이지수 마지막 spread) 해당 슬롯은 빈 흰 면으로 두고 leading만 그림.
    *
    * 각 슬롯은 [drawSingle]을 절반 viewport로 호출 → 트리밍/contrast/invert가 단쪽과 동일 경로로 적용.
+   *
+   * 정렬 정책 — 좌측 페이지는 우측 정렬, 우측 페이지는 좌측 정렬로 그려 화면 중앙선에 두 페이지가 맞붙는다.
+   * 페이지 비율이 절반 viewport보다 좁으면 중앙 정렬 시 가운데에 빈 여백이 생겨 spread 느낌이 깨지는 문제 해결.
+   * 외부(좌측 페이지의 왼쪽 / 우측 페이지의 오른쪽)에 남는 여백은 사용자 시야 가장자리라 시각적으로 자연스럽다.
    */
   private fun drawSpread(canvas: Canvas, s: CbzBookSession, viewportWidth: Int, viewportHeight: Int) {
     val half = viewportWidth / 2
@@ -236,14 +240,32 @@ class ReaderView(context: Context) : View(context) {
       else -> leading to secondary
     }
     if (leftPage in 0 until pageCount) {
-      drawSingle(canvas, s, leftPage, viewportX = 0, viewportWidth = half, viewportHeight = viewportHeight)
+      drawSingle(
+        canvas, s, leftPage,
+        viewportX = 0,
+        viewportWidth = half,
+        viewportHeight = viewportHeight,
+        align = HorizontalAlign.End,
+      )
     }
     if (rightPage in 0 until pageCount) {
-      drawSingle(canvas, s, rightPage, viewportX = rightStart, viewportWidth = viewportWidth - rightStart, viewportHeight = viewportHeight)
+      drawSingle(
+        canvas, s, rightPage,
+        viewportX = rightStart,
+        viewportWidth = viewportWidth - rightStart,
+        viewportHeight = viewportHeight,
+        align = HorizontalAlign.Start,
+      )
     }
   }
 
-  /** 비트맵 1장을 지정된 logical viewport rect에 fit하여 그림. canvas 변환은 호출자가 이미 적용. */
+  /**
+   * 비트맵 1장을 지정된 logical viewport rect에 fit하여 그림. canvas 변환은 호출자가 이미 적용.
+   *
+   * [align]은 페이지가 viewportWidth보다 좁을 때 가로 배치 결정:
+   * - [HorizontalAlign.Center]: 단쪽 모드 기본 — 좌우 균등 여백
+   * - [HorizontalAlign.Start] / [HorizontalAlign.End]: spread 모드 — 한쪽 정렬해 가운데 맞붙임
+   */
   private fun drawSingle(
     canvas: Canvas,
     s: CbzBookSession,
@@ -251,6 +273,7 @@ class ReaderView(context: Context) : View(context) {
     viewportX: Int,
     viewportWidth: Int,
     viewportHeight: Int,
+    align: HorizontalAlign = HorizontalAlign.Center,
   ) {
     if (viewportWidth <= 0 || viewportHeight <= 0) return
     val bitmap: Bitmap = s.pageBitmap(index) ?: return
@@ -269,12 +292,19 @@ class ReaderView(context: Context) : View(context) {
       fit.srcX + fit.srcWidth,
       fit.srcY + fit.srcHeight,
     )
+    val dstX = viewportX + when (align) {
+      HorizontalAlign.Start -> 0
+      HorizontalAlign.Center -> fit.offsetX
+      HorizontalAlign.End -> viewportWidth - fit.drawWidth
+    }
     val dst = Rect(
-      viewportX + fit.offsetX,
+      dstX,
       fit.offsetY,
-      viewportX + fit.offsetX + fit.drawWidth,
+      dstX + fit.drawWidth,
       fit.offsetY + fit.drawHeight,
     )
     canvas.drawBitmap(bitmap, src, dst, paint)
   }
+
+  private enum class HorizontalAlign { Start, Center, End }
 }
