@@ -10,6 +10,8 @@ internal fun ReaderState.toBookSettings(): BookSettings = BookSettings(
   direction = direction,
   trimEnabled = trimEnabled,
   contrast = contrast,
+  spreadMode = spreadMode,
+  orientation = orientation,
 )
 
 internal fun previousBookForBoundary(

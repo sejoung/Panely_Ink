@@ -1,5 +1,6 @@
 package io.github.sejoung.panelyink.data.db.settings
 
+import io.github.sejoung.panelyink.core.preferences.deserializeOrientation
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
 import io.github.sejoung.panelyink.reader.model.BookSettings
 import io.github.sejoung.panelyink.reader.model.deserializeDirection
@@ -43,6 +44,8 @@ internal fun BookSettingsEntity.toDomain(): BookSettings = BookSettings(
     direction = deserializeDirection(direction),
     trimEnabled = trimEnabled,
     contrast = contrast,
+    spreadMode = spreadMode,
+    orientation = deserializeOrientation(orientation),
 )
 
 internal fun BookSettings.toEntity(bookId: String, updatedAt: Long): BookSettingsEntity =
@@ -52,5 +55,7 @@ internal fun BookSettings.toEntity(bookId: String, updatedAt: Long): BookSetting
         direction = direction.name,
         trimEnabled = trimEnabled,
         contrast = contrast,
+        spreadMode = spreadMode,
+        orientation = orientation.name,
         updatedAt = updatedAt,
     )

@@ -4,7 +4,9 @@ import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.core.position.PositionKey
 import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.core.preferences.DEFAULT_FULL_REFRESH_INTERVAL
+import io.github.sejoung.panelyink.core.preferences.ReaderOrientation
 import io.github.sejoung.panelyink.core.preferences.ReadingDirection
+import io.github.sejoung.panelyink.reader.model.BookSettings
 import io.github.sejoung.panelyink.reader.session.DecodedPage
 import io.github.sejoung.panelyink.reader.session.PageDecoder
 import kotlinx.coroutines.CompletableDeferred
@@ -410,6 +412,146 @@ class ReaderViewModelTest {
         assertEquals(false, vm.state.value.invertEnabled)
         vm.setInvertEnabled(true)
         assertEquals(true, vm.state.value.invertEnabled)
+        vm.close()
+    }
+
+    @Test
+    fun spreadModeDefaultsOff() {
+        val vm = ReaderViewModel("b", 10, FakePageDecoder())
+        assertEquals(false, vm.state.value.spreadMode)
+        vm.close()
+    }
+
+    @Test
+    fun setSpreadModeOnAlignsCurrentPageToEven() {
+        val vm = ReaderViewModel("b", 100, FakePageDecoder(), initialPage = 7)
+        vm.setSpreadMode(true)
+        assertEquals(true, vm.state.value.spreadMode)
+        assertEquals(6, vm.state.value.currentPage)
+        vm.close()
+    }
+
+    @Test
+    fun setSpreadModeOffLeavesPageUntouched() {
+        val vm = ReaderViewModel(
+            "b", 100, FakePageDecoder(),
+            initialPage = 6,
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true),
+        )
+        assertEquals(6, vm.state.value.currentPage)
+        vm.setSpreadMode(false)
+        assertEquals(6, vm.state.value.currentPage)
+        assertEquals(false, vm.state.value.spreadMode)
+        vm.close()
+    }
+
+    @Test
+    fun initialSpreadModeAlignsInitialPage() {
+        val vm = ReaderViewModel(
+            "b", 100, FakePageDecoder(),
+            initialPage = 11,
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true),
+        )
+        assertEquals(10, vm.state.value.currentPage)
+        assertEquals(true, vm.state.value.spreadMode)
+        vm.close()
+    }
+
+    @Test
+    fun goNextStepsTwoInSpreadMode() {
+        val vm = ReaderViewModel(
+            "b", 100, FakePageDecoder(),
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true),
+        )
+        vm.goNext()
+        assertEquals(2, vm.state.value.currentPage)
+        vm.goNext()
+        assertEquals(4, vm.state.value.currentPage)
+        vm.close()
+    }
+
+    @Test
+    fun goPreviousStepsTwoInSpreadMode() {
+        val vm = ReaderViewModel(
+            "b", 100, FakePageDecoder(),
+            initialPage = 10,
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true),
+        )
+        vm.goPrevious()
+        assertEquals(8, vm.state.value.currentPage)
+        vm.goPrevious()
+        assertEquals(6, vm.state.value.currentPage)
+        vm.close()
+    }
+
+    @Test
+    fun goToSnapsToEvenInSpreadMode() {
+        val vm = ReaderViewModel(
+            "b", 100, FakePageDecoder(),
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true),
+        )
+        vm.goTo(15)
+        assertEquals(14, vm.state.value.currentPage)
+        vm.goTo(13)
+        assertEquals(12, vm.state.value.currentPage)
+        vm.close()
+    }
+
+    @Test
+    fun goNextClampsAtLastPageInSpreadMode() {
+        // 홀수 페이지 수 — 마지막 spread는 leading만 있고 secondary는 비어있음
+        val vm = ReaderViewModel(
+            "b", 7, FakePageDecoder(),
+            initialPage = 4,
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true),
+        )
+        vm.goNext()
+        assertEquals(6, vm.state.value.currentPage)
+        vm.goNext()
+        // 이미 마지막. 6이 leading이고 secondary는 없으니 더 진행 불가.
+        assertEquals(6, vm.state.value.currentPage)
+        vm.close()
+    }
+
+    @Test
+    fun orientationDefaultsAuto() {
+        val vm = ReaderViewModel("b", 10, FakePageDecoder())
+        assertEquals(ReaderOrientation.Auto, vm.state.value.orientation)
+        vm.close()
+    }
+
+    @Test
+    fun setOrientationUpdatesState() {
+        val vm = ReaderViewModel("b", 10, FakePageDecoder())
+        vm.setOrientation(ReaderOrientation.Landscape)
+        assertEquals(ReaderOrientation.Landscape, vm.state.value.orientation)
+        vm.setOrientation(ReaderOrientation.Portrait)
+        assertEquals(ReaderOrientation.Portrait, vm.state.value.orientation)
+        vm.close()
+    }
+
+    @Test
+    fun initialOrientationFromBookSettings() {
+        val vm = ReaderViewModel(
+            "b", 10, FakePageDecoder(),
+            initialBookSettings = BookSettings.DEFAULTS.copy(orientation = ReaderOrientation.Landscape),
+        )
+        assertEquals(ReaderOrientation.Landscape, vm.state.value.orientation)
+        vm.close()
+    }
+
+    @Test
+    fun fullRefreshCounterDoublesInSpreadMode() {
+        val vm = ReaderViewModel(
+            "b", 100, FakePageDecoder(),
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true),
+        )
+        vm.setFullRefreshInterval(4)
+        // 한 번 이동 = 2쪽 변화. interval=4면 두 번째 spread 전환에서 트리거.
+        vm.goNext()
+        assertEquals(0, vm.state.value.fullRefreshGeneration)
+        vm.goNext()
+        assertEquals(1, vm.state.value.fullRefreshGeneration)
         vm.close()
     }
 

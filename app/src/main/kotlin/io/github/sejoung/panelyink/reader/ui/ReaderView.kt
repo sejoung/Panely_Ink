@@ -10,8 +10,10 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.util.Log
 import android.view.View
+import android.graphics.Bitmap
 import io.github.sejoung.panelyink.core.fit.FitCalculator
 import io.github.sejoung.panelyink.core.fit.FitMode
+import io.github.sejoung.panelyink.core.preferences.ReadingDirection
 import io.github.sejoung.panelyink.core.render.ContrastMatrix
 import io.github.sejoung.panelyink.core.render.InvertMatrix
 import io.github.sejoung.panelyink.reader.ReaderViewModel
@@ -49,6 +51,9 @@ class ReaderView(context: Context) : View(context) {
   private var trimEnabled: Boolean = true
   private var contrast: Float = ContrastMatrix.IDENTITY
   private var invertEnabled: Boolean = false
+  private var spreadMode: Boolean = false
+  private var direction: ReadingDirection = ReadingDirection.Ltr
+  private var pageCount: Int = 0
 
   /**
    * 풀리프레시 시퀀스. [requestFullRefresh] 호출 시 채워지고, 매 onDraw에서
@@ -70,12 +75,15 @@ class ReaderView(context: Context) : View(context) {
   fun attach(session: CbzBookSession, viewModel: ReaderViewModel) {
     this.session = session
     this.viewModel = viewModel
+    this.pageCount = viewModel.pageCount
     val s = viewModel.state.value
     this.pageIndex = s.currentPage
     this.fitMode = s.fitMode
     this.trimEnabled = s.trimEnabled
     this.contrast = s.contrast
     this.invertEnabled = s.invertEnabled
+    this.spreadMode = s.spreadMode
+    this.direction = s.direction
     // contrast/invert 결합 colorFilter 적용은 applyColorAdjust 한 곳에서.
     applyColorAdjust()
     // 이미 측정된 상태였다면 바로 viewport 통지 (재바인딩 케이스).
@@ -123,6 +131,20 @@ class ReaderView(context: Context) : View(context) {
     if (this.invertEnabled == enabled) return
     this.invertEnabled = enabled
     applyColorAdjust()
+  }
+
+  fun setSpreadMode(enabled: Boolean) {
+    if (this.spreadMode == enabled) return
+    this.spreadMode = enabled
+    invalidate()
+  }
+
+  fun setDirection(dir: ReadingDirection) {
+    if (this.direction == dir) return
+    this.direction = dir
+    // 두쪽 보기에서만 시각적으로 영향(좌/우 배치 반전). 단쪽일 때는 그릴 게 안 바뀌지만
+    // 비용이 무시할 만하므로 분기 안 둠.
+    if (spreadMode) invalidate()
   }
 
   /**
@@ -185,12 +207,55 @@ class ReaderView(context: Context) : View(context) {
     canvas.drawColor(Color.WHITE)
     val s = session ?: return
     if (width <= 0 || height <= 0) return
-    val bitmap = s.pageBitmap(pageIndex) ?: return
-    val trim = if (trimEnabled) s.pageTrim(pageIndex) else null
+
+    if (spreadMode) {
+      drawSpread(canvas, s)
+    } else {
+      drawSingle(canvas, s, pageIndex, viewportX = 0, viewportWidth = width)
+    }
+  }
+
+  /**
+   * 두쪽 그리기. viewport를 좌/우로 정확히 양분하고 leading=`pageIndex`, secondary=`pageIndex+1`을
+   * direction에 따라 배치한다.
+   * - LTR: 좌=leading, 우=secondary
+   * - RTL: 좌=secondary, 우=leading
+   * - secondary가 책 범위를 벗어나면(홀수 페이지수 마지막 spread) 해당 슬롯은 빈 흰 면으로 두고 leading만 그림.
+   *
+   * 각 슬롯은 [drawSingle]을 절반 viewport로 호출 → 트리밍/contrast/invert가 단쪽과 동일 경로로 적용.
+   */
+  private fun drawSpread(canvas: Canvas, s: CbzBookSession) {
+    val half = width / 2
+    val rightStart = half // 홀수 width 1px은 우측 슬롯이 흡수
+    val leading = pageIndex
+    val secondary = pageIndex + 1
+    val (leftPage, rightPage) = when (direction) {
+      ReadingDirection.Rtl -> secondary to leading
+      else -> leading to secondary
+    }
+    if (leftPage in 0 until pageCount) {
+      drawSingle(canvas, s, leftPage, viewportX = 0, viewportWidth = half)
+    }
+    if (rightPage in 0 until pageCount) {
+      drawSingle(canvas, s, rightPage, viewportX = rightStart, viewportWidth = width - rightStart)
+    }
+  }
+
+  /** 비트맵 1장을 지정된 viewport rect(`[viewportX, viewportX+viewportWidth) × [0, height)`)에 fit하여 그림. */
+  private fun drawSingle(
+    canvas: Canvas,
+    s: CbzBookSession,
+    index: Int,
+    viewportX: Int,
+    viewportWidth: Int,
+  ) {
+    if (viewportWidth <= 0) return
+    val bitmap: Bitmap = s.pageBitmap(index) ?: return
+    val trim = if (trimEnabled) s.pageTrim(index) else null
     val fit = FitCalculator.compute(
       pageWidth = bitmap.width,
       pageHeight = bitmap.height,
-      viewportWidth = width,
+      viewportWidth = viewportWidth,
       viewportHeight = height,
       mode = fitMode,
       trim = trim,
@@ -202,9 +267,9 @@ class ReaderView(context: Context) : View(context) {
       fit.srcY + fit.srcHeight,
     )
     val dst = Rect(
-      fit.offsetX,
+      viewportX + fit.offsetX,
       fit.offsetY,
-      fit.offsetX + fit.drawWidth,
+      viewportX + fit.offsetX + fit.drawWidth,
       fit.offsetY + fit.drawHeight,
     )
     canvas.drawBitmap(bitmap, src, dst, paint)

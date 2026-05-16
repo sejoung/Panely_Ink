@@ -1,9 +1,12 @@
 package io.github.sejoung.panelyink.reader.ui
 
+import android.content.pm.ActivityInfo
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -11,6 +14,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import io.github.sejoung.panelyink.core.position.PositionRepository
 import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
+import io.github.sejoung.panelyink.core.preferences.ReaderOrientation
 import io.github.sejoung.panelyink.data.db.settings.BookSettingsRepository
 import io.github.sejoung.panelyink.core.book.BookRef
 import io.github.sejoung.panelyink.reader.ReaderState
@@ -44,6 +48,49 @@ internal fun ReaderSystemBarsEffect() {
         WindowCompat.getInsetsController(window, view)
           .show(WindowInsetsCompat.Type.systemBars())
       }
+    }
+  }
+}
+
+/**
+ * 책별 회전 잠금을 Activity에 반영. 본문 화면 라이프사이클 동안만 적용되고, 화면을 떠나면
+ * 진입 직전 값(`UNSPECIFIED`)으로 복원해 라이브러리/설정 화면이 시스템 회전을 따르도록 유지.
+ *
+ * AndroidManifest에 `configChanges="orientation|screenSize|..."`이 있어 회전 시 Activity는 재생성되지
+ * 않는다 — ReaderViewModel/세션이 그대로 유지되고, ReaderView는 `onSizeChanged`로 새 viewport를 받는다.
+ *
+ * **strict PORTRAIT/LANDSCAPE 사용 이유 (v1.1 변경):**
+ * Meebook M7 같은 e-ink 단말은 가속도계가 빈약하거나 시스템 자동회전이 기본 꺼짐이라
+ * `SCREEN_ORIENTATION_SENSOR_*` 변종이 무시되는 경우가 흔하다. 명시적 잠금은 시스템
+ * 자동회전 설정과 무관하게 적용되므로 strict 변종이 안전. 사용자가 단말을 180° 뒤집어
+ * 잡을 수는 없게 되지만, 한 번 잡은 방향 그대로 쓰는 책 읽기 패턴에는 영향 없음.
+ */
+@Composable
+internal fun ReaderOrientationEffect(orientation: ReaderOrientation) {
+  val activity = LocalContext.current.findMainActivity()
+  // 화면 진입 직전 값을 한 번 캡처. orientation이 바뀌어도 이 값은 그대로 — 떠날 때 원복용.
+  val originalOrientation = remember(activity) {
+    activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+  }
+  // orientation이 바뀔 때마다 즉시 적용. dispose 없는 effect라 중간 플리커 없음.
+  LaunchedEffect(activity, orientation) {
+    val target = when (orientation) {
+      ReaderOrientation.Auto -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+      ReaderOrientation.Portrait -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+      ReaderOrientation.Landscape -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+    }
+    val before = activity?.requestedOrientation
+    activity?.requestedOrientation = target
+    Log.d(
+      "PanelyInk.Orientation",
+      "apply orientation=$orientation target=$target before=$before activity=${activity?.javaClass?.simpleName}",
+    )
+  }
+  // ReaderScreen을 떠날 때만 원복 — 라이브러리/설정은 시스템 회전을 따르게.
+  DisposableEffect(activity) {
+    onDispose {
+      Log.d("PanelyInk.Orientation", "restore to $originalOrientation")
+      activity?.requestedOrientation = originalOrientation
     }
   }
 }
@@ -90,6 +137,8 @@ internal fun ReaderViewEffects(
     state.trimEnabled,
     state.contrast,
     state.invertEnabled,
+    state.spreadMode,
+    state.direction,
     view,
   ) {
     view?.setPageIndex(state.currentPage)
@@ -97,6 +146,8 @@ internal fun ReaderViewEffects(
     view?.setTrimEnabled(state.trimEnabled)
     view?.setContrast(state.contrast)
     view?.setInvertEnabled(state.invertEnabled)
+    view?.setSpreadMode(state.spreadMode)
+    view?.setDirection(state.direction)
   }
 
   LaunchedEffect(viewModel, view) {

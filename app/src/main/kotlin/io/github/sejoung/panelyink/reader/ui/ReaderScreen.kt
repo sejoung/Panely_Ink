@@ -217,6 +217,8 @@ private fun ReaderContent(
   ReaderLifecycleEffect(session = session, viewModel = viewModel)
 
   val state by viewModel.state.collectAsState()
+  // 책별 회전 잠금 — 본문 화면 라이프사이클 동안만 Activity에 적용.
+  ReaderOrientationEffect(state.orientation)
   var view by remember { mutableStateOf<ReaderView?>(null) }
   var menuOpen by remember { mutableStateOf(false) }
   var settingsOpen by remember { mutableStateOf(false) }

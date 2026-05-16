@@ -21,6 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.core.fit.FitMode
+import io.github.sejoung.panelyink.core.preferences.ReaderOrientation
 import io.github.sejoung.panelyink.core.preferences.ReadingDirection
 import io.github.sejoung.panelyink.core.render.ContrastMatrix
 import io.github.sejoung.panelyink.reader.ReaderState
@@ -54,6 +55,8 @@ fun ReaderSettingsScreen(
   onTrimEnabledChange: (Boolean) -> Unit,
   onContrastChange: (Float) -> Unit,
   onInvertEnabledChange: (Boolean) -> Unit,
+  onSpreadModeChange: (Boolean) -> Unit,
+  onOrientationChange: (ReaderOrientation) -> Unit,
   onTriggerFullRefresh: () -> Unit,
   onBack: () -> Unit,
   modifier: Modifier = Modifier,
@@ -118,6 +121,28 @@ fun ReaderSettingsScreen(
       DirectionSegments(
         selected = state.direction,
         onSelect = onDirectionChange,
+      )
+
+      Spacer(Modifier.height(spacing.space2))
+
+      // 두쪽 보기 — v1.1. 전 기기 노출, 사용자 선택. 토글 시 ReaderViewModel이
+      // currentPage를 leading(짝수)로 정렬하고 ReaderView가 viewport를 양분해 그림.
+      SectionLabel(stringResource(R.string.reader_spread))
+      Spacer(Modifier.height(spacing.space1))
+      SpreadSegments(
+        enabled = state.spreadMode,
+        onSelect = onSpreadModeChange,
+      )
+
+      Spacer(Modifier.height(spacing.space2))
+
+      // 회전 잠금 — v1.1. 두쪽 보기와 한 쌍으로 사용. ReaderOrientationEffect가 본문 화면
+      // 라이프사이클 동안만 Activity.requestedOrientation에 반영하고 떠나면 원복.
+      SectionLabel(stringResource(R.string.reader_orientation))
+      Spacer(Modifier.height(spacing.space1))
+      OrientationSegments(
+        selected = state.orientation,
+        onSelect = onOrientationChange,
       )
 
       Spacer(Modifier.height(spacing.space2))

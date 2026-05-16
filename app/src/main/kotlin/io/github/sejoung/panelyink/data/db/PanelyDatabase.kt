@@ -29,6 +29,8 @@ import io.github.sejoung.panelyink.data.db.settings.BookSettingsEntity
  * - v5: `bookmark` 테이블 추가 (책별 페이지 북마크)
  * - v6: `book_settings`에서 전역 prefs로 분리된 orphan 컬럼 제거
  * - v7: `book_index` 테이블 추가 + bookmark.created_at 정렬 인덱스
+ * - v8: `book_settings.spread_mode` 컬럼 추가 (두쪽 보기 토글 책별 저장 — v1.1)
+ * - v9: `book_settings.orientation` 컬럼 추가 (회전 잠금 책별 저장 — v1.1)
  *
  * 싱글톤 보장: [PanelyDatabase.getInstance]가 더블 체크 락. 안드로이드 앱에서 DB는 프로세스당 1개.
  */
@@ -40,7 +42,7 @@ import io.github.sejoung.panelyink.data.db.settings.BookSettingsEntity
     BookmarkEntity::class,
     BookIndexEntity::class,
   ],
-  version = 7,
+  version = 9,
   exportSchema = false,
 )
 abstract class PanelyDatabase : RoomDatabase() {
@@ -169,6 +171,30 @@ abstract class PanelyDatabase : RoomDatabase() {
       }
     }
 
+    /**
+     * v7 → v8: book_settings에 spread_mode 컬럼 추가 (두쪽 보기 토글 책별 저장).
+     * 기존 행은 기본값 0(false)으로 채워져, 책을 다시 열 때 단쪽 보기로 시작.
+     */
+    internal val MIGRATION_7_8 = object : Migration(7, 8) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+          "ALTER TABLE `book_settings` ADD COLUMN `spread_mode` INTEGER NOT NULL DEFAULT 0",
+        )
+      }
+    }
+
+    /**
+     * v8 → v9: book_settings에 orientation 컬럼 추가 (회전 잠금 책별 저장).
+     * 기존 행은 "Auto"로 채워져 v1.0과 동일하게 시스템 회전을 따른다.
+     */
+    internal val MIGRATION_8_9 = object : Migration(8, 9) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+          "ALTER TABLE `book_settings` ADD COLUMN `orientation` TEXT NOT NULL DEFAULT 'Auto'",
+        )
+      }
+    }
+
     /** v6 → v7: 전체 북마크 빠른 resolve용 책 인덱스와 북마크 최신순 정렬 인덱스. */
     internal val MIGRATION_6_7 = object : Migration(6, 7) {
       override fun migrate(db: SupportSQLiteDatabase) {
@@ -212,6 +238,8 @@ abstract class PanelyDatabase : RoomDatabase() {
             MIGRATION_4_5,
             MIGRATION_5_6,
             MIGRATION_6_7,
+            MIGRATION_7_8,
+            MIGRATION_8_9,
           )
           .build()
           .also { instance = it }

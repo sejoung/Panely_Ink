@@ -1,6 +1,7 @@
 package io.github.sejoung.panelyink.reader.model
 
 import io.github.sejoung.panelyink.core.fit.FitMode
+import io.github.sejoung.panelyink.core.preferences.ReaderOrientation
 import io.github.sejoung.panelyink.core.preferences.ReadingDirection
 import io.github.sejoung.panelyink.core.render.ContrastMatrix
 
@@ -23,6 +24,17 @@ data class BookSettings(
     val direction: ReadingDirection,
     val trimEnabled: Boolean,
     val contrast: Float,
+    /**
+     * 두쪽 보기(좌/우 동시 표시) 활성화 여부. v1.1 추가.
+     * direction과 결합해 LTR이면 `(n, n+1)`을 (좌, 우), RTL이면 (우, 좌)로 그린다.
+     * 책별 저장 — 같은 책은 다시 열 때 마지막 선택이 유지되고, 같은 시리즈 propagate에도 함께 따라감.
+     */
+    val spreadMode: Boolean,
+    /**
+     * 회전 잠금. v1.1 — 두쪽 보기와 한 쌍. 책별 저장. 본문 화면 진입 시 Activity에 requestedOrientation을 적용,
+     * 화면을 떠나면 호스트가 원복([io.github.sejoung.panelyink.reader.ui.ReaderOrientationEffect]).
+     */
+    val orientation: ReaderOrientation,
 ) {
     companion object {
         /** 새 책 진입 시 기본값. ReaderState 기본값과 일치해야 일관됨. */
@@ -31,6 +43,8 @@ data class BookSettings(
             direction = ReadingDirection.Ltr,
             trimEnabled = true,
             contrast = ContrastMatrix.IDENTITY,
+            spreadMode = false,
+            orientation = ReaderOrientation.Auto,
         )
     }
 }

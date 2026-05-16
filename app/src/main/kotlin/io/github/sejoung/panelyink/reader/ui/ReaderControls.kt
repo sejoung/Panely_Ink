@@ -28,6 +28,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.core.fit.FitMode
+import io.github.sejoung.panelyink.core.preferences.ReaderOrientation
 import io.github.sejoung.panelyink.core.render.ContrastMatrix
 import io.github.sejoung.panelyink.ui.components.PanelyTextButton
 import io.github.sejoung.panelyink.ui.components.Segments
@@ -90,6 +91,41 @@ internal fun TrimSegments(
   Segments(
     options = options,
     isSelected = { it == enabled },
+    labelOf = { options.first { p -> p.first == it }.second },
+    onSelect = onSelect,
+  )
+}
+
+@Composable
+internal fun SpreadSegments(
+  enabled: Boolean,
+  onSelect: (Boolean) -> Unit,
+) {
+  val options = listOf(
+    false to stringResource(R.string.reader_spread_single),
+    true to stringResource(R.string.reader_spread_two),
+  )
+  Segments(
+    options = options,
+    isSelected = { it == enabled },
+    labelOf = { options.first { p -> p.first == it }.second },
+    onSelect = onSelect,
+  )
+}
+
+@Composable
+internal fun OrientationSegments(
+  selected: ReaderOrientation,
+  onSelect: (ReaderOrientation) -> Unit,
+) {
+  val options = listOf(
+    ReaderOrientation.Auto to stringResource(R.string.reader_orientation_auto),
+    ReaderOrientation.Portrait to stringResource(R.string.reader_orientation_portrait),
+    ReaderOrientation.Landscape to stringResource(R.string.reader_orientation_landscape),
+  )
+  Segments(
+    options = options,
+    isSelected = { it == selected },
     labelOf = { options.first { p -> p.first == it }.second },
     onSelect = onSelect,
   )

@@ -33,6 +33,12 @@ data class BookSettingsEntity(
     @ColumnInfo(name = "contrast")
     val contrast: Float,
 
+    @ColumnInfo(name = "spread_mode", defaultValue = "0")
+    val spreadMode: Boolean,
+
+    @ColumnInfo(name = "orientation", defaultValue = "Auto")
+    val orientation: String,
+
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long,
 )

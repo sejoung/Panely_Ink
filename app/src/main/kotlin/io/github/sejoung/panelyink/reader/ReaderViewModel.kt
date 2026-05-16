@@ -4,6 +4,7 @@ import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.core.position.PositionKey
 import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.core.preferences.DEFAULT_FULL_REFRESH_INTERVAL
+import io.github.sejoung.panelyink.core.preferences.ReaderOrientation
 import io.github.sejoung.panelyink.core.preferences.ReadingDirection
 import io.github.sejoung.panelyink.core.render.ContrastMatrix
 import io.github.sejoung.panelyink.reader.model.BookSettings
@@ -61,17 +62,25 @@ class ReaderViewModel(
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
   private val _state = MutableStateFlow(
-    ReaderState(
-      currentPage = initialPage,
-      direction = initialBookSettings.direction,
-      fitMode = initialBookSettings.fitMode,
-      preloadWindow = preloadWindowFor(initialPage),
-      trimEnabled = initialBookSettings.trimEnabled,
-      contrast = initialBookSettings.contrast,
-      // 전역 prefs에서 받음 — 책별 저장은 안 함.
-      invertEnabled = initialAppPreferences.invertEnabled,
-      fullRefreshInterval = initialAppPreferences.fullRefreshInterval,
-    )
+    run {
+      // 두쪽 보기로 들어올 때 currentPage는 leading(짝수)으로 정렬 — 다시 책을 열어도
+      // 동일한 spread가 보이도록.
+      val alignedInitial = if (initialBookSettings.spreadMode) alignToSpreadLeading(initialPage)
+      else initialPage
+      ReaderState(
+        currentPage = alignedInitial,
+        direction = initialBookSettings.direction,
+        fitMode = initialBookSettings.fitMode,
+        preloadWindow = preloadWindowFor(alignedInitial),
+        trimEnabled = initialBookSettings.trimEnabled,
+        contrast = initialBookSettings.contrast,
+        spreadMode = initialBookSettings.spreadMode,
+        orientation = initialBookSettings.orientation,
+        // 전역 prefs에서 받음 — 책별 저장은 안 함.
+        invertEnabled = initialAppPreferences.invertEnabled,
+        fullRefreshInterval = initialAppPreferences.fullRefreshInterval,
+      )
+    }
   )
   val state: StateFlow<ReaderState> = _state.asStateFlow()
 
@@ -92,21 +101,30 @@ class ReaderViewModel(
   private var preloadJob: Job? = null
   private var preloadGeneration = 0
 
-  fun goNext() = goTo(state.value.currentPage + 1)
+  fun goNext() {
+    val step = if (state.value.spreadMode) 2 else 1
+    goTo(state.value.currentPage + step)
+  }
 
-  fun goPrevious() = goTo(state.value.currentPage - 1)
+  fun goPrevious() {
+    val step = if (state.value.spreadMode) 2 else 1
+    goTo(state.value.currentPage - step)
+  }
 
   fun goTo(pageIndex: Int) {
-    val clamped = pageIndex.coerceIn(0, pageCount - 1)
     val current = _state.value
+    // 두쪽 보기에서는 leading(짝수)으로 정렬 — 메뉴/북마크 점프도 spread 경계에 안착.
+    val aligned = if (current.spreadMode) alignToSpreadLeading(pageIndex) else pageIndex
+    val clamped = aligned.coerceIn(0, pageCount - 1)
     if (clamped == current.currentPage) return
 
     // 풀리프레시 정책 — N페이지마다 generation++ → ReaderView가 검정 한 프레임으로
     // e-ink 컨트롤러를 풀리프레시 모드로 끌어내림(잔상 누적 방어선).
     // interval=0이면 자동 트리거 비활성(사용자 명시 선택).
+    // spread 모드에서는 한 번의 전환에 2쪽이 동시에 바뀌므로 카운터 가중 2배.
     val interval = current.fullRefreshInterval
     val triggerFull = if (interval > 0) {
-      pagesSinceFullRefresh += 1
+      pagesSinceFullRefresh += if (current.spreadMode) 2 else 1
       (pagesSinceFullRefresh >= interval).also { hit ->
         if (hit) pagesSinceFullRefresh = 0
       }
@@ -183,6 +201,38 @@ class ReaderViewModel(
     _state.value = _state.value.copy(invertEnabled = enabled)
   }
 
+  /**
+   * 두쪽 보기 on/off. on으로 켤 때 현재 페이지를 leading(짝수)로 정렬해 spread 경계에 맞춤.
+   * off로 끌 때는 currentPage 그대로 유지(이미 그 페이지가 leading이었으니 단쪽으로 자연 노출).
+   * v1.0의 fitMode/trim과 직교 — 각 spread 슬롯에서 FitCalculator가 절반 viewport로 다시 계산.
+   */
+  fun setSpreadMode(enabled: Boolean) {
+    val current = _state.value
+    if (enabled == current.spreadMode) return
+    val newPage = if (enabled) alignToSpreadLeading(current.currentPage) else current.currentPage
+    val pageChanged = newPage != current.currentPage
+    _state.value = current.copy(
+      spreadMode = enabled,
+      currentPage = newPage,
+      preloadWindow = if (pageChanged) preloadWindowFor(newPage) else current.preloadWindow,
+    )
+    triggerPreload()
+  }
+
+  /** spread 모드 leading 정렬 — 짝수 인덱스로 내림(0,1→0 / 2,3→2 / 4,5→4). */
+  private fun alignToSpreadLeading(pageIndex: Int): Int =
+    if (pageIndex >= 0) (pageIndex / 2) * 2 else 0
+
+  /**
+   * 회전 잠금 변경. 본문 화면 진입 동안만 Activity에 적용되고, 화면을 떠나면
+   * 호스트가 원복([io.github.sejoung.panelyink.reader.ui.ReaderOrientationEffect]).
+   * 책별 저장은 ReaderState→BookSettings 매퍼 경로로 자동.
+   */
+  fun setOrientation(orientation: ReaderOrientation) {
+    if (orientation == _state.value.orientation) return
+    _state.value = _state.value.copy(orientation = orientation)
+  }
+
   fun onViewportChanged(width: Int, height: Int) {
     if (width <= 0 || height <= 0) return
     val current = _state.value
@@ -246,6 +296,16 @@ data class ReaderState(
   val contrast: Float = ContrastMatrix.IDENTITY,
   /** 흑백 반전(macOS 다크모드 대체). contrast와 함께 적용 시 contrast → invert 순. */
   val invertEnabled: Boolean = false,
+  /**
+   * 두쪽 보기. v1.1. ReaderView가 viewport를 좌/우로 분할해 (currentPage, currentPage+1)을
+   * direction에 따라 배치한다. currentPage는 leading(짝수)으로 정렬되어 들어옴.
+   */
+  val spreadMode: Boolean = false,
+  /**
+   * 회전 잠금. v1.1. ReaderScreen 라이프사이클 동안만 Activity.requestedOrientation에 반영.
+   * 기본값 [ReaderOrientation.Auto] = v1.0 동작 유지(시스템 회전 따름).
+   */
+  val orientation: ReaderOrientation = ReaderOrientation.Auto,
 )
 
 private fun IntRange.byProximityTo(center: Int): List<Int> {

@@ -90,6 +90,13 @@
     <string name="reader_direction">This book\'s reading direction</string>
     <string name="reader_direction_ltr">Left→Right</string>
     <string name="reader_direction_rtl">Right→Left</string>
+    <string name="reader_spread">Two-page view</string>
+    <string name="reader_spread_single">Single</string>
+    <string name="reader_spread_two">Two pages</string>
+    <string name="reader_orientation">Rotation</string>
+    <string name="reader_orientation_auto">Auto</string>
+    <string name="reader_orientation_portrait">Portrait</string>
+    <string name="reader_orientation_landscape">Landscape</string>
     <string name="reader_trim">Auto trim margins</string>
     <string name="reader_trim_auto">Auto</string>
     <string name="reader_contrast">Contrast</string>
