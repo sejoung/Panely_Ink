@@ -8,6 +8,7 @@ import io.github.sejoung.panelyink.core.preferences.ReaderOrientation
 import io.github.sejoung.panelyink.core.preferences.ReadingDirection
 import io.github.sejoung.panelyink.core.render.ContrastMatrix
 import io.github.sejoung.panelyink.reader.model.BookSettings
+import io.github.sejoung.panelyink.reader.model.BookSettingsOverrides
 import io.github.sejoung.panelyink.reader.session.PageDecoder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +52,7 @@ class ReaderViewModel(
   private val decoder: PageDecoder,
   initialPage: Int = 0,
   initialBookSettings: BookSettings = BookSettings.DEFAULTS,
+  initialOverrides: BookSettingsOverrides = BookSettingsOverrides.NONE,
   initialAppPreferences: AppPreferences = AppPreferences.DEFAULTS,
 ) {
 
@@ -83,6 +85,14 @@ class ReaderViewModel(
     }
   )
   val state: StateFlow<ReaderState> = _state.asStateFlow()
+
+  /**
+   * 사용자가 명시적으로 변경한 필드들의 sparse 표현. 책별 영속 저장의 단위.
+   * setter가 호출될 때마다 해당 필드가 non-null로 채워진다. 사용자가 손대지 않은 필드는 null로 남아
+   * 다음 진입에 [AppPreferences] / [BookSettings.DEFAULTS]에서 합성된다.
+   */
+  private val _overrides = MutableStateFlow(initialOverrides)
+  val overrides: StateFlow<BookSettingsOverrides> = _overrides.asStateFlow()
 
   /**
    * 마지막 풀리프레시 이후 페이지 변경 횟수. [ReaderState.fullRefreshInterval]에
@@ -168,11 +178,13 @@ class ReaderViewModel(
   fun setDirection(direction: ReadingDirection) {
     if (direction == state.value.direction) return
     _state.value = _state.value.copy(direction = direction)
+    _overrides.value = _overrides.value.copy(direction = direction)
   }
 
   fun setFitMode(fitMode: FitMode) {
     if (fitMode == state.value.fitMode) return
     _state.value = _state.value.copy(fitMode = fitMode)
+    _overrides.value = _overrides.value.copy(fitMode = fitMode)
     triggerPreload()
   }
 
@@ -180,6 +192,7 @@ class ReaderViewModel(
   fun setTrimEnabled(enabled: Boolean) {
     if (enabled == state.value.trimEnabled) return
     _state.value = _state.value.copy(trimEnabled = enabled)
+    _overrides.value = _overrides.value.copy(trimEnabled = enabled)
     if (enabled) triggerPreload()
   }
 
@@ -193,6 +206,7 @@ class ReaderViewModel(
     }
     if (value == _state.value.contrast) return
     _state.value = _state.value.copy(contrast = value)
+    _overrides.value = _overrides.value.copy(contrast = value)
   }
 
   /** 흑백 반전 on/off. ReaderView가 ColorMatrixColorFilter로 contrast와 결합 적용. */
@@ -216,6 +230,7 @@ class ReaderViewModel(
       currentPage = newPage,
       preloadWindow = if (pageChanged) preloadWindowFor(newPage) else current.preloadWindow,
     )
+    _overrides.value = _overrides.value.copy(spreadMode = enabled)
     triggerPreload()
   }
 
@@ -231,6 +246,7 @@ class ReaderViewModel(
   fun setOrientation(orientation: ReaderOrientation) {
     if (orientation == _state.value.orientation) return
     _state.value = _state.value.copy(orientation = orientation)
+    _overrides.value = _overrides.value.copy(orientation = orientation)
   }
 
   fun onViewportChanged(width: Int, height: Int) {

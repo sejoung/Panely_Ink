@@ -37,7 +37,9 @@ import io.github.sejoung.panelyink.data.preferences.SharedPrefsAppPreferencesRep
 import io.github.sejoung.panelyink.reader.ReaderViewModel
 import io.github.sejoung.panelyink.reader.input.ReaderInput
 import io.github.sejoung.panelyink.reader.model.BookSettings
+import io.github.sejoung.panelyink.reader.model.BookSettingsOverrides
 import io.github.sejoung.panelyink.reader.model.SeriesContext
+import io.github.sejoung.panelyink.reader.model.resolve
 import io.github.sejoung.panelyink.reader.session.CbzBookSession
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkSpacing
 import io.github.sejoung.panelyink.ui.theme.LocalPanelyInkTypography
@@ -58,15 +60,16 @@ import kotlinx.coroutines.launch
 @Composable
 fun ReaderScreen(
   context: SeriesContext,
-  propagatedBookSettings: BookSettings? = null,
+  propagatedOverrides: BookSettingsOverrides? = null,
   initialPageOverride: Int? = null,
   onBack: () -> Unit,
   /**
    * 시리즈 형제 권으로 이동 — 호스트가 새 [SeriesContext]를 만들어 [ReaderScreen]을 다시
    * 부르는 식으로 처리. M4 시리즈 연속 읽기 카드 / "다음 권" 카드에서 사용.
    * 인자로 받은 [BookRef]는 [SeriesContext.siblings] 안에 있어야 의미가 있다.
+   * 두 번째 인자는 현재 책에서 사용자가 명시적으로 설정한 [BookSettingsOverrides]만 — 미설정 필드는 형제 권의 전역 기본값을 따른다.
    */
-  onNavigate: (BookRef, BookSettings) -> Unit = { _, _ -> },
+  onNavigate: (BookRef, BookSettingsOverrides) -> Unit = { _, _ -> },
 ) {
   val entry = context.current
   val localContext = LocalContext.current
@@ -105,26 +108,22 @@ fun ReaderScreen(
             ?.pageIndex
             ?.coerceIn(0, session.pageCount - 1)
           ?: 0
-        // 전역 prefs(기본 읽기 방향, 흑백 반전, 풀리프레시 주기)는 SharedPreferences 1회 read.
+        // 전역 prefs(기본 읽기 방향/두쪽/회전/흑백 반전/풀리프레시)는 SharedPreferences 1회 read.
         val appPrefs = appPrefsRepo.load()
-        // 책별 설정이 없으면 전역 기본값들을 적용한다. 책당 1행이라 가벼움.
-        // 전역 prefs와 책별 settings는 별개 — 사용자가 책별 설정을 한 번 바꾸면 그 책은
-        // 이후 전역 변경의 영향을 받지 않는다. propagated(시리즈 형제 권)이 있으면 그게 더 우선.
-        val defaultBookSettings = BookSettings.DEFAULTS.copy(
-          direction = appPrefs.defaultReadingDirection,
-          spreadMode = appPrefs.defaultSpreadMode,
-          orientation = appPrefs.defaultOrientation,
-        )
-        val loadedBookSettings = bookSettingsRepo.load(session.bookId)
-        val bookSettings = loadedBookSettings
-          ?: propagatedBookSettings
-          ?: defaultBookSettings
+        // sparse override 모델 — DB에 책별 row가 있으면 그것만 명시 override로,
+        // 없으면 propagated(시리즈 형제 권 전파)도 없으면 NONE.
+        // 모든 미설정 필드는 [resolve]가 appPrefs로 합성. 전역 변경이 항상 책에 흘러들어옴.
+        val loadedOverrides = bookSettingsRepo.load(session.bookId)
+        val initialOverrides = loadedOverrides
+          ?: propagatedOverrides
+          ?: BookSettingsOverrides.NONE
+        val bookSettings = initialOverrides.resolve(appPrefs)
         Log.d(
           TAG,
-          "settings resolve bookId=${session.bookId} loaded=${loadedBookSettings != null} " +
-            "propagated=${propagatedBookSettings != null} " +
-            "globals(spread=${appPrefs.defaultSpreadMode} orientation=${appPrefs.defaultOrientation}) " +
-            "→ spread=${bookSettings.spreadMode} orientation=${bookSettings.orientation}",
+          "settings resolve bookId=${session.bookId} loaded=${loadedOverrides != null} " +
+            "propagated=${propagatedOverrides != null} overrides=$initialOverrides " +
+            "globals(spread=${appPrefs.defaultSpreadMode} orientation=${appPrefs.defaultOrientation} dir=${appPrefs.defaultReadingDirection}) " +
+            "→ resolved(spread=${bookSettings.spreadMode} orientation=${bookSettings.orientation} dir=${bookSettings.direction})",
         )
         loadingStep =
           localContext.getString(R.string.reader_loading_decode_first_page, session.pageCount)
@@ -134,6 +133,7 @@ fun ReaderScreen(
           session = session,
           resumedPage = resumed,
           bookSettings = bookSettings,
+          initialOverrides = initialOverrides,
           appPreferences = appPrefs,
         )
       }
@@ -161,6 +161,7 @@ fun ReaderScreen(
         bookTitle = entry.displayName,
         resumedPage = s.resumedPage,
         initialBookSettings = s.bookSettings,
+        initialOverrides = s.initialOverrides,
         initialAppPreferences = s.appPreferences,
         positionRepo = positionRepo,
         bookSettingsRepo = bookSettingsRepo,
@@ -203,13 +204,14 @@ private fun ReaderContent(
   bookTitle: String,
   resumedPage: Int,
   initialBookSettings: BookSettings,
+  initialOverrides: BookSettingsOverrides,
   initialAppPreferences: AppPreferences,
   positionRepo: PositionRepository,
   bookSettingsRepo: BookSettingsRepository,
   bookmarkRepo: BookmarkRepository,
   appPrefsRepo: AppPreferencesRepository,
   context: SeriesContext,
-  onNavigate: (BookRef, BookSettings) -> Unit,
+  onNavigate: (BookRef, BookSettingsOverrides) -> Unit,
   onExit: () -> Unit,
 ) {
   // ViewModelStore에 캐시되지 않도록 remember(session)로 묶는다 — 책을 닫고
@@ -222,6 +224,7 @@ private fun ReaderContent(
       decoder = session.asDecoder(),
       initialPage = resumedPage,
       initialBookSettings = initialBookSettings,
+      initialOverrides = initialOverrides,
       initialAppPreferences = initialAppPreferences,
     )
   }
@@ -367,6 +370,7 @@ private sealed interface SessionState {
     val session: CbzBookSession,
     val resumedPage: Int,
     val bookSettings: BookSettings,
+    val initialOverrides: BookSettingsOverrides,
     val appPreferences: AppPreferences,
   ) : SessionState
 

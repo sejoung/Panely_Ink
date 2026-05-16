@@ -6,6 +6,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -20,7 +22,7 @@ import io.github.sejoung.panelyink.core.book.BookRef
 import io.github.sejoung.panelyink.reader.ReaderState
 import io.github.sejoung.panelyink.reader.ReaderViewModel
 import io.github.sejoung.panelyink.reader.input.ReaderInput
-import io.github.sejoung.panelyink.reader.model.BookSettings
+import io.github.sejoung.panelyink.reader.model.BookSettingsOverrides
 import io.github.sejoung.panelyink.reader.model.SeriesContext
 import io.github.sejoung.panelyink.reader.session.CbzBookSession
 import kotlinx.coroutines.FlowPreview
@@ -194,31 +196,29 @@ internal fun ReaderPersistenceEffects(
     }
   }
 
+  // sparse override 모델 — viewModel.overrides는 "사용자가 명시적으로 바꾼 필드"만 담는다.
+  // 빈 override이면 repo.save가 row를 삭제 → 다음 진입에 전역값 그대로 적용.
+  // 진입 시점 overrides와 비교해 변경이 있을 때만 저장 — 단순히 책을 열어 보기만 한 경우 DB 무변경.
   LaunchedEffect(viewModel) {
-    // 진입 시점 settings를 캡처해 두면, 종료 시 사용자가 한 번도 안 건드린 경우 finally 저장을 생략할 수 있다.
-    // 그래야 책별 row가 만들어지지 않아 다음 진입 시 [io.github.sejoung.panelyink.core.preferences.AppPreferences]의
-    // 최신 전역 기본값(두쪽 보기/회전/방향)이 다시 적용된다 — 전역과 책별의 "별개" 의미를 보존.
-    val initialSettings = viewModel.state.value.toBookSettings()
+    val initialOverrides = viewModel.overrides.value
     try {
-      viewModel.state
-        .map { it.toBookSettings() }
+      viewModel.overrides
         .drop(1)
         .distinctUntilChanged()
         .debounce(SETTINGS_SAVE_DEBOUNCE_MS)
-        .collect { settings ->
+        .collect { overrides ->
           bookSettingsRepo.save(
             bookId = viewModel.bookId,
-            settings = settings,
+            overrides = overrides,
           )
         }
     } finally {
-      val latest = viewModel.state.value.toBookSettings()
-      if (latest != initialSettings) {
-        // debounce 윈도우 안에 닫혔어도 변경분이 있으면 한 번 더 보장 저장.
+      val latest = viewModel.overrides.value
+      if (latest != initialOverrides) {
         withContext(NonCancellable) {
           bookSettingsRepo.save(
             bookId = viewModel.bookId,
-            settings = latest,
+            overrides = latest,
           )
         }
       }
@@ -276,15 +276,15 @@ internal fun ReaderHardwareKeyHandler(
   onCloseMenu: () -> Unit,
   onCloseSettings: () -> Unit,
   onCloseBookmarks: () -> Unit,
-  onNavigate: (BookRef, BookSettings) -> Unit,
+  onNavigate: (BookRef, BookSettingsOverrides) -> Unit,
 ) {
   val activity = LocalContext.current.findMainActivity()
   // dispatcher는 boundary(첫/마지막 페이지)에서만 형제 권 점프 분기를 새로 잡으면 된다.
   // currentPage 자체를 key로 두면 매 페이지 전환마다 클로저를 재할당해 GC 압박이 누적된다.
-  // BookSettings는 형제 권으로 propagate되므로 변경 시에는 dispatcher도 재구성.
+  // overrides는 형제 권으로 propagate되므로 변경 시에는 dispatcher도 재구성.
   val atFirstPage = state.currentPage == 0
   val atLastPage = state.currentPage == viewModel.pageCount - 1
-  val propagatedSettings = state.toBookSettings()
+  val propagatedOverrides by viewModel.overrides.collectAsState()
   DisposableEffect(
     activity,
     viewModel,
@@ -293,7 +293,7 @@ internal fun ReaderHardwareKeyHandler(
     bookmarksOpen,
     atFirstPage,
     atLastPage,
-    propagatedSettings,
+    propagatedOverrides,
     context.previousBook,
     context.nextBook,
   ) {
@@ -328,7 +328,7 @@ internal fun ReaderHardwareKeyHandler(
           onPrev = {
             val previousBook = previousBookForBoundary(state, context)
             if (previousBook != null) {
-              onNavigate(previousBook, state.toBookSettings())
+              onNavigate(previousBook, propagatedOverrides)
             } else {
               viewModel.goPrevious()
             }
@@ -336,7 +336,7 @@ internal fun ReaderHardwareKeyHandler(
           onNext = {
             val nextBook = nextBookForBoundary(state, viewModel.pageCount, context)
             if (nextBook != null) {
-              onNavigate(nextBook, state.toBookSettings())
+              onNavigate(nextBook, propagatedOverrides)
             } else {
               viewModel.goNext()
             }

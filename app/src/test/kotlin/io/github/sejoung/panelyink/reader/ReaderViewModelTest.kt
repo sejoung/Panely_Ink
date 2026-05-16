@@ -7,6 +7,7 @@ import io.github.sejoung.panelyink.core.preferences.DEFAULT_FULL_REFRESH_INTERVA
 import io.github.sejoung.panelyink.core.preferences.ReaderOrientation
 import io.github.sejoung.panelyink.core.preferences.ReadingDirection
 import io.github.sejoung.panelyink.reader.model.BookSettings
+import io.github.sejoung.panelyink.reader.model.BookSettingsOverrides
 import io.github.sejoung.panelyink.reader.session.DecodedPage
 import io.github.sejoung.panelyink.reader.session.PageDecoder
 import kotlinx.coroutines.CompletableDeferred
@@ -539,6 +540,40 @@ class ReaderViewModelTest {
             initialBookSettings = BookSettings.DEFAULTS.copy(orientation = ReaderOrientation.Landscape),
         )
         assertEquals(ReaderOrientation.Landscape, vm.state.value.orientation)
+        vm.close()
+    }
+
+    @Test
+    fun overridesEmptyInitially() {
+        val vm = ReaderViewModel("b", 10, FakePageDecoder())
+        assertEquals(BookSettingsOverrides.NONE, vm.overrides.value)
+        vm.close()
+    }
+
+    @Test
+    fun settersRecordOverridesSparsely() {
+        val vm = ReaderViewModel("b", 10, FakePageDecoder())
+        // 사용자가 spread만 토글 — 다른 필드는 null 유지
+        vm.setSpreadMode(true)
+        val ov = vm.overrides.value
+        assertEquals(true, ov.spreadMode)
+        assertEquals(null, ov.orientation)
+        assertEquals(null, ov.direction)
+        assertEquals(null, ov.fitMode)
+        assertEquals(null, ov.trimEnabled)
+        assertEquals(null, ov.contrast)
+        vm.close()
+    }
+
+    @Test
+    fun initialOverridesAreUsedForOverridesState() {
+        val initial = BookSettingsOverrides(orientation = ReaderOrientation.Landscape)
+        val vm = ReaderViewModel(
+            "b", 10, FakePageDecoder(),
+            initialBookSettings = BookSettings.DEFAULTS.copy(orientation = ReaderOrientation.Landscape),
+            initialOverrides = initial,
+        )
+        assertEquals(initial, vm.overrides.value)
         vm.close()
     }
 

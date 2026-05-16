@@ -14,4 +14,7 @@ interface BookSettingsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: BookSettingsEntity)
 
+    @Query("DELETE FROM book_settings WHERE book_id = :bookId")
+    suspend fun delete(bookId: String)
+
 }

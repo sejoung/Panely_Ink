@@ -2,17 +2,7 @@ package io.github.sejoung.panelyink.reader.ui
 
 import io.github.sejoung.panelyink.core.book.BookRef
 import io.github.sejoung.panelyink.reader.ReaderState
-import io.github.sejoung.panelyink.reader.model.BookSettings
 import io.github.sejoung.panelyink.reader.model.SeriesContext
-
-internal fun ReaderState.toBookSettings(): BookSettings = BookSettings(
-  fitMode = fitMode,
-  direction = direction,
-  trimEnabled = trimEnabled,
-  contrast = contrast,
-  spreadMode = spreadMode,
-  orientation = orientation,
-)
 
 internal fun previousBookForBoundary(
   state: ReaderState,

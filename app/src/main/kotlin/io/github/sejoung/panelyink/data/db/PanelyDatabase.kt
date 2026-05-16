@@ -33,6 +33,9 @@ import io.github.sejoung.panelyink.data.db.settings.BookSettingsEntity
  * - v9: `book_settings.orientation` 컬럼 추가 (회전 잠금 책별 저장 — v1.1)
  * - v10: `book_settings.orientation` 기본값을 `'Auto'` → `'Portrait'`로 재생성, 레거시
  *        `'Auto'` 행 값을 `'Portrait'`로 정규화 (Auto 옵션 폐기에 따른 schema 정렬 — v1.1)
+ * - v11: `book_settings` 6필드(fit_mode/direction/trim_enabled/contrast/spread_mode/orientation)를 모두
+ *        nullable로 전환 — sparse override 모델 도입. NULL = 사용자 미설정 → 진입 시 전역값 따름.
+ *        기존 행은 그대로 복사되어 "전 필드 명시 override"로 처리(기존 동작 보존).
  *
  * 싱글톤 보장: [PanelyDatabase.getInstance]가 더블 체크 락. 안드로이드 앱에서 DB는 프로세스당 1개.
  */
@@ -44,7 +47,7 @@ import io.github.sejoung.panelyink.data.db.settings.BookSettingsEntity
     BookmarkEntity::class,
     BookIndexEntity::class,
   ],
-  version = 10,
+  version = 11,
   exportSchema = false,
 )
 abstract class PanelyDatabase : RoomDatabase() {
@@ -202,6 +205,59 @@ abstract class PanelyDatabase : RoomDatabase() {
     }
 
     /**
+     * v10 → v11: 6필드를 NOT NULL → nullable로 완화 (sparse override 모델).
+     *
+     * SQLite는 ALTER COLUMN nullability를 지원하지 않으므로 테이블 재생성.
+     * 기존 행은 모든 값이 채워진 채로 보존되어, 기존 책은 "전 필드 명시 override" 상태로 들어간다 — v1.0/베타 시절 동작 보존.
+     * 새 책은 row 없음 → 진입 시 [BookSettingsOverrides.NONE].resolve(appPrefs)로 합성.
+     */
+    internal val MIGRATION_10_11 = object : Migration(10, 11) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+          """
+                    CREATE TABLE IF NOT EXISTS `book_settings_new` (
+                        `book_id` TEXT NOT NULL,
+                        `fit_mode` TEXT,
+                        `direction` TEXT,
+                        `trim_enabled` INTEGER,
+                        `contrast` REAL,
+                        `spread_mode` INTEGER,
+                        `orientation` TEXT,
+                        `updated_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`book_id`)
+                    )
+                    """.trimIndent(),
+        )
+        db.execSQL(
+          """
+                    INSERT INTO `book_settings_new` (
+                        `book_id`,
+                        `fit_mode`,
+                        `direction`,
+                        `trim_enabled`,
+                        `contrast`,
+                        `spread_mode`,
+                        `orientation`,
+                        `updated_at`
+                    )
+                    SELECT
+                        `book_id`,
+                        `fit_mode`,
+                        `direction`,
+                        `trim_enabled`,
+                        `contrast`,
+                        `spread_mode`,
+                        `orientation`,
+                        `updated_at`
+                    FROM `book_settings`
+                    """.trimIndent(),
+        )
+        db.execSQL("DROP TABLE `book_settings`")
+        db.execSQL("ALTER TABLE `book_settings_new` RENAME TO `book_settings`")
+      }
+    }
+
+    /**
      * v9 → v10: orientation 컬럼 default를 `'Portrait'`로 정규화 + 레거시 `'Auto'` 행을 모두
      * `'Portrait'`로 치환. SQLite는 ALTER COLUMN DEFAULT를 지원하지 않으므로 v5→v6 패턴과
      * 동일하게 테이블 재생성 → 데이터 복사 → drop/rename.
@@ -300,6 +356,7 @@ abstract class PanelyDatabase : RoomDatabase() {
             MIGRATION_7_8,
             MIGRATION_8_9,
             MIGRATION_9_10,
+            MIGRATION_10_11,
           )
           .build()
           .also { instance = it }

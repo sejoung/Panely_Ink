@@ -22,9 +22,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.core.book.BookRef
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import io.github.sejoung.panelyink.reader.ReaderState
 import io.github.sejoung.panelyink.reader.ReaderViewModel
-import io.github.sejoung.panelyink.reader.model.BookSettings
+import io.github.sejoung.panelyink.reader.model.BookSettingsOverrides
 import io.github.sejoung.panelyink.core.preferences.ReadingDirection
 import io.github.sejoung.panelyink.reader.model.SeriesContext
 import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
@@ -54,8 +56,9 @@ internal fun ReaderOverlayLayer(
   onJumpToPage: (Int) -> Unit,
   onToggleBookmark: () -> Unit,
   onDeleteBookmark: (Int) -> Unit,
-  onNavigate: (BookRef, BookSettings) -> Unit,
+  onNavigate: (BookRef, BookSettingsOverrides) -> Unit,
 ) {
+  val overrides by viewModel.overrides.collectAsState()
   if (!menuOpen && !bookmarksOpen) {
     TapRegions(
       directionIsRtl = state.direction == ReadingDirection.Rtl,
@@ -69,6 +72,7 @@ internal fun ReaderOverlayLayer(
       context = context,
       settingsOpen = settingsOpen || bookmarksOpen,
       onNavigate = onNavigate,
+      propagatedOverrides = overrides,
       modifier = Modifier.fillMaxSize(),
     )
   } else {
@@ -81,10 +85,10 @@ internal fun ReaderOverlayLayer(
       currentPageBookmarked = currentPageBookmarked,
       onJumpToPage = onJumpToPage,
       onPreviousBook = {
-        context.previousBook?.let { onNavigate(it, state.toBookSettings()) }
+        context.previousBook?.let { onNavigate(it, overrides) }
       },
       onNextBook = {
-        context.nextBook?.let { onNavigate(it, state.toBookSettings()) }
+        context.nextBook?.let { onNavigate(it, overrides) }
       },
       onToggleBookmark = onToggleBookmark,
       onOpenBookmarks = onOpenBookmarks,
@@ -139,7 +143,8 @@ private fun AdjacentBookPrompt(
   pageCount: Int,
   context: SeriesContext,
   settingsOpen: Boolean,
-  onNavigate: (BookRef, BookSettings) -> Unit,
+  onNavigate: (BookRef, BookSettingsOverrides) -> Unit,
+  propagatedOverrides: BookSettingsOverrides,
   modifier: Modifier = Modifier,
 ) {
   if (settingsOpen) return
@@ -152,7 +157,7 @@ private fun AdjacentBookPrompt(
         label = stringResource(R.string.reader_next_book),
         title = nextBook.displayName,
         forward = true,
-        onClick = { onNavigate(nextBook, state.toBookSettings()) },
+        onClick = { onNavigate(nextBook, propagatedOverrides) },
         modifier = Modifier.align(Alignment.BottomCenter),
       )
 
@@ -160,7 +165,7 @@ private fun AdjacentBookPrompt(
         label = stringResource(R.string.reader_previous_book),
         title = previousBook.displayName,
         forward = false,
-        onClick = { onNavigate(previousBook, state.toBookSettings()) },
+        onClick = { onNavigate(previousBook, propagatedOverrides) },
         modifier = Modifier.align(Alignment.BottomCenter),
       )
     }
