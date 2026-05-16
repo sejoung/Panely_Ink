@@ -158,6 +158,12 @@ class CbzBookSession private constructor(
         payload = bitmap,
       )
     }
+
+    override fun keepWarm(visibleIndices: IntArray) {
+      // cache.get은 LruCache의 access 타임스탬프를 갱신해 evict 우선순위를 가장 낮춤.
+      // 캐시에 없으면 null 반환만 하고 LRU에 영향 없음 — 안전.
+      visibleIndices.forEach { idx -> cache.get(idx) }
+    }
   }
 
   fun close() {

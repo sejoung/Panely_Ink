@@ -267,10 +267,24 @@ class ReaderViewModel(
     if (s.viewportWidth <= 0 || s.viewportHeight <= 0) return
     val generation = ++preloadGeneration
     preloadJob?.cancel()
+    // spread 모드는 화면에 2쪽이 동시에 보이므로 leading(N)과 secondary(N+1) 둘 다 최우선 디코드.
+    // 기존 단일-중심 proximity는 N→N-1→N+1 순이라 페이지 막 넘긴 직후 첫 디코드 1회 동안 우측이 비는 문제 발생.
+    val decodeCenters = if (s.spreadMode && s.currentPage + 1 <= pageCount - 1) {
+      intArrayOf(s.currentPage, s.currentPage + 1)
+    } else {
+      intArrayOf(s.currentPage)
+    }
+    // spread 모드는 각 페이지가 화면 절반에만 그려지므로 디코드 해상도도 절반으로 충분.
+    // → inSampleSize가 한 단계 더 줄여 메모리/디코드시간 절반, cache eviction 압박 감소.
+    val decodeViewportW = if (s.spreadMode) s.viewportWidth / 2 else s.viewportWidth
+    val decodeViewportH = s.viewportHeight
     preloadJob = scope.launch {
-      for (idx in s.preloadWindow.byProximityTo(s.currentPage)) {
+      for (idx in s.preloadWindow.byProximityTo(*decodeCenters)) {
         if (generation != preloadGeneration || !currentCoroutineContext().isActive) return@launch
-        decoder.decode(idx, s.viewportWidth, s.viewportHeight, s.trimEnabled)
+        // 새 페이지를 캐시에 넣기 직전에 visible 페이지의 LRU 위치를 갱신해 evict 보호.
+        // 풀리프레시 시퀀스 중에는 onDraw가 pageBitmap을 호출하지 않아 LRU touch가 자연 발생 안 함 — 명시 보호 필요.
+        decoder.keepWarm(decodeCenters)
+        decoder.decode(idx, decodeViewportW, decodeViewportH, s.trimEnabled)
         if (generation != preloadGeneration || !currentCoroutineContext().isActive) return@launch
         _decoded.emit(idx)
       }
@@ -325,7 +339,14 @@ data class ReaderState(
   val orientation: ReaderOrientation = ReaderOrientation.Portrait,
 )
 
-private fun IntRange.byProximityTo(center: Int): List<Int> {
+/**
+ * 여러 중심점 중 최단 거리 기준으로 정렬. spread 모드처럼 화면에 동시에 보이는 페이지가 2개일 때
+ * 둘 다 거리 0으로 묶여 1순위로 디코드되도록.
+ *
+ * 동일 거리에서 안정 정렬 — `IntRange.toList()`가 오름차순을 보장하므로 같은 거리면 작은 인덱스 먼저.
+ */
+private fun IntRange.byProximityTo(vararg centers: Int): List<Int> {
+  require(centers.isNotEmpty()) { "centers must not be empty" }
   val list = toList()
-  return list.sortedBy { kotlin.math.abs(it - center) }
+  return list.sortedBy { idx -> centers.minOf { kotlin.math.abs(idx - it) } }
 }

@@ -581,6 +581,86 @@ class ReaderViewModelTest {
     }
 
     @Test
+    fun spreadModePreloadsBothVisiblePagesFirst() = runTest {
+        // leading(N)과 secondary(N+1)이 distance=0으로 묶여 1순위로 디코드되어야 한다.
+        // 기존 단일-중심 proximity는 N→N-1→N+1 순이라 페이지 막 넘긴 직후 첫 디코드 동안 우측이 빈다.
+        val decoder = FakePageDecoder()
+        val vm = ReaderViewModel(
+            "b", 100, decoder,
+            initialPage = 10,
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true),
+        )
+        vm.onViewportChanged(1648, 1236)
+        runCurrent()
+        // 디코드 순서 확인 — 첫 두 개는 visible spread (10, 11). 그 다음 인접 (9, 12), 외곽 (8, 13), ...
+        assertEquals(listOf(10, 11, 9, 12, 8, 13, 7), decoder.calls)
+        vm.close()
+    }
+
+    @Test
+    fun spreadModeDecodesAtHalfWidthViewport() = runTest {
+        // spread 모드는 각 페이지가 화면 절반에 그려지므로 디코더에 절반 viewport hint를 줘야
+        // inSampleSize가 적절히 계산되어 메모리/디코드 시간이 줄어든다.
+        val decoder = FakePageDecoder()
+        val vm = ReaderViewModel(
+            "b", 100, decoder,
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true),
+        )
+        vm.onViewportChanged(1648, 1236)
+        runCurrent()
+        // 1648 → 절반 824. 모든 디코드 호출이 (824, 1236)을 받아야 한다.
+        assertEquals(824 to 1236, decoder.viewports.first())
+        vm.close()
+    }
+
+    @Test
+    fun spreadModeAtLastPageOnlyHasLeadingCenter() = runTest {
+        // 홀수 페이지 책의 마지막 spread는 leading만 있고 secondary는 범위 밖.
+        // proximity center가 leading 1개로 폴백되어야 한다.
+        val decoder = FakePageDecoder()
+        val vm = ReaderViewModel(
+            "b", 7, decoder,
+            initialPage = 6, // 마지막 페이지 (페이지 수 7, 인덱스 6)
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true),
+        )
+        vm.onViewportChanged(1648, 1236)
+        runCurrent()
+        // currentPage=6 (이미 짝수 정렬 후), pageCount-1=6 → secondary=7은 범위 밖.
+        // 단일 중심 proximity로 6 → 5 → 4 → 3 → ... 순.
+        assertEquals(listOf(6, 5, 4, 3), decoder.calls)
+        vm.close()
+    }
+
+    @Test
+    fun spreadModeKeepsVisiblePagesWarmBeforeEachDecode() = runTest {
+        // 캐시 LRU eviction에서 visible 페이지 보호 — 디코드마다 (N, N+1)을 keepWarm으로 touch.
+        val decoder = FakePageDecoder()
+        val vm = ReaderViewModel(
+            "b", 100, decoder,
+            initialPage = 10,
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true),
+        )
+        vm.onViewportChanged(1648, 1236)
+        runCurrent()
+        // 7회 디코드 각각 직전에 keepWarm([10, 11]) 호출 — visible 페이지 LRU 보호.
+        assertEquals(7, decoder.keepWarmCalls.size)
+        assertTrue(decoder.keepWarmCalls.all { it == listOf(10, 11) })
+        vm.close()
+    }
+
+    @Test
+    fun singleModeKeepsCurrentPageWarm() = runTest {
+        // 단쪽 모드에서도 currentPage를 keepWarm — visible 1장만.
+        val decoder = FakePageDecoder()
+        val vm = ReaderViewModel("b", 100, decoder, initialPage = 5)
+        vm.onViewportChanged(800, 1200)
+        runCurrent()
+        assertTrue(decoder.keepWarmCalls.isNotEmpty())
+        assertTrue(decoder.keepWarmCalls.all { it == listOf(5) })
+        vm.close()
+    }
+
+    @Test
     fun fullRefreshCounterDoublesInSpreadMode() {
         val vm = ReaderViewModel(
             "b", 100, FakePageDecoder(),
@@ -608,6 +688,7 @@ private class FakePageDecoder(
     val calls = mutableListOf<Int>()
     val viewports = mutableListOf<Pair<Int, Int>>()
     val trimFlags = mutableListOf<Boolean>()
+    val keepWarmCalls = mutableListOf<List<Int>>()
 
     override suspend fun decode(
         pageIndex: Int,
@@ -620,5 +701,9 @@ private class FakePageDecoder(
         trimFlags += trimEnabled
         if (pageIndex in suspendOn && gate != null) gate.await()
         return DecodedPage(pageIndex, viewportWidth, viewportHeight, Any())
+    }
+
+    override fun keepWarm(visibleIndices: IntArray) {
+        keepWarmCalls += visibleIndices.toList()
     }
 }
