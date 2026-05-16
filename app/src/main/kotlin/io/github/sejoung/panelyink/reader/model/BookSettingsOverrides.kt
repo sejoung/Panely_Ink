@@ -41,21 +41,17 @@ data class BookSettingsOverrides(
 }
 
 /**
- * sparse override를 전역 prefs / 하드코드 fallback과 합성해 reader가 사용할 fully-resolved 값으로 변환.
+ * sparse override를 전역 prefs와 합성해 reader가 사용할 fully-resolved 값으로 변환.
  *
- * 우선순위: override → appPrefs(전역) → fallback([BookSettings.DEFAULTS]).
- *
- * 전역값이 정의된 필드(direction/spreadMode/orientation)는 appPrefs에서, 그 외(fitMode/trimEnabled/contrast)는
- * fallback에서 가져온다. 앱이 전역 prefs를 확장하면 여기에 필드를 추가하면 된다.
+ * 우선순위: override(책별 명시) → appPrefs(전역 기본값).
+ * v1.1부터 6필드 전부 [AppPreferences]에 동일 짝이 있어 하드코드 fallback은 사용 안 함.
+ * [BookSettings.DEFAULTS]는 [AppPreferences.DEFAULTS]가 fallback일 때만 간접 영향 (SharedPreferences 미설정 시).
  */
-fun BookSettingsOverrides.resolve(
-    appPrefs: AppPreferences,
-    fallback: BookSettings = BookSettings.DEFAULTS,
-): BookSettings = BookSettings(
-    fitMode = fitMode ?: fallback.fitMode,
+fun BookSettingsOverrides.resolve(appPrefs: AppPreferences): BookSettings = BookSettings(
+    fitMode = fitMode ?: appPrefs.defaultFitMode,
     direction = direction ?: appPrefs.defaultReadingDirection,
     trimEnabled = trimEnabled ?: appPrefs.defaultTrimEnabled,
-    contrast = contrast ?: fallback.contrast,
+    contrast = contrast ?: appPrefs.defaultContrast,
     spreadMode = spreadMode ?: appPrefs.defaultSpreadMode,
     orientation = orientation ?: appPrefs.defaultOrientation,
 )

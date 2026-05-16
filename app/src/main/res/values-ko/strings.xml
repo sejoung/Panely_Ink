@@ -50,6 +50,8 @@
     <string name="settings_default_spread_mode">기본 두쪽 보기</string>
     <string name="settings_default_orientation">기본 화면 회전</string>
     <string name="settings_default_trim_enabled">기본 자동 여백 트리밍</string>
+    <string name="settings_default_fit_mode">기본 화면 맞춤</string>
+    <string name="settings_default_contrast">기본 대비</string>
     <string name="settings_display">디스플레이</string>
     <string name="settings_full_refresh_interval">풀리프레시 주기 (페이지)</string>
     <string name="settings_invert">흑백 반전</string>

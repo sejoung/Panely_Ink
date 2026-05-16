@@ -1,5 +1,7 @@
 package io.github.sejoung.panelyink.core.preferences
 
+import io.github.sejoung.panelyink.core.fit.FitMode
+import io.github.sejoung.panelyink.core.render.ContrastMatrix
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -18,6 +20,8 @@ class AppPreferencesTest {
         assertEquals(false, AppPreferences.DEFAULTS.defaultSpreadMode)
         assertEquals(ReaderOrientation.Portrait, AppPreferences.DEFAULTS.defaultOrientation)
         assertEquals(false, AppPreferences.DEFAULTS.defaultTrimEnabled)
+        assertEquals(FitMode.FitScreen, AppPreferences.DEFAULTS.defaultFitMode)
+        assertEquals(ContrastMatrix.IDENTITY, AppPreferences.DEFAULTS.defaultContrast)
     }
 
     @Test

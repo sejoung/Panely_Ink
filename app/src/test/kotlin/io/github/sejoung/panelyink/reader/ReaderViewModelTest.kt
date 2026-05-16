@@ -85,6 +85,8 @@ class ReaderViewModelTest {
                 defaultSpreadMode = false,
                 defaultOrientation = ReaderOrientation.Portrait,
                 defaultTrimEnabled = false,
+                defaultFitMode = FitMode.FitScreen,
+                defaultContrast = 1.0f,
             ),
         )
 

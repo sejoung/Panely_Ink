@@ -16,6 +16,8 @@ class BookSettingsOverridesTest {
         defaultSpreadMode = true,
         defaultOrientation = ReaderOrientation.Landscape,
         defaultTrimEnabled = true,
+        defaultFitMode = FitMode.FitWidth,
+        defaultContrast = 1.4f,
     )
 
     @Test
@@ -35,14 +37,14 @@ class BookSettingsOverridesTest {
 
     @Test
     fun resolveEmptyOverridesUsesAllGlobals() {
+        // v1.1: 6필드 전부 appPrefs에서 합성 — 하드코드 fallback 미사용.
         val resolved = BookSettingsOverrides.NONE.resolve(appPrefs)
         assertEquals(ReadingDirection.Rtl, resolved.direction)
         assertEquals(true, resolved.spreadMode)
         assertEquals(ReaderOrientation.Landscape, resolved.orientation)
-        assertEquals(true, resolved.trimEnabled) // appPrefs.defaultTrimEnabled에서 가져옴
-        // fitMode/contrast는 appPrefs에 필드 없음 → fallback DEFAULTS
-        assertEquals(BookSettings.DEFAULTS.fitMode, resolved.fitMode)
-        assertEquals(BookSettings.DEFAULTS.contrast, resolved.contrast)
+        assertEquals(true, resolved.trimEnabled)
+        assertEquals(FitMode.FitWidth, resolved.fitMode)
+        assertEquals(1.4f, resolved.contrast)
     }
 
     @Test
@@ -68,6 +70,26 @@ class BookSettingsOverridesTest {
         assertEquals(false, resolved.spreadMode) // 명시 override
         assertEquals(ReadingDirection.Rtl, resolved.direction) // 전역
         assertEquals(ReaderOrientation.Landscape, resolved.orientation) // 전역
+    }
+
+    @Test
+    fun resolveFitModeFollowsAppPrefs() {
+        val resolved = BookSettingsOverrides.NONE.resolve(appPrefs.copy(defaultFitMode = FitMode.FitHeight))
+        assertEquals(FitMode.FitHeight, resolved.fitMode)
+    }
+
+    @Test
+    fun resolveContrastFollowsAppPrefs() {
+        val resolved = BookSettingsOverrides.NONE.resolve(appPrefs.copy(defaultContrast = 0.8f))
+        assertEquals(0.8f, resolved.contrast)
+    }
+
+    @Test
+    fun resolveFitModeOverrideBeatsAppPrefs() {
+        // 사용자가 책별로 Zoom 선택 — 전역 FitWidth와 무관하게 Zoom 유지
+        val overrides = BookSettingsOverrides(fitMode = FitMode.Zoom(1.5f))
+        val resolved = overrides.resolve(appPrefs.copy(defaultFitMode = FitMode.FitWidth))
+        assertEquals(FitMode.Zoom(1.5f), resolved.fitMode)
     }
 
     @Test

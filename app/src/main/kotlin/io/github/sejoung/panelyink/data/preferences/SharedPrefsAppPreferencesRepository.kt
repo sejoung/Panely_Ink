@@ -2,6 +2,7 @@ package io.github.sejoung.panelyink.data.preferences
 
 import android.content.Context
 import androidx.core.content.edit
+import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.core.preferences.AppLocale
 import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
@@ -9,6 +10,8 @@ import io.github.sejoung.panelyink.core.preferences.ReaderOrientation
 import io.github.sejoung.panelyink.core.preferences.ReadingDirection
 import io.github.sejoung.panelyink.core.preferences.deserializeOrientation
 import io.github.sejoung.panelyink.reader.model.deserializeDirection
+import io.github.sejoung.panelyink.reader.model.deserializeFitMode
+import io.github.sejoung.panelyink.reader.model.serializeFitMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -59,6 +62,16 @@ class SharedPrefsAppPreferencesRepository(
                 KEY_DEFAULT_TRIM_ENABLED,
                 AppPreferences.DEFAULTS.defaultTrimEnabled,
             ),
+            defaultFitMode = deserializeFitMode(
+                prefs.getString(
+                    KEY_DEFAULT_FIT_MODE,
+                    serializeFitMode(AppPreferences.DEFAULTS.defaultFitMode),
+                ) ?: serializeFitMode(AppPreferences.DEFAULTS.defaultFitMode),
+            ),
+            defaultContrast = prefs.getFloat(
+                KEY_DEFAULT_CONTRAST,
+                AppPreferences.DEFAULTS.defaultContrast,
+            ),
         )
     }
 
@@ -90,6 +103,14 @@ class SharedPrefsAppPreferencesRepository(
         prefs.edit { putBoolean(KEY_DEFAULT_TRIM_ENABLED, value) }
     }
 
+    override suspend fun setDefaultFitMode(value: FitMode) = withContext(Dispatchers.IO) {
+        prefs.edit { putString(KEY_DEFAULT_FIT_MODE, serializeFitMode(value)) }
+    }
+
+    override suspend fun setDefaultContrast(value: Float) = withContext(Dispatchers.IO) {
+        prefs.edit { putFloat(KEY_DEFAULT_CONTRAST, value) }
+    }
+
     companion object {
         private const val PREFS_NAME = AppLocale.PREFS_NAME
         private const val KEY_DEFAULT_READING_DIRECTION = "default_reading_direction"
@@ -98,5 +119,7 @@ class SharedPrefsAppPreferencesRepository(
         private const val KEY_DEFAULT_SPREAD_MODE = "default_spread_mode"
         private const val KEY_DEFAULT_ORIENTATION = "default_orientation"
         private const val KEY_DEFAULT_TRIM_ENABLED = "default_trim_enabled"
+        private const val KEY_DEFAULT_FIT_MODE = "default_fit_mode"
+        private const val KEY_DEFAULT_CONTRAST = "default_contrast"
     }
 }

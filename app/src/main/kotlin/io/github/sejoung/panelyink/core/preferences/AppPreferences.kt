@@ -3,6 +3,8 @@ package io.github.sejoung.panelyink.core.preferences
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.res.Configuration
+import io.github.sejoung.panelyink.core.fit.FitMode
+import io.github.sejoung.panelyink.core.render.ContrastMatrix
 import java.util.Locale
 
 /**
@@ -38,6 +40,15 @@ data class AppPreferences(
      * 트림을 원하면 책별/전역에서 명시 ON. 책별 저장값이 있으면 그쪽이 우선.
      */
     val defaultTrimEnabled: Boolean,
+    /**
+     * 새 책 첫 진입 시 적용할 화면 맞춤 기본값 — v1.1. FitScreen/FitWidth/FitHeight 중 하나.
+     * `FitMode.Zoom`은 전역 기본값으로 의미 없어 UI에서 노출 안 함(책별 명시만 가능).
+     */
+    val defaultFitMode: FitMode,
+    /**
+     * 새 책 첫 진입 시 적용할 대비 배율 기본값 — v1.1. 0.5..2.0. 1.0 = 원본.
+     */
+    val defaultContrast: Float,
 ) {
     companion object {
         val DEFAULTS: AppPreferences = AppPreferences(
@@ -48,6 +59,8 @@ data class AppPreferences(
             defaultSpreadMode = false,
             defaultOrientation = ReaderOrientation.Portrait,
             defaultTrimEnabled = false,
+            defaultFitMode = FitMode.FitScreen,
+            defaultContrast = ContrastMatrix.IDENTITY,
         )
     }
 }
@@ -97,6 +110,8 @@ interface AppPreferencesRepository {
     suspend fun setDefaultSpreadMode(value: Boolean)
     suspend fun setDefaultOrientation(value: ReaderOrientation)
     suspend fun setDefaultTrimEnabled(value: Boolean)
+    suspend fun setDefaultFitMode(value: FitMode)
+    suspend fun setDefaultContrast(value: Float)
 }
 
 const val DEFAULT_FULL_REFRESH_INTERVAL: Int = 0

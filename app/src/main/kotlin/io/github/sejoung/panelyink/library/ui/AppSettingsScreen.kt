@@ -34,6 +34,9 @@ import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
 import io.github.sejoung.panelyink.data.preferences.SharedPrefsAppPreferencesRepository
 import io.github.sejoung.panelyink.library.model.ViewMode
+import io.github.sejoung.panelyink.core.render.ContrastMatrix
+import io.github.sejoung.panelyink.reader.ui.ContrastSlider
+import io.github.sejoung.panelyink.reader.ui.FitSegments
 import io.github.sejoung.panelyink.reader.ui.OrientationSegments
 import io.github.sejoung.panelyink.reader.ui.SpreadSegments
 import io.github.sejoung.panelyink.reader.ui.TrimSegments
@@ -216,6 +219,35 @@ fun AppSettingsScreen(
         onSelect = { value ->
           prefs = current.copy(defaultTrimEnabled = value)
           scope.launch { repo.setDefaultTrimEnabled(value) }
+        },
+      )
+
+      Spacer(Modifier.height(spacing.space3))
+
+      // 화면 맞춤 — FitMode.Zoom은 책별 명시만 가능, 여기엔 3개 segment만.
+      SectionLabel(stringResource(R.string.settings_default_fit_mode))
+      Spacer(Modifier.height(spacing.space1))
+      FitSegments(
+        selected = current.defaultFitMode,
+        onSelect = { value ->
+          prefs = current.copy(defaultFitMode = value)
+          scope.launch { repo.setDefaultFitMode(value) }
+        },
+      )
+
+      Spacer(Modifier.height(spacing.space3))
+
+      SectionLabel(stringResource(R.string.settings_default_contrast))
+      Spacer(Modifier.height(spacing.space1))
+      ContrastSlider(
+        contrast = current.defaultContrast,
+        onCommit = { value ->
+          prefs = current.copy(defaultContrast = value)
+          scope.launch { repo.setDefaultContrast(value) }
+        },
+        onReset = {
+          prefs = current.copy(defaultContrast = ContrastMatrix.IDENTITY)
+          scope.launch { repo.setDefaultContrast(ContrastMatrix.IDENTITY) }
         },
       )
 
