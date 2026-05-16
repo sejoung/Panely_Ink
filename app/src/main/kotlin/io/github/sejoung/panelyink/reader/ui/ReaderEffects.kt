@@ -195,6 +195,10 @@ internal fun ReaderPersistenceEffects(
   }
 
   LaunchedEffect(viewModel) {
+    // 진입 시점 settings를 캡처해 두면, 종료 시 사용자가 한 번도 안 건드린 경우 finally 저장을 생략할 수 있다.
+    // 그래야 책별 row가 만들어지지 않아 다음 진입 시 [io.github.sejoung.panelyink.core.preferences.AppPreferences]의
+    // 최신 전역 기본값(두쪽 보기/회전/방향)이 다시 적용된다 — 전역과 책별의 "별개" 의미를 보존.
+    val initialSettings = viewModel.state.value.toBookSettings()
     try {
       viewModel.state
         .map { it.toBookSettings() }
@@ -208,11 +212,15 @@ internal fun ReaderPersistenceEffects(
           )
         }
     } finally {
-      withContext(NonCancellable) {
-        bookSettingsRepo.save(
-          bookId = viewModel.bookId,
-          settings = viewModel.state.value.toBookSettings(),
-        )
+      val latest = viewModel.state.value.toBookSettings()
+      if (latest != initialSettings) {
+        // debounce 윈도우 안에 닫혔어도 변경분이 있으면 한 번 더 보장 저장.
+        withContext(NonCancellable) {
+          bookSettingsRepo.save(
+            bookId = viewModel.bookId,
+            settings = latest,
+          )
+        }
       }
     }
   }

@@ -115,9 +115,17 @@ fun ReaderScreen(
           spreadMode = appPrefs.defaultSpreadMode,
           orientation = appPrefs.defaultOrientation,
         )
-        val bookSettings = bookSettingsRepo.load(session.bookId)
+        val loadedBookSettings = bookSettingsRepo.load(session.bookId)
+        val bookSettings = loadedBookSettings
           ?: propagatedBookSettings
           ?: defaultBookSettings
+        Log.d(
+          TAG,
+          "settings resolve bookId=${session.bookId} loaded=${loadedBookSettings != null} " +
+            "propagated=${propagatedBookSettings != null} " +
+            "globals(spread=${appPrefs.defaultSpreadMode} orientation=${appPrefs.defaultOrientation}) " +
+            "→ spread=${bookSettings.spreadMode} orientation=${bookSettings.orientation}",
+        )
         loadingStep =
           localContext.getString(R.string.reader_loading_decode_first_page, session.pageCount)
         session.decode(resumed, trimEnabled = bookSettings.trimEnabled)
