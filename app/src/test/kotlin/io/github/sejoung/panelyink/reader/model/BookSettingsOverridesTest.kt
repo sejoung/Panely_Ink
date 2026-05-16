@@ -15,6 +15,7 @@ class BookSettingsOverridesTest {
         defaultReadingDirection = ReadingDirection.Rtl,
         defaultSpreadMode = true,
         defaultOrientation = ReaderOrientation.Landscape,
+        defaultTrimEnabled = true,
     )
 
     @Test
@@ -38,10 +39,25 @@ class BookSettingsOverridesTest {
         assertEquals(ReadingDirection.Rtl, resolved.direction)
         assertEquals(true, resolved.spreadMode)
         assertEquals(ReaderOrientation.Landscape, resolved.orientation)
-        // fitMode/trim/contrast는 appPrefs에 필드 없음 → fallback DEFAULTS
+        assertEquals(true, resolved.trimEnabled) // appPrefs.defaultTrimEnabled에서 가져옴
+        // fitMode/contrast는 appPrefs에 필드 없음 → fallback DEFAULTS
         assertEquals(BookSettings.DEFAULTS.fitMode, resolved.fitMode)
-        assertEquals(BookSettings.DEFAULTS.trimEnabled, resolved.trimEnabled)
         assertEquals(BookSettings.DEFAULTS.contrast, resolved.contrast)
+    }
+
+    @Test
+    fun resolveTrimFollowsAppPrefsWhenNoOverride() {
+        val offPrefs = appPrefs.copy(defaultTrimEnabled = false)
+        val resolved = BookSettingsOverrides.NONE.resolve(offPrefs)
+        assertEquals(false, resolved.trimEnabled)
+    }
+
+    @Test
+    fun resolveTrimOverrideBeatsAppPrefs() {
+        // 사용자가 책별 trim=false 명시 → 전역이 true여도 false 유지
+        val overrides = BookSettingsOverrides(trimEnabled = false)
+        val resolved = overrides.resolve(appPrefs.copy(defaultTrimEnabled = true))
+        assertEquals(false, resolved.trimEnabled)
     }
 
     @Test

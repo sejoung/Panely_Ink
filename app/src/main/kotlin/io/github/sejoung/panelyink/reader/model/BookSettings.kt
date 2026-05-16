@@ -37,11 +37,15 @@ data class BookSettings(
     val orientation: ReaderOrientation,
 ) {
     companion object {
-        /** 새 책 진입 시 기본값. ReaderState 기본값과 일치해야 일관됨. */
+        /**
+         * 하드코드 fallback — 사용자 명시 override와 [io.github.sejoung.panelyink.core.preferences.AppPreferences]
+         * 전역 기본값 둘 다 없을 때 최종 안전 값. 그래서 보수적인 값을 채워둠:
+         * - `trimEnabled = false`: 두쪽 보기에서 페이지별 trim 결과가 정렬을 깰 수 있어 OFF가 안전 (v1.1 변경)
+         */
         val DEFAULTS: BookSettings = BookSettings(
             fitMode = FitMode.FitScreen,
             direction = ReadingDirection.Ltr,
-            trimEnabled = true,
+            trimEnabled = false,
             contrast = ContrastMatrix.IDENTITY,
             spreadMode = false,
             orientation = ReaderOrientation.Portrait,

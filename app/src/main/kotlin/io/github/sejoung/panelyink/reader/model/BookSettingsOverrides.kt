@@ -54,7 +54,7 @@ fun BookSettingsOverrides.resolve(
 ): BookSettings = BookSettings(
     fitMode = fitMode ?: fallback.fitMode,
     direction = direction ?: appPrefs.defaultReadingDirection,
-    trimEnabled = trimEnabled ?: fallback.trimEnabled,
+    trimEnabled = trimEnabled ?: appPrefs.defaultTrimEnabled,
     contrast = contrast ?: fallback.contrast,
     spreadMode = spreadMode ?: appPrefs.defaultSpreadMode,
     orientation = orientation ?: appPrefs.defaultOrientation,

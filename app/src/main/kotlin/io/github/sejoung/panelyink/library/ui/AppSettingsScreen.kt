@@ -36,6 +36,7 @@ import io.github.sejoung.panelyink.data.preferences.SharedPrefsAppPreferencesRep
 import io.github.sejoung.panelyink.library.model.ViewMode
 import io.github.sejoung.panelyink.reader.ui.OrientationSegments
 import io.github.sejoung.panelyink.reader.ui.SpreadSegments
+import io.github.sejoung.panelyink.reader.ui.TrimSegments
 import io.github.sejoung.panelyink.ui.components.DirectionSegments
 import io.github.sejoung.panelyink.ui.components.FullRefreshIntervalSegments
 import io.github.sejoung.panelyink.ui.components.GroupHeader
@@ -202,6 +203,19 @@ fun AppSettingsScreen(
         onSelect = { value ->
           prefs = current.copy(defaultOrientation = value)
           scope.launch { repo.setDefaultOrientation(value) }
+        },
+      )
+
+      Spacer(Modifier.height(spacing.space3))
+
+      // 자동 여백 트리밍 — 두쪽 보기에서 페이지별 trim이 좌/우 정렬을 깰 수 있어 기본 OFF.
+      SectionLabel(stringResource(R.string.settings_default_trim_enabled))
+      Spacer(Modifier.height(spacing.space1))
+      TrimSegments(
+        enabled = current.defaultTrimEnabled,
+        onSelect = { value ->
+          prefs = current.copy(defaultTrimEnabled = value)
+          scope.launch { repo.setDefaultTrimEnabled(value) }
         },
       )
 

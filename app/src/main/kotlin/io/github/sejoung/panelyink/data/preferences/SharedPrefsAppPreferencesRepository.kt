@@ -55,6 +55,10 @@ class SharedPrefsAppPreferencesRepository(
                     AppPreferences.DEFAULTS.defaultOrientation.name,
                 ) ?: AppPreferences.DEFAULTS.defaultOrientation.name,
             ),
+            defaultTrimEnabled = prefs.getBoolean(
+                KEY_DEFAULT_TRIM_ENABLED,
+                AppPreferences.DEFAULTS.defaultTrimEnabled,
+            ),
         )
     }
 
@@ -82,6 +86,10 @@ class SharedPrefsAppPreferencesRepository(
         prefs.edit { putString(KEY_DEFAULT_ORIENTATION, value.name) }
     }
 
+    override suspend fun setDefaultTrimEnabled(value: Boolean) = withContext(Dispatchers.IO) {
+        prefs.edit { putBoolean(KEY_DEFAULT_TRIM_ENABLED, value) }
+    }
+
     companion object {
         private const val PREFS_NAME = AppLocale.PREFS_NAME
         private const val KEY_DEFAULT_READING_DIRECTION = "default_reading_direction"
@@ -89,5 +97,6 @@ class SharedPrefsAppPreferencesRepository(
         private const val KEY_INVERT_ENABLED = "invert_enabled"
         private const val KEY_DEFAULT_SPREAD_MODE = "default_spread_mode"
         private const val KEY_DEFAULT_ORIENTATION = "default_orientation"
+        private const val KEY_DEFAULT_TRIM_ENABLED = "default_trim_enabled"
     }
 }

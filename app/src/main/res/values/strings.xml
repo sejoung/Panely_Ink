@@ -49,6 +49,7 @@
     <string name="settings_default_reading_direction">Default reading direction</string>
     <string name="settings_default_spread_mode">Default two-page view</string>
     <string name="settings_default_orientation">Default rotation</string>
+    <string name="settings_default_trim_enabled">Default auto trim margins</string>
     <string name="settings_display">Display</string>
     <string name="settings_full_refresh_interval">Full refresh interval (pages)</string>
     <string name="settings_invert">Invert black/white</string>

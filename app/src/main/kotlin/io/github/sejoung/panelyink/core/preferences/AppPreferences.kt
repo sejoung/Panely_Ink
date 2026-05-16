@@ -32,6 +32,12 @@ data class AppPreferences(
      * 새 책 첫 진입 시 적용할 회전 잠금 기본값 — v1.1. 책별 저장값이 있으면 그쪽이 우선.
      */
     val defaultOrientation: ReaderOrientation,
+    /**
+     * 새 책 첫 진입 시 적용할 자동 여백 트리밍 기본값 — v1.1. 기본 false로 둠 —
+     * 두쪽 보기에서 페이지별 trim 결과가 좌/우 정렬을 깰 수 있고, e-ink 사용자는 페이지 잔상보다 일관된 레이아웃을 더 선호.
+     * 트림을 원하면 책별/전역에서 명시 ON. 책별 저장값이 있으면 그쪽이 우선.
+     */
+    val defaultTrimEnabled: Boolean,
 ) {
     companion object {
         val DEFAULTS: AppPreferences = AppPreferences(
@@ -41,6 +47,7 @@ data class AppPreferences(
             languageTag = AppLanguage.System.tag,
             defaultSpreadMode = false,
             defaultOrientation = ReaderOrientation.Portrait,
+            defaultTrimEnabled = false,
         )
     }
 }
@@ -89,6 +96,7 @@ interface AppPreferencesRepository {
     suspend fun setLanguageTag(value: String)
     suspend fun setDefaultSpreadMode(value: Boolean)
     suspend fun setDefaultOrientation(value: ReaderOrientation)
+    suspend fun setDefaultTrimEnabled(value: Boolean)
 }
 
 const val DEFAULT_FULL_REFRESH_INTERVAL: Int = 0

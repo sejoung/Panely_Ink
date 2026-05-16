@@ -84,6 +84,7 @@ class ReaderViewModelTest {
                 languageTag = "ko",
                 defaultSpreadMode = false,
                 defaultOrientation = ReaderOrientation.Portrait,
+                defaultTrimEnabled = false,
             ),
         )
 
