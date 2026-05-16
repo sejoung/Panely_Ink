@@ -47,6 +47,8 @@
     <string name="settings_library_view_mode">표시 방식</string>
     <string name="settings_reader_defaults">리더 기본값</string>
     <string name="settings_default_reading_direction">기본 읽기 방향</string>
+    <string name="settings_default_spread_mode">기본 두쪽 보기</string>
+    <string name="settings_default_orientation">기본 화면 회전</string>
     <string name="settings_display">디스플레이</string>
     <string name="settings_full_refresh_interval">풀리프레시 주기 (페이지)</string>
     <string name="settings_invert">흑백 반전</string>
@@ -94,7 +96,6 @@
     <string name="reader_spread_single">한쪽</string>
     <string name="reader_spread_two">두쪽</string>
     <string name="reader_orientation">화면 회전</string>
-    <string name="reader_orientation_auto">자동</string>
     <string name="reader_orientation_portrait">세로</string>
     <string name="reader_orientation_landscape">가로</string>
     <string name="reader_trim">자동 여백 트리밍</string>

@@ -119,7 +119,6 @@ internal fun OrientationSegments(
   onSelect: (ReaderOrientation) -> Unit,
 ) {
   val options = listOf(
-    ReaderOrientation.Auto to stringResource(R.string.reader_orientation_auto),
     ReaderOrientation.Portrait to stringResource(R.string.reader_orientation_portrait),
     ReaderOrientation.Landscape to stringResource(R.string.reader_orientation_landscape),
   )

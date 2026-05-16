@@ -36,7 +36,7 @@ data class BookSettingsEntity(
     @ColumnInfo(name = "spread_mode", defaultValue = "0")
     val spreadMode: Boolean,
 
-    @ColumnInfo(name = "orientation", defaultValue = "Auto")
+    @ColumnInfo(name = "orientation", defaultValue = "Portrait")
     val orientation: String,
 
     @ColumnInfo(name = "updated_at")

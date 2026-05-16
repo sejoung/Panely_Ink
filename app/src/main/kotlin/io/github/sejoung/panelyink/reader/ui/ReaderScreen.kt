@@ -107,9 +107,13 @@ fun ReaderScreen(
           ?: 0
         // 전역 prefs(기본 읽기 방향, 흑백 반전, 풀리프레시 주기)는 SharedPreferences 1회 read.
         val appPrefs = appPrefsRepo.load()
-        // 책별 설정이 없으면 전역 기본 읽기 방향을 적용한다. 책당 1행이라 가벼움.
+        // 책별 설정이 없으면 전역 기본값들을 적용한다. 책당 1행이라 가벼움.
+        // 전역 prefs와 책별 settings는 별개 — 사용자가 책별 설정을 한 번 바꾸면 그 책은
+        // 이후 전역 변경의 영향을 받지 않는다. propagated(시리즈 형제 권)이 있으면 그게 더 우선.
         val defaultBookSettings = BookSettings.DEFAULTS.copy(
           direction = appPrefs.defaultReadingDirection,
+          spreadMode = appPrefs.defaultSpreadMode,
+          orientation = appPrefs.defaultOrientation,
         )
         val bookSettings = bookSettingsRepo.load(session.bookId)
           ?: propagatedBookSettings
@@ -256,7 +260,10 @@ private fun ReaderContent(
     onNavigate = onNavigate,
   )
 
-  Box(modifier = Modifier.fillMaxSize()) {
+  // 본문 트리 전체를 회전 — 물리 viewport와 state.orientation이 mismatch일 때만 90° CW 적용.
+  // ReaderView의 페이지 그림과 ReaderOverlayLayer의 메뉴/탭 영역이 한 덩어리로 회전되어
+  // Compose hit-test가 pointer 좌표를 자동 재맵핑한다.
+  ReaderRotationLayout(orientation = state.orientation) {
     ReaderAndroidViewHost(
       session = session,
       viewModel = viewModel,

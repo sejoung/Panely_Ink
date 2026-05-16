@@ -44,7 +44,7 @@ data class BookSettings(
             trimEnabled = true,
             contrast = ContrastMatrix.IDENTITY,
             spreadMode = false,
-            orientation = ReaderOrientation.Auto,
+            orientation = ReaderOrientation.Portrait,
         )
     }
 }

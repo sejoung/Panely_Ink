@@ -75,7 +75,6 @@ internal fun ReaderOrientationEffect(orientation: ReaderOrientation) {
   // orientation이 바뀔 때마다 즉시 적용. dispose 없는 effect라 중간 플리커 없음.
   LaunchedEffect(activity, orientation) {
     val target = when (orientation) {
-      ReaderOrientation.Auto -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
       ReaderOrientation.Portrait -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
       ReaderOrientation.Landscape -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
     }

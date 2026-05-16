@@ -47,6 +47,8 @@
     <string name="settings_library_view_mode">View mode</string>
     <string name="settings_reader_defaults">Reader Defaults</string>
     <string name="settings_default_reading_direction">Default reading direction</string>
+    <string name="settings_default_spread_mode">Default two-page view</string>
+    <string name="settings_default_orientation">Default rotation</string>
     <string name="settings_display">Display</string>
     <string name="settings_full_refresh_interval">Full refresh interval (pages)</string>
     <string name="settings_invert">Invert black/white</string>
@@ -94,7 +96,6 @@
     <string name="reader_spread_single">Single</string>
     <string name="reader_spread_two">Two pages</string>
     <string name="reader_orientation">Rotation</string>
-    <string name="reader_orientation_auto">Auto</string>
     <string name="reader_orientation_portrait">Portrait</string>
     <string name="reader_orientation_landscape">Landscape</string>
     <string name="reader_trim">Auto trim margins</string>

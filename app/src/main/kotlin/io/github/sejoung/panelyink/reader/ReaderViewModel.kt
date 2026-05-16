@@ -302,10 +302,11 @@ data class ReaderState(
    */
   val spreadMode: Boolean = false,
   /**
-   * 회전 잠금. v1.1. ReaderScreen 라이프사이클 동안만 Activity.requestedOrientation에 반영.
-   * 기본값 [ReaderOrientation.Auto] = v1.0 동작 유지(시스템 회전 따름).
+   * 회전 잠금. v1.1. ReaderScreen 라이프사이클 동안만 Activity.requestedOrientation에 반영하고
+   * OS가 무시하면 [io.github.sejoung.panelyink.reader.ui.ReaderRotationLayout]이 Compose SW 회전으로 폴백.
+   * 기본값 [ReaderOrientation.Portrait] = v1.0과 동일한 시각 동작.
    */
-  val orientation: ReaderOrientation = ReaderOrientation.Auto,
+  val orientation: ReaderOrientation = ReaderOrientation.Portrait,
 )
 
 private fun IntRange.byProximityTo(center: Int): List<Int> {

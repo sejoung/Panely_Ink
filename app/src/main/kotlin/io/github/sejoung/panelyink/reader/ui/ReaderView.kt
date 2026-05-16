@@ -208,15 +208,17 @@ class ReaderView(context: Context) : View(context) {
     val s = session ?: return
     if (width <= 0 || height <= 0) return
 
+    // 회전은 Compose 상위 레이어([io.github.sejoung.panelyink.reader.ui.ReaderRotationLayout])가
+    // 전체 트리(페이지+오버레이)에 한 번 적용한다. ReaderView는 자기에게 주어진 view 차원만 본다.
     if (spreadMode) {
-      drawSpread(canvas, s)
+      drawSpread(canvas, s, width, height)
     } else {
-      drawSingle(canvas, s, pageIndex, viewportX = 0, viewportWidth = width)
+      drawSingle(canvas, s, pageIndex, viewportX = 0, viewportWidth = width, viewportHeight = height)
     }
   }
 
   /**
-   * 두쪽 그리기. viewport를 좌/우로 정확히 양분하고 leading=`pageIndex`, secondary=`pageIndex+1`을
+   * 두쪽 그리기. logical viewport를 좌/우로 정확히 양분하고 leading=`pageIndex`, secondary=`pageIndex+1`을
    * direction에 따라 배치한다.
    * - LTR: 좌=leading, 우=secondary
    * - RTL: 좌=secondary, 우=leading
@@ -224,8 +226,8 @@ class ReaderView(context: Context) : View(context) {
    *
    * 각 슬롯은 [drawSingle]을 절반 viewport로 호출 → 트리밍/contrast/invert가 단쪽과 동일 경로로 적용.
    */
-  private fun drawSpread(canvas: Canvas, s: CbzBookSession) {
-    val half = width / 2
+  private fun drawSpread(canvas: Canvas, s: CbzBookSession, viewportWidth: Int, viewportHeight: Int) {
+    val half = viewportWidth / 2
     val rightStart = half // 홀수 width 1px은 우측 슬롯이 흡수
     val leading = pageIndex
     val secondary = pageIndex + 1
@@ -234,29 +236,30 @@ class ReaderView(context: Context) : View(context) {
       else -> leading to secondary
     }
     if (leftPage in 0 until pageCount) {
-      drawSingle(canvas, s, leftPage, viewportX = 0, viewportWidth = half)
+      drawSingle(canvas, s, leftPage, viewportX = 0, viewportWidth = half, viewportHeight = viewportHeight)
     }
     if (rightPage in 0 until pageCount) {
-      drawSingle(canvas, s, rightPage, viewportX = rightStart, viewportWidth = width - rightStart)
+      drawSingle(canvas, s, rightPage, viewportX = rightStart, viewportWidth = viewportWidth - rightStart, viewportHeight = viewportHeight)
     }
   }
 
-  /** 비트맵 1장을 지정된 viewport rect(`[viewportX, viewportX+viewportWidth) × [0, height)`)에 fit하여 그림. */
+  /** 비트맵 1장을 지정된 logical viewport rect에 fit하여 그림. canvas 변환은 호출자가 이미 적용. */
   private fun drawSingle(
     canvas: Canvas,
     s: CbzBookSession,
     index: Int,
     viewportX: Int,
     viewportWidth: Int,
+    viewportHeight: Int,
   ) {
-    if (viewportWidth <= 0) return
+    if (viewportWidth <= 0 || viewportHeight <= 0) return
     val bitmap: Bitmap = s.pageBitmap(index) ?: return
     val trim = if (trimEnabled) s.pageTrim(index) else null
     val fit = FitCalculator.compute(
       pageWidth = bitmap.width,
       pageHeight = bitmap.height,
       viewportWidth = viewportWidth,
-      viewportHeight = height,
+      viewportHeight = viewportHeight,
       mode = fitMode,
       trim = trim,
     )

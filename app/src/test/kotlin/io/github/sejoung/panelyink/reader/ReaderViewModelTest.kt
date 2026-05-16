@@ -81,6 +81,8 @@ class ReaderViewModelTest {
                 fullRefreshInterval = 10,
                 invertEnabled = true,
                 languageTag = "ko",
+                defaultSpreadMode = false,
+                defaultOrientation = ReaderOrientation.Portrait,
             ),
         )
 
@@ -514,9 +516,9 @@ class ReaderViewModelTest {
     }
 
     @Test
-    fun orientationDefaultsAuto() {
+    fun orientationDefaultsPortrait() {
         val vm = ReaderViewModel("b", 10, FakePageDecoder())
-        assertEquals(ReaderOrientation.Auto, vm.state.value.orientation)
+        assertEquals(ReaderOrientation.Portrait, vm.state.value.orientation)
         vm.close()
     }
 

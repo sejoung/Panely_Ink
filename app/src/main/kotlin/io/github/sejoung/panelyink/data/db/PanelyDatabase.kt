@@ -31,6 +31,8 @@ import io.github.sejoung.panelyink.data.db.settings.BookSettingsEntity
  * - v7: `book_index` 테이블 추가 + bookmark.created_at 정렬 인덱스
  * - v8: `book_settings.spread_mode` 컬럼 추가 (두쪽 보기 토글 책별 저장 — v1.1)
  * - v9: `book_settings.orientation` 컬럼 추가 (회전 잠금 책별 저장 — v1.1)
+ * - v10: `book_settings.orientation` 기본값을 `'Auto'` → `'Portrait'`로 재생성, 레거시
+ *        `'Auto'` 행 값을 `'Portrait'`로 정규화 (Auto 옵션 폐기에 따른 schema 정렬 — v1.1)
  *
  * 싱글톤 보장: [PanelyDatabase.getInstance]가 더블 체크 락. 안드로이드 앱에서 DB는 프로세스당 1개.
  */
@@ -42,7 +44,7 @@ import io.github.sejoung.panelyink.data.db.settings.BookSettingsEntity
     BookmarkEntity::class,
     BookIndexEntity::class,
   ],
-  version = 9,
+  version = 10,
   exportSchema = false,
 )
 abstract class PanelyDatabase : RoomDatabase() {
@@ -185,13 +187,70 @@ abstract class PanelyDatabase : RoomDatabase() {
 
     /**
      * v8 → v9: book_settings에 orientation 컬럼 추가 (회전 잠금 책별 저장).
-     * 기존 행은 "Auto"로 채워져 v1.0과 동일하게 시스템 회전을 따른다.
+     *
+     * 역사적 마이그레이션 — v1.1 베타에서 `DEFAULT 'Auto'`로 컬럼이 만들어졌다.
+     * [MIGRATION_9_10]에서 default를 'Portrait'로 정규화하고 'Auto' 값 행도 모두 'Portrait'로
+     * 변환하므로 여기 default가 무엇이든 결과는 동일. 다만 베타 단말의 DB와 hash 일치를
+     * 위해 베타가 쓴 그대로 'Auto'로 둔다.
      */
     internal val MIGRATION_8_9 = object : Migration(8, 9) {
       override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(
           "ALTER TABLE `book_settings` ADD COLUMN `orientation` TEXT NOT NULL DEFAULT 'Auto'",
         )
+      }
+    }
+
+    /**
+     * v9 → v10: orientation 컬럼 default를 `'Portrait'`로 정규화 + 레거시 `'Auto'` 행을 모두
+     * `'Portrait'`로 치환. SQLite는 ALTER COLUMN DEFAULT를 지원하지 않으므로 v5→v6 패턴과
+     * 동일하게 테이블 재생성 → 데이터 복사 → drop/rename.
+     *
+     * Room identity hash가 entity의 `defaultValue = "Portrait"`와 일치하도록 default 절을 일치시키는 것이 핵심.
+     */
+    internal val MIGRATION_9_10 = object : Migration(9, 10) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+          """
+                    CREATE TABLE IF NOT EXISTS `book_settings_new` (
+                        `book_id` TEXT NOT NULL,
+                        `fit_mode` TEXT NOT NULL,
+                        `direction` TEXT NOT NULL,
+                        `trim_enabled` INTEGER NOT NULL,
+                        `contrast` REAL NOT NULL,
+                        `spread_mode` INTEGER NOT NULL DEFAULT 0,
+                        `orientation` TEXT NOT NULL DEFAULT 'Portrait',
+                        `updated_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`book_id`)
+                    )
+                    """.trimIndent(),
+        )
+        db.execSQL(
+          """
+                    INSERT INTO `book_settings_new` (
+                        `book_id`,
+                        `fit_mode`,
+                        `direction`,
+                        `trim_enabled`,
+                        `contrast`,
+                        `spread_mode`,
+                        `orientation`,
+                        `updated_at`
+                    )
+                    SELECT
+                        `book_id`,
+                        `fit_mode`,
+                        `direction`,
+                        `trim_enabled`,
+                        `contrast`,
+                        `spread_mode`,
+                        CASE WHEN `orientation` = 'Auto' THEN 'Portrait' ELSE `orientation` END,
+                        `updated_at`
+                    FROM `book_settings`
+                    """.trimIndent(),
+        )
+        db.execSQL("DROP TABLE `book_settings`")
+        db.execSQL("ALTER TABLE `book_settings_new` RENAME TO `book_settings`")
       }
     }
 
@@ -240,6 +299,7 @@ abstract class PanelyDatabase : RoomDatabase() {
             MIGRATION_6_7,
             MIGRATION_7_8,
             MIGRATION_8_9,
+            MIGRATION_9_10,
           )
           .build()
           .also { instance = it }

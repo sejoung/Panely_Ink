@@ -1,21 +1,24 @@
 package io.github.sejoung.panelyink.core.preferences
 
 /**
- * 본문 리더 회전 잠금. 책별 [io.github.sejoung.panelyink.reader.model.BookSettings]에 저장되며,
- * 두쪽 보기와 짝을 이뤄 사용된다 — 가로 잠금 + 두쪽 보기가 10"+ 디바이스에서의 기본 조합.
+ * 본문 리더 회전 잠금. 책별 [io.github.sejoung.panelyink.reader.model.BookSettings]와
+ * 앱 전역 기본값([AppPreferences.defaultOrientation])에서 함께 사용된다.
  *
- * - [Auto]: 시스템 회전 설정을 따름. v1.0과 동일한 기본 동작.
- * - [Portrait]: 세로 잠금. 가속도계가 어떻든 SENSOR_PORTRAIT로 잡아 위/아래 뒤집기는 허용.
- * - [Landscape]: 가로 잠금. SENSOR_LANDSCAPE — 좌/우 어느 쪽이든 사용자가 잡은 방향대로.
+ * - [Portrait]: 세로 — v1.0과 동일. 기본값.
+ * - [Landscape]: 가로 — 두쪽 보기와 함께 쓰면 자연스럽게 좌/우 페이지가 정렬됨.
  *
- * 직렬화: Room에는 `name`을 String으로 저장. 알 수 없는 값은 [Auto]로 안전 폴백.
+ * **Auto는 v1.1 초기 설계에 있었으나 제거됨**: Mee OS 같은 e-ink OEM이
+ * `Activity.requestedOrientation = UNSPECIFIED`을 받아도 시스템 자동회전 설정이 꺼져 있어
+ * 실질적으로 Portrait와 동일하게 동작. 의미 있는 옵션이 아니라 사용자 혼란만 가중되어 제거.
+ * 레거시 DB 값 `"Auto"`는 [deserializeOrientation]이 [Portrait]로 폴백한다.
+ *
+ * 직렬화: Room에는 `name`을 String으로 저장.
  */
 enum class ReaderOrientation {
-    Auto,
     Portrait,
     Landscape,
 }
 
-/** 깨진/알 수 없는 직렬값은 [ReaderOrientation.Auto] 폴백 — v1.0 동작 유지. */
+/** 깨진/알 수 없는 직렬값(레거시 `"Auto"` 포함)은 [ReaderOrientation.Portrait] 폴백 — v1.0 동작 유지. */
 fun deserializeOrientation(value: String): ReaderOrientation =
-    runCatching { ReaderOrientation.valueOf(value) }.getOrDefault(ReaderOrientation.Auto)
+    runCatching { ReaderOrientation.valueOf(value) }.getOrDefault(ReaderOrientation.Portrait)

@@ -5,7 +5,9 @@ import androidx.core.content.edit
 import io.github.sejoung.panelyink.core.preferences.AppLocale
 import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
+import io.github.sejoung.panelyink.core.preferences.ReaderOrientation
 import io.github.sejoung.panelyink.core.preferences.ReadingDirection
+import io.github.sejoung.panelyink.core.preferences.deserializeOrientation
 import io.github.sejoung.panelyink.reader.model.deserializeDirection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -43,6 +45,16 @@ class SharedPrefsAppPreferencesRepository(
                 AppLocale.KEY_LANGUAGE_TAG,
                 AppPreferences.DEFAULTS.languageTag,
             ) ?: AppPreferences.DEFAULTS.languageTag,
+            defaultSpreadMode = prefs.getBoolean(
+                KEY_DEFAULT_SPREAD_MODE,
+                AppPreferences.DEFAULTS.defaultSpreadMode,
+            ),
+            defaultOrientation = deserializeOrientation(
+                prefs.getString(
+                    KEY_DEFAULT_ORIENTATION,
+                    AppPreferences.DEFAULTS.defaultOrientation.name,
+                ) ?: AppPreferences.DEFAULTS.defaultOrientation.name,
+            ),
         )
     }
 
@@ -62,10 +74,20 @@ class SharedPrefsAppPreferencesRepository(
         prefs.edit { putString(AppLocale.KEY_LANGUAGE_TAG, value) }
     }
 
+    override suspend fun setDefaultSpreadMode(value: Boolean) = withContext(Dispatchers.IO) {
+        prefs.edit { putBoolean(KEY_DEFAULT_SPREAD_MODE, value) }
+    }
+
+    override suspend fun setDefaultOrientation(value: ReaderOrientation) = withContext(Dispatchers.IO) {
+        prefs.edit { putString(KEY_DEFAULT_ORIENTATION, value.name) }
+    }
+
     companion object {
         private const val PREFS_NAME = AppLocale.PREFS_NAME
         private const val KEY_DEFAULT_READING_DIRECTION = "default_reading_direction"
         private const val KEY_FULL_REFRESH_INTERVAL = "full_refresh_interval"
         private const val KEY_INVERT_ENABLED = "invert_enabled"
+        private const val KEY_DEFAULT_SPREAD_MODE = "default_spread_mode"
+        private const val KEY_DEFAULT_ORIENTATION = "default_orientation"
     }
 }

@@ -65,15 +65,15 @@ class BookSettingsEntityMappingTest {
             trimEnabled = true,
             contrast = 1.0f,
             spreadMode = false,
-            orientation = "Auto",
+            orientation = "Portrait",
             updatedAt = 0L,
         )
         assertEquals(false, entity.toDomain().spreadMode)
-        assertEquals(ReaderOrientation.Auto, entity.toDomain().orientation)
+        assertEquals(ReaderOrientation.Portrait, entity.toDomain().orientation)
     }
 
     @Test
-    fun unknownOrientationFallsBackToAuto() {
+    fun unknownOrientationFallsBackToPortrait() {
         val entity = BookSettingsEntity(
             bookId = "b",
             fitMode = "FitScreen",
@@ -84,6 +84,22 @@ class BookSettingsEntityMappingTest {
             orientation = "Tilted",
             updatedAt = 0L,
         )
-        assertEquals(ReaderOrientation.Auto, entity.toDomain().orientation)
+        assertEquals(ReaderOrientation.Portrait, entity.toDomain().orientation)
+    }
+
+    @Test
+    fun legacyAutoOrientationFallsBackToPortrait() {
+        // v1.1 베타 단계에서 "Auto" 값이 저장된 행 호환성
+        val entity = BookSettingsEntity(
+            bookId = "b",
+            fitMode = "FitScreen",
+            direction = "Ltr",
+            trimEnabled = true,
+            contrast = 1.0f,
+            spreadMode = false,
+            orientation = "Auto",
+            updatedAt = 0L,
+        )
+        assertEquals(ReaderOrientation.Portrait, entity.toDomain().orientation)
     }
 }

@@ -23,6 +23,15 @@ data class AppPreferences(
     val fullRefreshInterval: Int,
     val invertEnabled: Boolean,
     val languageTag: String,
+    /**
+     * 새 책 첫 진입 시 적용할 두쪽 보기 기본값 — v1.1. 책별 [io.github.sejoung.panelyink.reader.model.BookSettings.spreadMode]가
+     * 저장된 책은 그쪽이 우선. 라이브러리 전역 설정에서만 토글 가능.
+     */
+    val defaultSpreadMode: Boolean,
+    /**
+     * 새 책 첫 진입 시 적용할 회전 잠금 기본값 — v1.1. 책별 저장값이 있으면 그쪽이 우선.
+     */
+    val defaultOrientation: ReaderOrientation,
 ) {
     companion object {
         val DEFAULTS: AppPreferences = AppPreferences(
@@ -30,6 +39,8 @@ data class AppPreferences(
             fullRefreshInterval = DEFAULT_FULL_REFRESH_INTERVAL,
             invertEnabled = false,
             languageTag = AppLanguage.System.tag,
+            defaultSpreadMode = false,
+            defaultOrientation = ReaderOrientation.Portrait,
         )
     }
 }
@@ -76,6 +87,8 @@ interface AppPreferencesRepository {
     suspend fun setFullRefreshInterval(value: Int)
     suspend fun setInvertEnabled(value: Boolean)
     suspend fun setLanguageTag(value: String)
+    suspend fun setDefaultSpreadMode(value: Boolean)
+    suspend fun setDefaultOrientation(value: ReaderOrientation)
 }
 
 const val DEFAULT_FULL_REFRESH_INTERVAL: Int = 0

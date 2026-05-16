@@ -14,6 +14,9 @@ class AppPreferencesTest {
             AppPreferences.DEFAULTS.fullRefreshInterval,
         )
         assertEquals(false, AppPreferences.DEFAULTS.invertEnabled)
+        // v1.1: 새 책 첫 진입 시 v1.0과 동일한 시각 동작(단쪽 + 세로)
+        assertEquals(false, AppPreferences.DEFAULTS.defaultSpreadMode)
+        assertEquals(ReaderOrientation.Portrait, AppPreferences.DEFAULTS.defaultOrientation)
     }
 
     @Test

@@ -34,6 +34,8 @@ import io.github.sejoung.panelyink.core.preferences.AppPreferences
 import io.github.sejoung.panelyink.core.preferences.AppPreferencesRepository
 import io.github.sejoung.panelyink.data.preferences.SharedPrefsAppPreferencesRepository
 import io.github.sejoung.panelyink.library.model.ViewMode
+import io.github.sejoung.panelyink.reader.ui.OrientationSegments
+import io.github.sejoung.panelyink.reader.ui.SpreadSegments
 import io.github.sejoung.panelyink.ui.components.DirectionSegments
 import io.github.sejoung.panelyink.ui.components.FullRefreshIntervalSegments
 import io.github.sejoung.panelyink.ui.components.GroupHeader
@@ -175,6 +177,31 @@ fun AppSettingsScreen(
         onSelect = { value ->
           prefs = current.copy(defaultReadingDirection = value)
           scope.launch { repo.setDefaultReadingDirection(value) }
+        },
+      )
+
+      Spacer(Modifier.height(spacing.space3))
+
+      // 새 책 첫 진입 시 기본값. 책별 spreadMode가 저장된 책에는 영향 없음 — 별개로 유지.
+      SectionLabel(stringResource(R.string.settings_default_spread_mode))
+      Spacer(Modifier.height(spacing.space1))
+      SpreadSegments(
+        enabled = current.defaultSpreadMode,
+        onSelect = { value ->
+          prefs = current.copy(defaultSpreadMode = value)
+          scope.launch { repo.setDefaultSpreadMode(value) }
+        },
+      )
+
+      Spacer(Modifier.height(spacing.space3))
+
+      SectionLabel(stringResource(R.string.settings_default_orientation))
+      Spacer(Modifier.height(spacing.space1))
+      OrientationSegments(
+        selected = current.defaultOrientation,
+        onSelect = { value ->
+          prefs = current.copy(defaultOrientation = value)
+          scope.launch { repo.setDefaultOrientation(value) }
         },
       )
 
