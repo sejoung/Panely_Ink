@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -279,10 +280,30 @@ class ReaderViewModel(
     val decodeViewportW = if (s.spreadMode) s.viewportWidth / 2 else s.viewportWidth
     val decodeViewportH = s.viewportHeight
     preloadJob = scope.launch {
+      val visibleSet = decodeCenters.toHashSet()
+      // Phase 1: visible 페어를 **병렬** 디코드 후 emit 1회 — invalidate 1회만 발생.
+      // [io.github.sejoung.panelyink.core.archive.CbzArchive]가 dup PFD로 reader pool을 유지하므로
+      // 두 페이지가 독립된 ZipFile/Channel을 통해 동시에 디코드된다. spread 모드 진입/페이지 넘김에서
+      // 두 페이지가 사용자 시야에 동시 등장 (sequential 디코드의 0-200ms 한쪽만 보이는 깜빡임 제거).
+      coroutineScope {
+        decodeCenters.forEach { idx ->
+          launch {
+            // 새 페이지를 캐시에 넣기 직전에 visible 페이지의 LRU 위치를 갱신해 evict 보호.
+            // 풀리프레시 시퀀스 중에는 onDraw가 pageBitmap을 호출하지 않아 LRU touch가 자연 발생 안 함.
+            decoder.keepWarm(decodeCenters)
+            decoder.decode(idx, decodeViewportW, decodeViewportH, s.trimEnabled)
+          }
+        }
+      } // coroutineScope가 모든 자식 launch를 await — 둘 다 cache에 들어간 후에야 다음 줄로 넘어감.
+      if (generation != preloadGeneration || !currentCoroutineContext().isActive) return@launch
+      // emit은 1회 — onDraw가 invalidate 받아 visible 페어 둘 다 cache에서 그린다. 인덱스 값 자체는 collector가 무시.
+      _decoded.emit(decodeCenters[0])
+
+      // Phase 2: 나머지 인접 페이지는 sequential — cache 압박 줄이고 디스크 IO 분산.
+      // 디코드되는 대로 emit해 다음 페이지 넘김에 대비.
       for (idx in s.preloadWindow.byProximityTo(*decodeCenters)) {
+        if (idx in visibleSet) continue
         if (generation != preloadGeneration || !currentCoroutineContext().isActive) return@launch
-        // 새 페이지를 캐시에 넣기 직전에 visible 페이지의 LRU 위치를 갱신해 evict 보호.
-        // 풀리프레시 시퀀스 중에는 onDraw가 pageBitmap을 호출하지 않아 LRU touch가 자연 발생 안 함 — 명시 보호 필요.
         decoder.keepWarm(decodeCenters)
         decoder.decode(idx, decodeViewportW, decodeViewportH, s.trimEnabled)
         if (generation != preloadGeneration || !currentCoroutineContext().isActive) return@launch

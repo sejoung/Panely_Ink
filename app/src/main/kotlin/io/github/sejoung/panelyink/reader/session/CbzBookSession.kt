@@ -12,10 +12,8 @@ import io.github.sejoung.panelyink.core.archive.NestedZipExtractor
 import io.github.sejoung.panelyink.core.book.BookRef
 import io.github.sejoung.panelyink.core.fit.TrimRect
 import io.github.sejoung.panelyink.core.trim.MarginTrimmer
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
@@ -56,8 +54,14 @@ class CbzBookSession private constructor(
    * 바뀌어도 같은 비트맵에 대한 본문 좌표는 변하지 않으므로 재계산 불필요.
    */
   private val trimCache = ConcurrentHashMap<Int, TrimRect>()
-  // 코루틴 cancellation-aware. ReentrantLock과 달리 디코드가 cancel되면 락이 정상 해제.
-  private val decodeLock = Mutex()
+
+  /**
+   * 세션이 닫혔는지 표시. close 직후 in-flight 디코드가 archive를 사용 중이다가
+   * IOException을 받으면 [decode]가 [CancellationException]으로 변환해 propagate한다.
+   * preloadJob은 이미 cancel 상태라 silent 처리.
+   */
+  @Volatile
+  private var sessionClosed = false
 
   /** ReaderView가 onSizeChanged에서 갱신. 0/음수면 무시. */
   fun setViewportHint(width: Int, height: Int) {
@@ -67,19 +71,30 @@ class CbzBookSession private constructor(
     }
   }
 
-  /** 캐시에 [pageIndex] 비트맵을 넣는다. 이미 있으면 재사용. */
-  suspend fun decode(pageIndex: Int, trimEnabled: Boolean = true): Bitmap = decodeLock.withLock {
-    withContext(Dispatchers.IO) {
-      cache.get(pageIndex)?.let { bitmap ->
-        if (trimEnabled && !trimCache.containsKey(pageIndex)) {
-          trimCache[pageIndex] = computeTrim(bitmap)
-        }
-        return@withContext bitmap
+  /**
+   * 캐시에 [pageIndex] 비트맵을 넣는다. 이미 있으면 재사용.
+   *
+   * **병렬 호출 가능 (v1.1):** [CbzArchive]가 dup PFD로 N개 독립 ZipFile reader pool을 유지하므로
+   * 두 디코드가 서로 다른 reader를 빌려 동시에 IO/디코드 가능. 같은 page index에 대한 중복 호출은
+   * 둘 다 cache miss → 둘 다 디코드 → 둘 다 put (idempotent, 마지막이 살아남음). ReaderViewModel은
+   * 각 디코드 호출 인덱스가 다르도록 구성하므로 실제 중복은 없음.
+   *
+   * 세션이 close 되는 중 archive read가 IOException을 던지면 [CancellationException]으로 변환해
+   * preloadJob의 정상 cancel 경로로 합류시킨다.
+   */
+  suspend fun decode(pageIndex: Int, trimEnabled: Boolean = true): Bitmap = withContext(Dispatchers.IO) {
+    if (sessionClosed) throw CancellationException("session closed")
+    cache.get(pageIndex)?.let { bitmap ->
+      if (trimEnabled && !trimCache.containsKey(pageIndex)) {
+        trimCache[pageIndex] = computeTrim(bitmap)
       }
-      require(pageIndex in pages.indices) { "page $pageIndex out of range [$pageCount]" }
-      val name = pages[pageIndex].name
-      val t0 = System.currentTimeMillis()
+      return@withContext bitmap
+    }
+    require(pageIndex in pages.indices) { "page $pageIndex out of range [$pageCount]" }
+    val name = pages[pageIndex].name
+    val t0 = System.currentTimeMillis()
 
+    try {
       // 1. 헤더만 읽어 원본 크기 파악
       val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
       archive.openPage(pageIndex).use { input ->
@@ -117,6 +132,10 @@ class CbzBookSession private constructor(
         trimCache[pageIndex] = computeTrim(bitmap)
       }
       bitmap
+    } catch (io: IOException) {
+      // close가 archive를 끊으면서 발생한 IOException은 cancel 경로로 정상화.
+      if (sessionClosed) throw CancellationException("session closed during decode #$pageIndex").initCause(io)
+      throw io
     }
   }
 
@@ -167,17 +186,13 @@ class CbzBookSession private constructor(
   }
 
   fun close() {
-    // dispose 경로에서 호출되므로 suspend로 만들 수 없다. 진행 중인 디코드가 archive를
-    // 잡고 있는 상태에서 close가 채널을 닫으면 IOException이 새므로, runBlocking으로
-    // in-flight 디코드의 완료(또는 cancel 후 종료)를 기다린다. 이전 ReentrantLock과
-    // 동일한 블로킹 의미를 유지.
-    runBlocking {
-      decodeLock.withLock {
-        cache.clear()
-        trimCache.clear()
-        archive.close()
-      }
-    }
+    // v1.1: 디코드 동시성을 풀어 mutex 제거. archive.close()는 in-flight reader도 강제로 끊지만
+    // [decode]가 IOException을 [CancellationException]으로 변환해 cancel 경로로 합류시키므로 안전.
+    // preloadJob은 viewModel.scope.cancel()로 이미 cancel 시그널을 받은 상태.
+    sessionClosed = true
+    cache.clear()
+    trimCache.clear()
+    archive.close()
   }
 
   companion object {
@@ -196,9 +211,10 @@ class CbzBookSession private constructor(
           val tempFile = NestedZipExtractor.extract(
             ctx, entry.documentUri, entry.nestedEntryName,
           )
-          CbzArchive.open(tempFile)
+          // 두쪽 보기 병렬 디코드를 위해 reader 2개. spread 미사용 시도 60-100ms 초과 비용일 뿐.
+          CbzArchive.open(tempFile, parallelReaders = CbzArchive.PARALLEL_READERS_FOR_SPREAD)
         } else {
-          CbzArchive.open(ctx, entry.documentUri)
+          CbzArchive.open(ctx, entry.documentUri, parallelReaders = CbzArchive.PARALLEL_READERS_FOR_SPREAD)
         }
         if (archive.pages.isEmpty()) {
           archive.close()

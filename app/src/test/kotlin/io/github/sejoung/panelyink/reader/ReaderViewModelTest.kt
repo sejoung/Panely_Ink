@@ -582,8 +582,9 @@ class ReaderViewModelTest {
 
     @Test
     fun spreadModePreloadsBothVisiblePagesFirst() = runTest {
-        // leading(N)과 secondary(N+1)이 distance=0으로 묶여 1순위로 디코드되어야 한다.
-        // 기존 단일-중심 proximity는 N→N-1→N+1 순이라 페이지 막 넘긴 직후 첫 디코드 동안 우측이 빈다.
+        // Phase 1: leading(N)과 secondary(N+1) **병렬** 디코드 → 호출 순서는 비결정적이지만
+        //         두 페이지가 모두 가장 먼저 디코드되어야 한다.
+        // Phase 2: 나머지는 proximity 순서 sequential (9, 12, 8, 13, 7).
         val decoder = FakePageDecoder()
         val vm = ReaderViewModel(
             "b", 100, decoder,
@@ -592,8 +593,10 @@ class ReaderViewModelTest {
         )
         vm.onViewportChanged(1648, 1236)
         runCurrent()
-        // 디코드 순서 확인 — 첫 두 개는 visible spread (10, 11). 그 다음 인접 (9, 12), 외곽 (8, 13), ...
-        assertEquals(listOf(10, 11, 9, 12, 8, 13, 7), decoder.calls)
+        // 첫 2개 호출은 (10, 11) 또는 (11, 10) — 병렬 launch라 순서 불확정.
+        assertEquals(setOf(10, 11), decoder.calls.take(2).toSet())
+        // 나머지 5개는 sequential proximity 순서.
+        assertEquals(listOf(9, 12, 8, 13, 7), decoder.calls.drop(2))
         vm.close()
     }
 
@@ -633,7 +636,8 @@ class ReaderViewModelTest {
 
     @Test
     fun spreadModeKeepsVisiblePagesWarmBeforeEachDecode() = runTest {
-        // 캐시 LRU eviction에서 visible 페이지 보호 — 디코드마다 (N, N+1)을 keepWarm으로 touch.
+        // 캐시 LRU eviction에서 visible 페이지 보호 — 모든 디코드 직전에 (N, N+1)을 keepWarm으로 touch.
+        // Phase 1(병렬) 2회 + Phase 2(sequential) 5회 = 7회.
         val decoder = FakePageDecoder()
         val vm = ReaderViewModel(
             "b", 100, decoder,
@@ -642,7 +646,6 @@ class ReaderViewModelTest {
         )
         vm.onViewportChanged(1648, 1236)
         runCurrent()
-        // 7회 디코드 각각 직전에 keepWarm([10, 11]) 호출 — visible 페이지 LRU 보호.
         assertEquals(7, decoder.keepWarmCalls.size)
         assertTrue(decoder.keepWarmCalls.all { it == listOf(10, 11) })
         vm.close()
