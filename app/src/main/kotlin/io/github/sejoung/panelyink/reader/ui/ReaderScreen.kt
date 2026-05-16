@@ -113,18 +113,10 @@ fun ReaderScreen(
         // sparse override 모델 — DB에 책별 row가 있으면 그것만 명시 override로,
         // 없으면 propagated(시리즈 형제 권 전파)도 없으면 NONE.
         // 모든 미설정 필드는 [resolve]가 appPrefs로 합성. 전역 변경이 항상 책에 흘러들어옴.
-        val loadedOverrides = bookSettingsRepo.load(session.bookId)
-        val initialOverrides = loadedOverrides
+        val initialOverrides = bookSettingsRepo.load(session.bookId)
           ?: propagatedOverrides
           ?: BookSettingsOverrides.NONE
         val bookSettings = initialOverrides.resolve(appPrefs)
-        Log.d(
-          TAG,
-          "settings resolve bookId=${session.bookId} loaded=${loadedOverrides != null} " +
-            "propagated=${propagatedOverrides != null} overrides=$initialOverrides " +
-            "globals(spread=${appPrefs.defaultSpreadMode} orientation=${appPrefs.defaultOrientation} dir=${appPrefs.defaultReadingDirection}) " +
-            "→ resolved(spread=${bookSettings.spreadMode} orientation=${bookSettings.orientation} dir=${bookSettings.direction})",
-        )
         loadingStep =
           localContext.getString(R.string.reader_loading_decode_first_page, session.pageCount)
         session.decode(resumed, trimEnabled = bookSettings.trimEnabled)

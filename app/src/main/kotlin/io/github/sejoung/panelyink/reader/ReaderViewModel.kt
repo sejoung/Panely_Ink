@@ -241,7 +241,7 @@ class ReaderViewModel(
   /**
    * 회전 잠금 변경. 본문 화면 진입 동안만 Activity에 적용되고, 화면을 떠나면
    * 호스트가 원복([io.github.sejoung.panelyink.reader.ui.ReaderOrientationEffect]).
-   * 책별 저장은 ReaderState→BookSettings 매퍼 경로로 자동.
+   * 책별 저장은 [overrides]가 변경 필드를 기록 → [io.github.sejoung.panelyink.reader.ui.ReaderPersistenceEffects]가 영속화.
    */
   fun setOrientation(orientation: ReaderOrientation) {
     if (orientation == _state.value.orientation) return

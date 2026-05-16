@@ -1,7 +1,6 @@
 package io.github.sejoung.panelyink.reader.ui
 
 import android.content.pm.ActivityInfo
-import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -76,21 +75,14 @@ internal fun ReaderOrientationEffect(orientation: ReaderOrientation) {
   }
   // orientation이 바뀔 때마다 즉시 적용. dispose 없는 effect라 중간 플리커 없음.
   LaunchedEffect(activity, orientation) {
-    val target = when (orientation) {
+    activity?.requestedOrientation = when (orientation) {
       ReaderOrientation.Portrait -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
       ReaderOrientation.Landscape -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
     }
-    val before = activity?.requestedOrientation
-    activity?.requestedOrientation = target
-    Log.d(
-      "PanelyInk.Orientation",
-      "apply orientation=$orientation target=$target before=$before activity=${activity?.javaClass?.simpleName}",
-    )
   }
   // ReaderScreen을 떠날 때만 원복 — 라이브러리/설정은 시스템 회전을 따르게.
   DisposableEffect(activity) {
     onDispose {
-      Log.d("PanelyInk.Orientation", "restore to $originalOrientation")
       activity?.requestedOrientation = originalOrientation
     }
   }

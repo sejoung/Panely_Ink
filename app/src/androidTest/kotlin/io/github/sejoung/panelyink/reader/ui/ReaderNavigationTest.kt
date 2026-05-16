@@ -4,8 +4,8 @@ import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.sejoung.panelyink.core.book.BookRef
 import io.github.sejoung.panelyink.core.fit.FitMode
-import io.github.sejoung.panelyink.reader.ReaderState
 import io.github.sejoung.panelyink.core.preferences.ReadingDirection
+import io.github.sejoung.panelyink.reader.ReaderState
 import io.github.sejoung.panelyink.reader.model.SeriesContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -44,22 +44,6 @@ class ReaderNavigationTest {
 
         assertNull(previousBookForBoundary(state(currentPage = 0), context))
         assertNull(nextBookForBoundary(state(currentPage = 9), pageCount = 10, context))
-    }
-
-    @Test
-    fun stateToBookSettingsCopiesBookScopedFieldsOnly() {
-        val settings = state(
-            currentPage = 3,
-            direction = ReadingDirection.Rtl,
-            fitMode = FitMode.FitWidth,
-            trimEnabled = false,
-            contrast = 1.25f,
-        ).toBookSettings()
-
-        assertEquals(FitMode.FitWidth, settings.fitMode)
-        assertEquals(ReadingDirection.Rtl, settings.direction)
-        assertEquals(false, settings.trimEnabled)
-        assertEquals(1.25f, settings.contrast)
     }
 
     private fun seriesContext(current: Int): SeriesContext {
