@@ -110,10 +110,20 @@ class CbzBookSession private constructor(
       val targetH = if (hintHeight > 0) hintHeight else bounds.outHeight
       val sample = computeInSampleSize(bounds.outWidth, bounds.outHeight, targetW, targetH)
 
-      // 3. 본 디코드
+      // 3. 본 디코드 — RGB_565로 메모리 절반(ARGB_8888 4byte → RGB_565 2byte/픽셀).
+      //
+      // 만화/만화 페이지는 흑백 또는 제한된 컬러 팔레트라 RGB_565의 5-6-5 비트 깊이로 시각적 차이 없음.
+      // ContrastMatrix/InvertMatrix는 ColorMatrixColorFilter로 draw 시점에 적용되므로 bitmap config와 무관.
+      //
+      // 효과 (1500×2000 픽셀 기준):
+      // - ARGB_8888: 12MB / 페이지. ±3 프리로드 7장 = 84MB. 64MB 캐시에서 2-3장 evict — spread 모드에서
+      //   다음 spread (N+2, N+3) 페이지가 evict 후보가 되어 페이지 넘김 시 빈 페이지 발생.
+      // - RGB_565: 6MB / 페이지. 7장 = 42MB. 64MB 캐시에 모두 fit — 이웃 spread 즉시 hit, 빈 페이지 0.
+      //
+      // 알파 채널이 필요한 PNG는 BitmapFactory가 자동으로 ARGB_8888로 폴백 (inPreferredConfig는 hint).
       val opts = BitmapFactory.Options().apply {
         inSampleSize = sample
-        inPreferredConfig = Bitmap.Config.ARGB_8888 // RGB565 옵션은 v1.0 후반(또는 PRD §11 Q5) 검토
+        inPreferredConfig = Bitmap.Config.RGB_565
       }
       val bitmap = archive.openPage(pageIndex).use { input ->
         BitmapFactory.decodeStream(input, null, opts)
