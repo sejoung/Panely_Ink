@@ -47,6 +47,16 @@ Physical page keys, volume keys, D-pad keys, and tap zones should all stay consi
 direction. At the first or last page, pressing the boundary key again may navigate to the previous
 or next volume when a series context exists.
 
+In two-page spread mode the viewport is split exactly in half. Each half draws one page with
+inner-edge alignment, so the gutter sides of both pages meet at the screen center. The user
+expects the spread to read as a single canvas. Decoration between the halves is not added.
+
+Rotation respects the user's per-book setting (or the global default for books they have not
+customized). The app asks the OS first via `Activity.requestedOrientation`. When the OS does not
+honor the request, `ReaderRotationLayout` rotates the entire reader Compose tree — page content,
+overlays, menu, segmented controls, tap zones — so input and visuals remain consistent. Visual
+state never has the page rotated while the menu stays in the original orientation.
+
 ## Components
 
 - Buttons are flat, high contrast, and border-driven.

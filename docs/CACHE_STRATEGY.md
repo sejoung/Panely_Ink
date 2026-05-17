@@ -164,21 +164,35 @@ Location: `CbzBookSession.BitmapPageCache`
 
 Stores:
 
-- decoded page bitmaps for one open book
+- decoded page bitmaps for one open book, encoded as `RGB_565` so a 1500×2000 page is ~6 MB
+  instead of ~12 MB; PNGs that actually need alpha fall back to `ARGB_8888` automatically
 
 Limit:
 
-- 100 MB per open session
+- device-tier byte budget: `min(memoryClass/4, 100 MB)` with a 32 MB floor (16 MB on
+  low-RAM devices via `ActivityManager.isLowRamDevice`). On Meebook M7-class hardware
+  this lands around 64 MB, which is enough room for the full ±3 preload window at
+  `RGB_565` (~42 MB) without eviction.
 
 Used by:
 
 - `ReaderView.onDraw`
 - `CbzBookSession.decode`
-- ±3 page preload
+- ±3 page preload (parallel for the visible pair, sequential for neighbors)
+
+Eviction protection:
+
+- `PageDecoder.keepWarm(visibleIndices)` is called immediately before each preload decode and
+  performs a `cache.get` on the currently visible page (or visible spread pair). The
+  `LruCache.get` updates the LRU access timestamp so the visible page is always the most
+  recently used entry and survives the next put. This is the only thing that protects the
+  visible page during an e-ink full-refresh sequence — while the controller is being driven
+  with the black/white/black frames, `ReaderView.onDraw` paints solid colors instead of
+  calling `pageBitmap`, so no natural LRU touch happens for the visible page.
 
 Invalidated by:
 
-- LRU eviction
+- LRU eviction (within the preload window only — visible pages are keep-warmed)
 - closing or navigating away from the current book session
 
 ## Reader Trim Cache

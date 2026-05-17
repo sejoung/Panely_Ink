@@ -31,13 +31,15 @@ Panely Ink is under active development. The core reader and local library are us
 - SAF folder library with nested folder navigation
 - CBZ/ZIP reading through SAF without copying the whole archive
 - ZIP-of-CBZ series detection and nested archive opening
-- Single-page reader with Canvas rendering
-- LTR/RTL reading direction with an app-level default and per-book override
-- Hardware page keys, volume keys, D-pad, and tap zones
+- Single-page and two-page spread reader with Canvas rendering
+- LTR/RTL reading direction, fit mode, trim, contrast, two-page spread, and rotation
+  lock — each with a global default and a per-book sparse override
+- Software rotation fallback for e-ink OEMs that ignore `Activity.requestedOrientation`
+- Hardware page keys, volume keys, D-pad, and tap zones (hit-testing is rotation-aware)
 - Resume, progress badges, per-book settings, current-book bookmarks, and all-bookmarks view
 - Book index for resolving all-bookmark rows and adjacent volumes
 - Cover extraction with disk JPEG cache, Room metadata, and in-memory LRU cache
-- Optional e-ink full refresh interval, manual full refresh, trim, contrast, and invert controls
+- Optional e-ink full refresh interval, manual full refresh, and invert controls
 - Previous/next volume navigation and boundary key navigation
 - English and Korean UI strings, with system language as the default, English fallback, and an
   in-app language setting
@@ -48,6 +50,8 @@ Planned or incomplete:
 - Full library search / metadata indexing
 - Meebook-specific refresh API spike
 - Signed release packaging and device validation
+- NDK JPEG/WebP decoders, bitmap pool, and decoded-bitmap disk cache (performance optimizations
+  listed in [docs/ROADMAP.md](docs/ROADMAP.md))
 
 Remaining work is tracked in [docs/ROADMAP.md](docs/ROADMAP.md).
 
@@ -60,6 +64,11 @@ Panely Ink avoids animated, color-heavy UI. Reader chrome stays hidden until req
 - Physical page/volume keys work without touching the screen again
 - At the first/last page, pressing the boundary key again moves to the previous/next volume when
   available
+- In two-page spread mode the screen splits 50/50; inner edges of both pages touch the center
+  line so the spread reads as one continuous canvas
+- Rotation locks at the app layer (`Activity.requestedOrientation`); when the OEM ignores it,
+  a Compose-level transform rotates the entire reader tree (including tap zones, menu, and
+  overlays), so input coordinates remain consistent with what the user sees
 
 The visual system is documented in [docs/DESIGN.md](docs/DESIGN.md).
 
@@ -118,18 +127,21 @@ release APK, creates the local tag, and asks whether to push.
 
 ```text
 app/src/main/kotlin/io/github/sejoung/panelyink/
-├── core/                 # archive, book refs, fit, position, prefs, render, sort, trim
+├── core/                 # archive (dup-PFD reader pool), book refs, fit, position,
+│                         #   prefs (reading direction, orientation), render, sort, trim
 ├── data/                 # Room packages, repositories, preferences, reset helpers
 ├── library/
 │   ├── data/             # SAF scanning, covers, path codec
 │   ├── model/            # LibraryEntry, BookEntry adapters, SortMode, ViewMode
-│   ├── ui/               # Library Compose screens and dialogs
+│   ├── ui/               # Library + AppSettings Compose screens and dialogs
 │   └── LibraryViewModel.kt
 ├── reader/
 │   ├── input/            # hardware key dispatch
-│   ├── model/            # BookSettings, SeriesContext
-│   ├── session/          # CbzBookSession, PageDecoder, bitmap cache
-│   ├── ui/               # Reader Compose + Android View host
+│   ├── model/            # BookSettings (resolved), BookSettingsOverrides (sparse),
+│   │                     #   SeriesContext
+│   ├── session/          # CbzBookSession, PageDecoder (keepWarm), bitmap cache
+│   ├── ui/               # Reader Compose + Android View host,
+│   │                     #   ReaderRotationLayout (SW rotation fallback)
 │   └── ReaderViewModel.kt
 ├── ui/                   # theme tokens and shared components
 ├── MainActivity.kt       # screen host and key dispatcher
@@ -147,7 +159,12 @@ The app relies on aggressive but explicit caching:
 - Nested ZIP entries are extracted once into `cacheDir/nested`
 - Covers use Room metadata, disk JPEG cache, and a bounded in-memory LRU
 - Global bookmarks index only the books needed for the all-bookmarks list
-- Reader pages use a 100 MB bitmap LRU per open book session
+- Reader pages use a device-tier bitmap LRU per open book session (typically 32–64 MB).
+  Bitmaps decode at `RGB_565` so the ±3 preload window fits without thrashing; the visible
+  page (or visible spread pair) is LRU-touched before every other decode to protect it from
+  eviction during e-ink full-refresh frames
+- Two-page spread decodes both visible pages in parallel through a pool of two independent
+  ZipFile readers (dup-PFD), then emits a single invalidate so both halves appear together
 - Page trim results are cached per decoded page
 
 Cache behavior and invalidation points are documented in [docs/CACHE_STRATEGY.md](docs/CACHE_STRATEGY.md).

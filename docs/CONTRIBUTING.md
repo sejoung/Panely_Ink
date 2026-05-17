@@ -35,6 +35,13 @@ Run connected tests for Room migrations, Android framework behavior, or SAF/URI 
 - Use `core.book.BookRef` or `IndexedBookRef` when data crosses from library into reader,
   bookmarks, or indexing.
 - Do not pass `library.model.BookEntry` deeper into reader/session code.
+- Per-book settings are persisted as `BookSettingsOverrides` (every field nullable). A
+  per-book setting only becomes non-null after the user explicitly changes it. New
+  reader-settable fields must follow this same pattern, with a matching global default in
+  `AppPreferences` and a merge step in `BookSettingsOverrides.resolve`.
+- Per-book and global settings must stay decoupled: changing one global default should still
+  affect every book the user has not individually customized. If you add a new setting,
+  verify both directions in `BookSettingsOverridesTest`.
 - Put user-facing strings in Android string resources. English is the default; Korean lives in
   `values-ko`.
 
@@ -84,10 +91,13 @@ non-interactive push or `--no-push` to skip the prompt.
 ## Areas That Need Help
 
 - Meebook refresh API investigation
-- Real-device performance measurements
+- Real-device performance measurements (decode time, cache hit rate, rotation latency)
 - Dithering and gamma experiments
 - Full-library search and metadata indexing
 - Release signing and install-ready APK packaging
+- Performance roadmap items in `docs/ROADMAP.md`: NDK `libjpeg-turbo` / `libwebp` decoders,
+  bitmap pool via `BitmapFactory.Options.inBitmap`, on-disk decoded-bitmap cache, and
+  adaptive preload radius for low-memory devices
 
 ## License
 

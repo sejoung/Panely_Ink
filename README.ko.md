@@ -31,13 +31,15 @@ Panely Ink는 현재 개발 중입니다. 핵심 리더와 로컬 라이브러�
 - SAF 폴더 기반 라이브러리와 중첩 폴더 탐색
 - 전체 아카이브 복사 없이 SAF를 통한 CBZ/ZIP 읽기
 - ZIP-of-CBZ 시리즈 감지와 중첩 아카이브 열기
-- Canvas 기반 단일 페이지 리더
-- 앱 기본값과 책별 오버라이드를 지원하는 LTR/RTL 읽기 방향
-- 물리 페이지 키, 볼륨 키, D-pad, 탭 영역
+- Canvas 기반 단일 페이지 / 두쪽 보기 리더
+- LTR/RTL 읽기 방향, 화면 맞춤, 트리밍, 대비, 두쪽 보기, 회전 잠금 — 각 항목마다
+  전역 기본값과 책별 sparse override 지원
+- `Activity.requestedOrientation`을 무시하는 e-ink OEM을 위한 소프트웨어 회전 폴백
+- 물리 페이지 키, 볼륨 키, D-pad, 탭 영역 (hit-testing이 회전 인지)
 - 이어보기, 진행률 배지, 책별 설정, 현재 책 북마크, 전체 북마크 화면
 - 전체 북마크 행과 인접 권 이동을 해결하기 위한 책 인덱스
 - 디스크 JPEG 캐시, Room 메타데이터, 메모리 LRU를 사용하는 표지 추출
-- 선택형 e-ink 풀리프레시 주기, 수동 풀리프레시, 트리밍, 대비, 흑백 반전 컨트롤
+- 선택형 e-ink 풀리프레시 주기, 수동 풀리프레시, 흑백 반전 컨트롤
 - 이전/다음 권 이동과 첫/마지막 페이지 경계 키 이동
 - 영어/한국어 UI 문자열, 시스템 언어 기본값, 영어 fallback, 앱 내 언어 설정
 
@@ -47,6 +49,8 @@ Panely Ink는 현재 개발 중입니다. 핵심 리더와 로컬 라이브러�
 - 전체 라이브러리 검색 / 메타데이터 인덱싱
 - Meebook 전용 refresh API 조사
 - 서명된 릴리스 패키징과 실기기 검증
+- NDK JPEG/WebP 디코더, 비트맵 풀, 디코드 결과 디스크 캐시 (성능 최적화 항목은
+  [docs/ROADMAP.md](docs/ROADMAP.md) 참고)
 
 남은 작업은 [docs/ROADMAP.md](docs/ROADMAP.md)에 정리되어 있습니다.
 
@@ -60,6 +64,11 @@ Panely Ink는 애니메이션이나 색상이 많은 UI를 피합니다. 리더 
 - 물리 페이지/볼륨 키는 화면을 다시 터치하지 않아도 계속 동작
 - 첫 페이지 또는 마지막 페이지에서 경계 방향 키를 한 번 더 누르면 가능한 경우
   이전/다음 권으로 이동
+- 두쪽 보기 모드에서는 화면을 50/50으로 양분하고 두 페이지 안쪽 가장자리가 중앙선에서
+  맞붙어 spread가 끊김 없이 이어지도록 그림
+- 회전은 우선 `Activity.requestedOrientation`으로 잠금. OEM이 무시하는 경우 Compose
+  레벨 transform이 리더 트리(탭 영역/메뉴/오버레이 포함) 전체를 회전시켜 입력 좌표가
+  사용자 시야와 일치하도록 유지
 
 시각 시스템은 [docs/DESIGN.md](docs/DESIGN.md)에 정리되어 있습니다.
 
@@ -118,18 +127,21 @@ release APK를 빌드한 뒤 로컬 태그를 만들고 push 여부를 물어봅
 
 ```text
 app/src/main/kotlin/io/github/sejoung/panelyink/
-├── core/                 # archive, book refs, fit, position, prefs, render, sort, trim
+├── core/                 # archive (dup-PFD reader pool), book refs, fit, position,
+│                         #   prefs (reading direction, orientation), render, sort, trim
 ├── data/                 # Room packages, repositories, preferences, reset helpers
 ├── library/
 │   ├── data/             # SAF scanning, covers, path codec
 │   ├── model/            # LibraryEntry, BookEntry adapters, SortMode, ViewMode
-│   ├── ui/               # Library Compose screens and dialogs
+│   ├── ui/               # Library + AppSettings Compose screens and dialogs
 │   └── LibraryViewModel.kt
 ├── reader/
 │   ├── input/            # hardware key dispatch
-│   ├── model/            # BookSettings, SeriesContext
-│   ├── session/          # CbzBookSession, PageDecoder, bitmap cache
-│   ├── ui/               # Reader Compose + Android View host
+│   ├── model/            # BookSettings (resolved), BookSettingsOverrides (sparse),
+│   │                     #   SeriesContext
+│   ├── session/          # CbzBookSession, PageDecoder (keepWarm), bitmap cache
+│   ├── ui/               # Reader Compose + Android View host,
+│   │                     #   ReaderRotationLayout (SW rotation fallback)
 │   └── ReaderViewModel.kt
 ├── ui/                   # theme tokens and shared components
 ├── MainActivity.kt       # screen host and key dispatcher
@@ -147,7 +159,12 @@ Panely Ink는 비용이 큰 작업을 줄이기 위해 명시적인 캐시를 �
 - 중첩 ZIP entry는 `cacheDir/nested`에 한 번 추출
 - 표지는 Room 메타데이터, 디스크 JPEG 캐시, 메모리 LRU 사용
 - 전체 북마크는 전체 목록에 필요한 책만 인덱싱
-- 리더 페이지는 열린 책 세션마다 100 MB 비트맵 LRU 사용
+- 리더 페이지는 디바이스 등급에 따른 비트맵 LRU 사용 (보통 32–64 MB). 비트맵은
+  `RGB_565`로 디코드해 ±3 프리로드 윈도우가 thrashing 없이 fit. 현재 보이는 페이지
+  (또는 두쪽 보기 페어)는 다음 디코드 직전마다 LRU touch로 갱신해 e-ink 풀리프레시
+  중에도 evict 보호
+- 두쪽 보기는 dup-PFD로 만든 독립 ZipFile reader 2개로 두 페이지를 병렬 디코드한 뒤
+  invalidate 1회만 발행해 양쪽이 동시에 등장하도록 처리
 - 페이지 트림 결과는 디코드된 페이지 단위로 캐시
 
 캐시 동작과 갱신 지점은 [docs/CACHE_STRATEGY.md](docs/CACHE_STRATEGY.md)에 정리되어 있습니다.
