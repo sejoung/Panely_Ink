@@ -61,7 +61,38 @@ object NestedZipExtractor {
       TAG,
       "extract done: ${target.length()} bytes in ${System.currentTimeMillis() - t0}ms",
     )
+    // 추출 캐시는 결정적 이름으로 누적되어 [clearAll](전체 리셋)로만 비워졌다 — ZIP-of-CBZ를
+    // 여러 권 열면 무한히 커진다. 상한 초과 시 오래된 것부터(방금 추출한 target 제외) 정리.
+    pruneToLimit(context, keep = target)
     target
+  }
+
+  /**
+   * 추출 캐시를 [maxBytes] 이하로 LRU 정리. [keep]은 방금 추출해 곧 열릴 파일이라 보존한다.
+   * (열려 있는 파일을 unlink해도 FD는 유효하지만, 다음 진입에서 불필요한 재추출을 막기 위해 제외.)
+   */
+  internal suspend fun pruneToLimit(
+    context: Context,
+    keep: File? = null,
+    maxBytes: Long = MAX_CACHE_BYTES,
+  ): Int = withContext(Dispatchers.IO) {
+    val dir = File(context.cacheDir, DIR)
+    val files = dir.listFiles()?.filter { it.isFile } ?: return@withContext 0
+    var total = files.sumOf { it.length() }
+    if (total <= maxBytes) return@withContext 0
+    var deleted = 0
+    // 오래된 것(lastModified 오름차순) 먼저 삭제, keep은 건너뜀.
+    for (file in files.sortedBy { it.lastModified() }) {
+      if (total <= maxBytes) break
+      if (keep != null && file == keep) continue
+      val size = file.length()
+      if (file.delete()) {
+        total -= size
+        deleted++
+      }
+    }
+    if (deleted > 0) Log.d(TAG, "prune: deleted=$deleted remaining=${total / 1024}KB")
+    deleted
   }
 
   fun cacheFile(context: Context, parentUri: Uri, entryName: String): File {
@@ -100,4 +131,7 @@ object NestedZipExtractor {
   }
 
   private const val MAX_NESTED_ARCHIVE_BYTES = 512L * 1024L * 1024L
+
+  /** 추출 캐시 디스크 상한. 단권 최대치(512MB) 2권 + 여유. 초과 시 [pruneToLimit]가 LRU 정리. */
+  private const val MAX_CACHE_BYTES = 1024L * 1024L * 1024L
 }

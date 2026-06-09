@@ -125,8 +125,13 @@ class ReaderViewModel(
   fun goTo(pageIndex: Int) {
     val current = _state.value
     // 두쪽 보기에서는 leading(짝수)으로 정렬 — 메뉴/북마크 점프도 spread 경계에 안착.
+    // 정렬 → 클램프 → 재정렬 순. 짝수 페이지 책(예: 8쪽)의 마지막 spread(6·7)에서 goNext가
+    // align(8)=8 → clamp(7)로 홀수에 떨어지면 leading이 미정렬되어 마지막 페이지가 단독 노출되는
+    // 버그가 있었다. 클램프 결과를 한 번 더 정렬해 항상 leading(짝수)에 안착시킨다.
     val aligned = if (current.spreadMode) alignToSpreadLeading(pageIndex) else pageIndex
-    val clamped = aligned.coerceIn(0, pageCount - 1)
+    val clamped = aligned.coerceIn(0, pageCount - 1).let {
+      if (current.spreadMode) alignToSpreadLeading(it) else it
+    }
     if (clamped == current.currentPage) return
 
     // 풀리프레시 정책 — N페이지마다 generation++ → ReaderView가 검정 한 프레임으로

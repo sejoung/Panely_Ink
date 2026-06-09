@@ -72,6 +72,10 @@ class ReaderView(context: Context) : View(context) {
     isDither = false
   }
 
+  // drawSingle 핫패스에서 프레임/슬롯마다 새 Rect를 할당하지 않도록 재사용. onDraw는 단일 스레드.
+  private val srcRect = Rect()
+  private val dstRect = Rect()
+
   fun attach(session: CbzBookSession, viewModel: ReaderViewModel) {
     this.session = session
     this.viewModel = viewModel
@@ -286,7 +290,7 @@ class ReaderView(context: Context) : View(context) {
       mode = fitMode,
       trim = trim,
     )
-    val src = Rect(
+    srcRect.set(
       fit.srcX,
       fit.srcY,
       fit.srcX + fit.srcWidth,
@@ -297,13 +301,13 @@ class ReaderView(context: Context) : View(context) {
       HorizontalAlign.Center -> fit.offsetX
       HorizontalAlign.End -> viewportWidth - fit.drawWidth
     }
-    val dst = Rect(
+    dstRect.set(
       dstX,
       fit.offsetY,
       dstX + fit.drawWidth,
       fit.offsetY + fit.drawHeight,
     )
-    canvas.drawBitmap(bitmap, src, dst, paint)
+    canvas.drawBitmap(bitmap, srcRect, dstRect, paint)
   }
 
   private enum class HorizontalAlign { Start, Center, End }

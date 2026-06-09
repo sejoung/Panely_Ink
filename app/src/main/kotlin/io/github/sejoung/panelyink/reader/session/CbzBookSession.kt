@@ -50,6 +50,20 @@ class CbzBookSession private constructor(
   private var hintHeight: Int = 0
 
   /**
+   * 디코드 해상도 세대(epoch). [setViewportHint]가 viewport 차원을 실제로 바꿀 때마다 증가한다.
+   *
+   * 캐시 키는 pageIndex뿐이라 해상도(inSampleSize)가 바뀌는 변경 — 두쪽↔단쪽 토글(viewport ½),
+   * 화면 회전, fit 모드에 따른 목표 해상도 변화 — 후에도 이전 해상도로 디코드된 비트맵이 그대로
+   * 반환되어 흐릿하게 보이는 문제가 있었다. epoch가 바뀌면 캐시/트림을 비워 현재 해상도로 재디코드하게
+   * 하고, 디코드 도중 epoch가 변하면 그 결과(stale 해상도)는 캐시에 넣지 않는다.
+   */
+  @Volatile
+  private var resolutionEpoch: Int = 0
+
+  /** [hintWidth]/[hintHeight]/[resolutionEpoch]의 일관된 스냅샷/갱신을 위한 락. */
+  private val resolutionLock = Any()
+
+  /**
    * 페이지별 자동 트리밍 결과. 디코드 시 1회 계산해서 보관 — viewport나 fit이
    * 바뀌어도 같은 비트맵에 대한 본문 좌표는 변하지 않으므로 재계산 불필요.
    */
@@ -63,11 +77,28 @@ class CbzBookSession private constructor(
   @Volatile
   private var sessionClosed = false
 
-  /** ReaderView가 onSizeChanged에서 갱신. 0/음수면 무시. */
+  /**
+   * ReaderView가 onSizeChanged에서, 그리고 디코드 직전 [asDecoder]가 갱신. 0/음수면 무시.
+   *
+   * 차원이 실제로 바뀌면 [resolutionEpoch]를 증가시키고 캐시/트림을 비운다 — 이전 해상도로
+   * 디코드된 비트맵이 새 viewport에 흐릿하게 그려지는 것을 막는다(두쪽 토글·회전 등).
+   * 차원이 동일하면(정상 페이지 넘김의 반복 호출) no-op이라 캐시가 유지된다.
+   */
   fun setViewportHint(width: Int, height: Int) {
-    if (width > 0 && height > 0) {
-      hintWidth = width
-      hintHeight = height
+    if (width <= 0 || height <= 0) return
+    val changed = synchronized(resolutionLock) {
+      if (width == hintWidth && height == hintHeight) {
+        false
+      } else {
+        hintWidth = width
+        hintHeight = height
+        resolutionEpoch++
+        true
+      }
+    }
+    if (changed) {
+      cache.clear()
+      trimCache.clear()
     }
   }
 
@@ -94,6 +125,12 @@ class CbzBookSession private constructor(
     val name = pages[pageIndex].name
     val t0 = System.currentTimeMillis()
 
+    // 디코드에 사용할 해상도/epoch를 일관된 스냅샷으로 캡처. 디코드 도중 해상도가 바뀌면
+    // (epoch 변동) 아래 put 단계에서 stale 결과를 캐시에 넣지 않는다.
+    val (snapW, snapH, snapEpoch) = synchronized(resolutionLock) {
+      Triple(hintWidth, hintHeight, resolutionEpoch)
+    }
+
     try {
       // 1. 헤더만 읽어 원본 크기 파악
       val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -106,8 +143,8 @@ class CbzBookSession private constructor(
       }
 
       // 2. viewport에 맞춰 inSampleSize 계산
-      val targetW = if (hintWidth > 0) hintWidth else bounds.outWidth
-      val targetH = if (hintHeight > 0) hintHeight else bounds.outHeight
+      val targetW = if (snapW > 0) snapW else bounds.outWidth
+      val targetH = if (snapH > 0) snapH else bounds.outHeight
       val sample = computeInSampleSize(bounds.outWidth, bounds.outHeight, targetW, targetH)
 
       // 3. 본 디코드 — RGB_565로 메모리 절반(ARGB_8888 4byte → RGB_565 2byte/픽셀).
@@ -135,11 +172,17 @@ class CbzBookSession private constructor(
           "src=${bounds.outWidth}x${bounds.outHeight} sample=$sample → ${bitmap.width}x${bitmap.height}",
       )
 
-      cache.put(pageIndex, bitmap)
-      // 자동 여백 트리밍은 사용자가 켠 경우에만 계산한다. 꺼진 상태에서는 행 버퍼 IntArray
-      // 할당과 픽셀 스캔을 생략해 페이지 전환 비용을 줄인다.
-      if (trimEnabled && !trimCache.containsKey(pageIndex)) {
-        trimCache[pageIndex] = computeTrim(bitmap)
+      // 디코드 도중 해상도가 바뀌었으면(두쪽 토글·회전 등으로 setViewportHint가 epoch 증가)
+      // 이 비트맵은 stale 해상도라 캐시에 넣지 않는다 — 캐시 오염을 막고 현재 trigger가
+      // 새 해상도로 재디코드하게 둔다. 호출자에게는 그대로 반환(emit→invalidate는 무해).
+      if (resolutionEpoch == snapEpoch) {
+        cache.put(pageIndex, bitmap)
+        // 자동 여백 트리밍은 사용자가 켠 경우에만 계산한다. 꺼진 상태에서는 행 버퍼 IntArray
+        // 할당과 픽셀 스캔을 생략해 페이지 전환 비용을 줄인다. 트림 좌표는 비트맵 해상도에
+        // 종속되므로 stale epoch에서는 계산/저장하지 않는다.
+        if (trimEnabled && !trimCache.containsKey(pageIndex)) {
+          trimCache[pageIndex] = computeTrim(bitmap)
+        }
       }
       bitmap
     } catch (io: IOException) {

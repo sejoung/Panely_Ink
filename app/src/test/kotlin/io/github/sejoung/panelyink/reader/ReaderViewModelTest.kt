@@ -520,6 +520,35 @@ class ReaderViewModelTest {
     }
 
     @Test
+    fun goNextClampsAtLastSpreadWithEvenPageCount() {
+        // 짝수 페이지 수 — 마지막 전체 spread는 (6,7). 거기서 한 번 더 넘겨도 leading은
+        // 짝수(6)에 머물러야 한다. 정렬→클램프만 하면 align(8)=8→clamp(7)로 홀수에 떨어져
+        // 페이지 6이 사라지고 7만 단독 노출되는 회귀가 발생한다.
+        val vm = ReaderViewModel(
+            "b", 8, FakePageDecoder(),
+            initialPage = 6,
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true),
+        )
+        assertEquals(6, vm.state.value.currentPage)
+        vm.goNext()
+        assertEquals(6, vm.state.value.currentPage)
+        vm.close()
+    }
+
+    @Test
+    fun goToBeyondEndSnapsToLastLeadingWithEvenPageCount() {
+        val vm = ReaderViewModel(
+            "b", 8, FakePageDecoder(),
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true),
+        )
+        vm.goTo(7) // 마지막 페이지(홀수)로 점프 → leading 6에 안착
+        assertEquals(6, vm.state.value.currentPage)
+        vm.goTo(99) // 범위 초과 → 마지막 leading(6)
+        assertEquals(6, vm.state.value.currentPage)
+        vm.close()
+    }
+
+    @Test
     fun orientationDefaultsPortrait() {
         val vm = ReaderViewModel("b", 10, FakePageDecoder())
         assertEquals(ReaderOrientation.Portrait, vm.state.value.orientation)
