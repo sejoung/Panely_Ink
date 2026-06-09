@@ -38,6 +38,9 @@ data class BookSettingsEntity(
     @ColumnInfo(name = "spread_mode")
     val spreadMode: Boolean?,
 
+    @ColumnInfo(name = "cover_alone")
+    val coverAlone: Boolean?,
+
     @ColumnInfo(name = "orientation")
     val orientation: String?,
 

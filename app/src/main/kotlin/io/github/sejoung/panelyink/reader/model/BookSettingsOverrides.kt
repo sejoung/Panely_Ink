@@ -28,11 +28,12 @@ data class BookSettingsOverrides(
     val trimEnabled: Boolean? = null,
     val contrast: Float? = null,
     val spreadMode: Boolean? = null,
+    val coverAlone: Boolean? = null,
     val orientation: ReaderOrientation? = null,
 ) {
     val isEmpty: Boolean
         get() = fitMode == null && direction == null && trimEnabled == null &&
-            contrast == null && spreadMode == null && orientation == null
+            contrast == null && spreadMode == null && coverAlone == null && orientation == null
 
     companion object {
         /** 아무 override도 없는 상태. 새 책 첫 진입 시 또는 책별 row 미존재. */
@@ -53,5 +54,8 @@ fun BookSettingsOverrides.resolve(appPrefs: AppPreferences): BookSettings = Book
     trimEnabled = trimEnabled ?: appPrefs.defaultTrimEnabled,
     contrast = contrast ?: appPrefs.defaultContrast,
     spreadMode = spreadMode ?: appPrefs.defaultSpreadMode,
+    // coverAlone은 전역 prefs 짝이 없는 책별 전용 토글이라 하드코드 false로 합성한다.
+    // (두쪽 보기를 켠 책에서 사용자가 명시 ON 할 때만 non-null이 됨.)
+    coverAlone = coverAlone ?: false,
     orientation = orientation ?: appPrefs.defaultOrientation,
 )

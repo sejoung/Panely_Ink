@@ -98,6 +98,7 @@
     <string name="reader_spread">두쪽 보기</string>
     <string name="reader_spread_single">한쪽</string>
     <string name="reader_spread_two">두쪽</string>
+    <string name="reader_cover_alone">표지 한 장으로</string>
     <string name="reader_orientation">화면 회전</string>
     <string name="reader_orientation_portrait">세로</string>
     <string name="reader_orientation_landscape">가로</string>

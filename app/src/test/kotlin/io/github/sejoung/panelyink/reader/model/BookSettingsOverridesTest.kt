@@ -33,6 +33,19 @@ class BookSettingsOverridesTest {
         assertFalse(BookSettingsOverrides(trimEnabled = true).isEmpty)
         assertFalse(BookSettingsOverrides(contrast = 1.5f).isEmpty)
         assertFalse(BookSettingsOverrides(fitMode = FitMode.FitWidth).isEmpty)
+        assertFalse(BookSettingsOverrides(coverAlone = true).isEmpty)
+    }
+
+    @Test
+    fun resolveCoverAloneDefaultsFalseWithoutOverride() {
+        // coverAlone은 전역 prefs 짝이 없는 책별 전용 토글 — 미설정이면 항상 false로 합성.
+        assertEquals(false, BookSettingsOverrides.NONE.resolve(appPrefs).coverAlone)
+    }
+
+    @Test
+    fun resolveCoverAloneOverrideIsKept() {
+        val resolved = BookSettingsOverrides(coverAlone = true).resolve(appPrefs)
+        assertEquals(true, resolved.coverAlone)
     }
 
     @Test

@@ -131,6 +131,7 @@ internal fun ReaderViewEffects(
     state.contrast,
     state.invertEnabled,
     state.spreadMode,
+    state.coverAlone,
     state.direction,
     view,
   ) {
@@ -140,6 +141,7 @@ internal fun ReaderViewEffects(
     view?.setContrast(state.contrast)
     view?.setInvertEnabled(state.invertEnabled)
     view?.setSpreadMode(state.spreadMode)
+    view?.setCoverAlone(state.coverAlone)
     view?.setDirection(state.direction)
   }
 

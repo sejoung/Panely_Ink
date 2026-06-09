@@ -17,6 +17,7 @@ class BookSettingsEntityMappingTest {
             trimEnabled = false,
             contrast = 1.4f,
             spreadMode = true,
+            coverAlone = true,
             orientation = ReaderOrientation.Landscape,
         )
         val entity = overrides.toEntity(bookId = "book", updatedAt = 123L)
@@ -27,6 +28,7 @@ class BookSettingsEntityMappingTest {
         assertEquals(false, entity.trimEnabled)
         assertEquals(1.4f, entity.contrast)
         assertEquals(true, entity.spreadMode)
+        assertEquals(true, entity.coverAlone)
         assertEquals("Landscape", entity.orientation)
         assertEquals(123L, entity.updatedAt)
 
@@ -41,6 +43,7 @@ class BookSettingsEntityMappingTest {
         assertEquals(null, entity.trimEnabled)
         assertEquals(null, entity.contrast)
         assertEquals(null, entity.spreadMode)
+        assertEquals(null, entity.coverAlone)
         assertEquals(null, entity.orientation)
         assertEquals(BookSettingsOverrides.NONE, entity.toDomain())
     }
@@ -68,6 +71,7 @@ class BookSettingsEntityMappingTest {
             trimEnabled = true,
             contrast = 1.0f,
             spreadMode = false,
+            coverAlone = null,
             orientation = "Auto",
             updatedAt = 0L,
         )

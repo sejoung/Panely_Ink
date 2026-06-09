@@ -68,8 +68,11 @@ class ReaderViewModel(
     run {
       // 두쪽 보기로 들어올 때 currentPage는 leading(짝수)으로 정렬 — 다시 책을 열어도
       // 동일한 spread가 보이도록.
-      val alignedInitial = if (initialBookSettings.spreadMode) alignToSpreadLeading(initialPage)
-      else initialPage
+      val alignedInitial = if (initialBookSettings.spreadMode) {
+        alignToSpreadLeading(initialPage, initialBookSettings.coverAlone)
+      } else {
+        initialPage
+      }
       ReaderState(
         currentPage = alignedInitial,
         direction = initialBookSettings.direction,
@@ -78,6 +81,7 @@ class ReaderViewModel(
         trimEnabled = initialBookSettings.trimEnabled,
         contrast = initialBookSettings.contrast,
         spreadMode = initialBookSettings.spreadMode,
+        coverAlone = initialBookSettings.coverAlone,
         orientation = initialBookSettings.orientation,
         // 전역 prefs에서 받음 — 책별 저장은 안 함.
         invertEnabled = initialAppPreferences.invertEnabled,
@@ -128,9 +132,13 @@ class ReaderViewModel(
     // 정렬 → 클램프 → 재정렬 순. 짝수 페이지 책(예: 8쪽)의 마지막 spread(6·7)에서 goNext가
     // align(8)=8 → clamp(7)로 홀수에 떨어지면 leading이 미정렬되어 마지막 페이지가 단독 노출되는
     // 버그가 있었다. 클램프 결과를 한 번 더 정렬해 항상 leading(짝수)에 안착시킨다.
-    val aligned = if (current.spreadMode) alignToSpreadLeading(pageIndex) else pageIndex
+    val aligned = if (current.spreadMode) {
+      alignToSpreadLeading(pageIndex, current.coverAlone)
+    } else {
+      pageIndex
+    }
     val clamped = aligned.coerceIn(0, pageCount - 1).let {
-      if (current.spreadMode) alignToSpreadLeading(it) else it
+      if (current.spreadMode) alignToSpreadLeading(it, current.coverAlone) else it
     }
     if (clamped == current.currentPage) return
 
@@ -229,7 +237,11 @@ class ReaderViewModel(
   fun setSpreadMode(enabled: Boolean) {
     val current = _state.value
     if (enabled == current.spreadMode) return
-    val newPage = if (enabled) alignToSpreadLeading(current.currentPage) else current.currentPage
+    val newPage = if (enabled) {
+      alignToSpreadLeading(current.currentPage, current.coverAlone)
+    } else {
+      current.currentPage
+    }
     val pageChanged = newPage != current.currentPage
     _state.value = current.copy(
       spreadMode = enabled,
@@ -240,9 +252,38 @@ class ReaderViewModel(
     triggerPreload()
   }
 
-  /** spread 모드 leading 정렬 — 짝수 인덱스로 내림(0,1→0 / 2,3→2 / 4,5→4). */
-  private fun alignToSpreadLeading(pageIndex: Int): Int =
-    if (pageIndex >= 0) (pageIndex / 2) * 2 else 0
+  /**
+   * 표지 한 장 단독 on/off. 두쪽 보기에서만 시각적 의미가 있지만, 단쪽일 때 토글해도
+   * 다음에 두쪽을 켜면 반영되도록 값은 그대로 저장한다.
+   * 켜고 끌 때 페어링 parity가 바뀌므로 현재 페이지를 새 정렬 기준으로 다시 leading에 안착시킨다.
+   */
+  fun setCoverAlone(enabled: Boolean) {
+    val current = _state.value
+    if (enabled == current.coverAlone) return
+    val newPage = if (current.spreadMode) {
+      alignToSpreadLeading(current.currentPage, enabled)
+    } else {
+      current.currentPage
+    }
+    val pageChanged = newPage != current.currentPage
+    _state.value = current.copy(
+      coverAlone = enabled,
+      currentPage = newPage,
+      preloadWindow = if (pageChanged) preloadWindowFor(newPage) else current.preloadWindow,
+    )
+    _overrides.value = _overrides.value.copy(coverAlone = enabled)
+    triggerPreload()
+  }
+
+  /**
+   * spread 모드 leading 정렬.
+   * - [coverAlone]=false: 짝수 인덱스로 내림 — (0,1)(2,3)(4,5)… → 0,2,4…
+   * - [coverAlone]=true: 0쪽 단독, 이후 (1,2)(3,4)… → leading은 0,1,3,5…
+   */
+  private fun alignToSpreadLeading(pageIndex: Int, coverAlone: Boolean): Int {
+    if (pageIndex <= 0) return 0
+    return if (coverAlone) ((pageIndex - 1) / 2) * 2 + 1 else (pageIndex / 2) * 2
+  }
 
   /**
    * 회전 잠금 변경. 본문 화면 진입 동안만 Activity에 적용되고, 화면을 떠나면
@@ -275,14 +316,21 @@ class ReaderViewModel(
     preloadJob?.cancel()
     // spread 모드는 화면에 2쪽이 동시에 보이므로 leading(N)과 secondary(N+1) 둘 다 최우선 디코드.
     // 기존 단일-중심 proximity는 N→N-1→N+1 순이라 페이지 막 넘긴 직후 첫 디코드 1회 동안 우측이 비는 문제 발생.
-    val decodeCenters = if (s.spreadMode && s.currentPage + 1 <= pageCount - 1) {
+    //
+    // 단, 표지 단독(coverAlone && 0쪽) 또는 홀수-마지막 한 장은 secondary가 없다 — 이때는 그 한 장이
+    // 전체 폭 중앙으로 그려지므로(ReaderView.drawSpread) secondary를 디코드하지 않고 전체 해상도로 디코드한다.
+    val hasSecondary = s.spreadMode &&
+      !(s.coverAlone && s.currentPage == 0) &&
+      s.currentPage + 1 <= pageCount - 1
+    val decodeCenters = if (hasSecondary) {
       intArrayOf(s.currentPage, s.currentPage + 1)
     } else {
       intArrayOf(s.currentPage)
     }
-    // spread 모드는 각 페이지가 화면 절반에만 그려지므로 디코드 해상도도 절반으로 충분.
-    // → inSampleSize가 한 단계 더 줄여 메모리/디코드시간 절반, cache eviction 압박 감소.
-    val decodeViewportW = if (s.spreadMode) s.viewportWidth / 2 else s.viewportWidth
+    // 두쪽 페어는 각 페이지가 화면 절반에만 그려지므로 디코드 해상도도 절반으로 충분
+    // (inSampleSize 한 단계 더 ↓ → 메모리/디코드시간 절반, cache eviction 압박 감소).
+    // 단독 슬롯(표지 단독·마지막 한 장)과 단쪽 모드는 전체 폭으로 그려지므로 전체 해상도로 디코드해 선명하게.
+    val decodeViewportW = if (hasSecondary) s.viewportWidth / 2 else s.viewportWidth
     val decodeViewportH = s.viewportHeight
     preloadJob = scope.launch {
       val visibleSet = decodeCenters.toHashSet()
@@ -357,6 +405,11 @@ data class ReaderState(
    * direction에 따라 배치한다. currentPage는 leading(짝수)으로 정렬되어 들어옴.
    */
   val spreadMode: Boolean = false,
+  /**
+   * 표지 한 장 단독. v1.1. spreadMode와 함께만 의미. true면 0쪽을 단독 표시하고 이후를 (1,2)(3,4)…로
+   * 짝지어 인쇄본 펼침면에 정렬한다. ReaderView가 단독 슬롯을 전체 폭 중앙 정렬로 그린다.
+   */
+  val coverAlone: Boolean = false,
   /**
    * 회전 잠금. v1.1. ReaderScreen 라이프사이클 동안만 Activity.requestedOrientation에 반영하고
    * OS가 무시하면 [io.github.sejoung.panelyink.reader.ui.ReaderRotationLayout]이 Compose SW 회전으로 폴백.

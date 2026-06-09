@@ -140,6 +140,42 @@ class PanelyDatabaseMigrationTest {
     }
 
     @Test
+    fun migration11To12AddsNullableCoverAloneColumnAndPreservesData() {
+        createVersion11Database()
+
+        val roomDb = Room.databaseBuilder(context, PanelyDatabase::class.java, DB_NAME)
+            .addMigrations(PanelyDatabase.MIGRATION_11_12)
+            .allowMainThreadQueries()
+            .build()
+
+        val db = roomDb.openHelper.readableDatabase
+
+        // cover_alone 컬럼이 nullable로 추가되었는지.
+        var coverAloneNotNull: Int? = null
+        db.query("PRAGMA table_info(`book_settings`)").use { cursor ->
+            val nameIdx = cursor.getColumnIndexOrThrow("name")
+            val notNullIdx = cursor.getColumnIndexOrThrow("notnull")
+            while (cursor.moveToNext()) {
+                if (cursor.getString(nameIdx) == "cover_alone") {
+                    coverAloneNotNull = cursor.getInt(notNullIdx)
+                }
+            }
+        }
+        assertEquals(0, coverAloneNotNull)
+
+        // 기존 행은 보존되고 cover_alone은 NULL(미설정 → 진입 시 false 합성).
+        db.query("SELECT * FROM `book_settings` WHERE `book_id` = 'legacy'").use { cursor ->
+            assertEquals(true, cursor.moveToFirst())
+            assertEquals("FitWidth", cursor.getString(cursor.getColumnIndexOrThrow("fit_mode")))
+            assertEquals(1, cursor.getInt(cursor.getColumnIndexOrThrow("spread_mode")))
+            assertEquals(true, cursor.isNull(cursor.getColumnIndexOrThrow("cover_alone")))
+            assertEquals(2222L, cursor.getLong(cursor.getColumnIndexOrThrow("updated_at")))
+        }
+
+        roomDb.close()
+    }
+
+    @Test
     fun migration6To7AddsBookIndexAndBookmarkCreatedAtIndex() {
         createVersion6Database()
 
@@ -308,6 +344,48 @@ class PanelyDatabaseMigrationTest {
                     `contrast` REAL NOT NULL,
                     `spread_mode` INTEGER NOT NULL DEFAULT 0,
                     `orientation` TEXT NOT NULL DEFAULT 'Portrait',
+                    `updated_at` INTEGER NOT NULL,
+                    PRIMARY KEY(`book_id`)
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(EMPTY_COVER_META_TABLE)
+            db.execSQL(EMPTY_BOOKMARK_TABLE)
+            db.execSQL(EMPTY_BOOK_INDEX_TABLE)
+            db.execSQL(
+                """
+                INSERT INTO `book_settings` (
+                    `book_id`,
+                    `fit_mode`,
+                    `direction`,
+                    `trim_enabled`,
+                    `contrast`,
+                    `spread_mode`,
+                    `orientation`,
+                    `updated_at`
+                ) VALUES ('legacy', 'FitWidth', 'Rtl', 0, 1.25, 1, 'Landscape', 2222)
+                """.trimIndent(),
+            )
+        }
+    }
+
+    private fun createVersion11Database() {
+        val file = context.getDatabasePath(DB_NAME)
+        file.parentFile?.mkdirs()
+        SQLiteDatabase.openOrCreateDatabase(file, null).use { db ->
+            db.version = 11
+            db.execSQL(EMPTY_POSITION_TABLE)
+            // v11: 모든 override 필드 nullable.
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `book_settings` (
+                    `book_id` TEXT NOT NULL,
+                    `fit_mode` TEXT,
+                    `direction` TEXT,
+                    `trim_enabled` INTEGER,
+                    `contrast` REAL,
+                    `spread_mode` INTEGER,
+                    `orientation` TEXT,
                     `updated_at` INTEGER NOT NULL,
                     PRIMARY KEY(`book_id`)
                 )

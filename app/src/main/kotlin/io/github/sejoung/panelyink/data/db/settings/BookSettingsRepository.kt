@@ -52,6 +52,7 @@ internal fun BookSettingsEntity.toDomain(): BookSettingsOverrides = BookSettings
     trimEnabled = trimEnabled,
     contrast = contrast,
     spreadMode = spreadMode,
+    coverAlone = coverAlone,
     orientation = orientation?.let(::deserializeOrientation),
 )
 
@@ -63,6 +64,7 @@ internal fun BookSettingsOverrides.toEntity(bookId: String, updatedAt: Long): Bo
         trimEnabled = trimEnabled,
         contrast = contrast,
         spreadMode = spreadMode,
+        coverAlone = coverAlone,
         orientation = orientation?.name,
         updatedAt = updatedAt,
     )

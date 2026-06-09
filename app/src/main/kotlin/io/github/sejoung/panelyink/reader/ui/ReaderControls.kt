@@ -114,6 +114,23 @@ internal fun SpreadSegments(
 }
 
 @Composable
+internal fun CoverAloneSegments(
+  enabled: Boolean,
+  onSelect: (Boolean) -> Unit,
+) {
+  val options = listOf(
+    false to stringResource(R.string.common_off),
+    true to stringResource(R.string.common_on),
+  )
+  Segments(
+    options = options,
+    isSelected = { it == enabled },
+    labelOf = { options.first { p -> p.first == it }.second },
+    onSelect = onSelect,
+  )
+}
+
+@Composable
 internal fun OrientationSegments(
   selected: ReaderOrientation,
   onSelect: (ReaderOrientation) -> Unit,

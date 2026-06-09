@@ -110,6 +110,7 @@ internal fun ReaderOverlayLayer(
       onContrastChange = viewModel::setContrast,
       onInvertEnabledChange = viewModel::setInvertEnabled,
       onSpreadModeChange = viewModel::setSpreadMode,
+      onCoverAloneChange = viewModel::setCoverAlone,
       onOrientationChange = viewModel::setOrientation,
       onTriggerFullRefresh = viewModel::triggerFullRefresh,
       onBack = {

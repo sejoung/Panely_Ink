@@ -36,6 +36,8 @@ import io.github.sejoung.panelyink.data.db.settings.BookSettingsEntity
  * - v11: `book_settings` 6필드(fit_mode/direction/trim_enabled/contrast/spread_mode/orientation)를 모두
  *        nullable로 전환 — sparse override 모델 도입. NULL = 사용자 미설정 → 진입 시 전역값 따름.
  *        기존 행은 그대로 복사되어 "전 필드 명시 override"로 처리(기존 동작 보존).
+ * - v12: `book_settings.cover_alone` nullable 컬럼 추가 (표지 한 장 단독 토글 책별 저장 — v1.1).
+ *        NULL = 미설정 → 진입 시 false(기존 (0,1) 페어링)로 합성.
  *
  * 싱글톤 보장: [PanelyDatabase.getInstance]가 더블 체크 락. 안드로이드 앱에서 DB는 프로세스당 1개.
  */
@@ -47,7 +49,7 @@ import io.github.sejoung.panelyink.data.db.settings.BookSettingsEntity
     BookmarkEntity::class,
     BookIndexEntity::class,
   ],
-  version = 11,
+  version = 12,
   exportSchema = false,
 )
 abstract class PanelyDatabase : RoomDatabase() {
@@ -258,6 +260,18 @@ abstract class PanelyDatabase : RoomDatabase() {
     }
 
     /**
+     * v11 → v12: book_settings에 cover_alone nullable 컬럼 추가 (표지 한 장 단독 토글 책별 저장).
+     *
+     * 이미 v11에서 모든 override 필드가 nullable이라 단순 ADD COLUMN으로 충분. 기존 행은 NULL로 채워져
+     * 진입 시 false(기존 (0,1) 페어링)로 합성 — 기존 동작 보존.
+     */
+    internal val MIGRATION_11_12 = object : Migration(11, 12) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `book_settings` ADD COLUMN `cover_alone` INTEGER")
+      }
+    }
+
+    /**
      * v9 → v10: orientation 컬럼 default를 `'Portrait'`로 정규화 + 레거시 `'Auto'` 행을 모두
      * `'Portrait'`로 치환. SQLite는 ALTER COLUMN DEFAULT를 지원하지 않으므로 v5→v6 패턴과
      * 동일하게 테이블 재생성 → 데이터 복사 → drop/rename.
@@ -357,6 +371,7 @@ abstract class PanelyDatabase : RoomDatabase() {
             MIGRATION_8_9,
             MIGRATION_9_10,
             MIGRATION_10_11,
+            MIGRATION_11_12,
           )
           .build()
           .also { instance = it }

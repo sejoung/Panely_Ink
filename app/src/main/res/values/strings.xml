@@ -98,6 +98,7 @@
     <string name="reader_spread">Two-page view</string>
     <string name="reader_spread_single">Single</string>
     <string name="reader_spread_two">Two pages</string>
+    <string name="reader_cover_alone">First page alone (cover)</string>
     <string name="reader_orientation">Rotation</string>
     <string name="reader_orientation_portrait">Portrait</string>
     <string name="reader_orientation_landscape">Landscape</string>

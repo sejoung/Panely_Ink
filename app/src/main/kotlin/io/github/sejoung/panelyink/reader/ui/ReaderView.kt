@@ -52,6 +52,7 @@ class ReaderView(context: Context) : View(context) {
   private var contrast: Float = ContrastMatrix.IDENTITY
   private var invertEnabled: Boolean = false
   private var spreadMode: Boolean = false
+  private var coverAlone: Boolean = false
   private var direction: ReadingDirection = ReadingDirection.Ltr
   private var pageCount: Int = 0
 
@@ -87,6 +88,7 @@ class ReaderView(context: Context) : View(context) {
     this.contrast = s.contrast
     this.invertEnabled = s.invertEnabled
     this.spreadMode = s.spreadMode
+    this.coverAlone = s.coverAlone
     this.direction = s.direction
     // contrast/invert 결합 colorFilter 적용은 applyColorAdjust 한 곳에서.
     applyColorAdjust()
@@ -141,6 +143,13 @@ class ReaderView(context: Context) : View(context) {
     if (this.spreadMode == enabled) return
     this.spreadMode = enabled
     invalidate()
+  }
+
+  fun setCoverAlone(enabled: Boolean) {
+    if (this.coverAlone == enabled) return
+    this.coverAlone = enabled
+    // 두쪽 보기일 때만 시각적 영향(표지 단독/페어 정렬). 단쪽이면 다시 그릴 필요 없음.
+    if (spreadMode) invalidate()
   }
 
   fun setDirection(dir: ReadingDirection) {
@@ -226,7 +235,8 @@ class ReaderView(context: Context) : View(context) {
    * direction에 따라 배치한다.
    * - LTR: 좌=leading, 우=secondary
    * - RTL: 좌=secondary, 우=leading
-   * - secondary가 책 범위를 벗어나면(홀수 페이지수 마지막 spread) 해당 슬롯은 빈 흰 면으로 두고 leading만 그림.
+   * - 단독 슬롯(표지 한 장 단독 또는 secondary가 책 범위 밖인 홀수 마지막 한 장)은 절반-슬롯 대신
+   *   전체 폭 중앙 정렬로 크게 그린다 — 두 단독 케이스가 일관되게 보이도록.
    *
    * 각 슬롯은 [drawSingle]을 절반 viewport로 호출 → 트리밍/contrast/invert가 단쪽과 동일 경로로 적용.
    *
@@ -235,10 +245,21 @@ class ReaderView(context: Context) : View(context) {
    * 외부(좌측 페이지의 왼쪽 / 우측 페이지의 오른쪽)에 남는 여백은 사용자 시야 가장자리라 시각적으로 자연스럽다.
    */
   private fun drawSpread(canvas: Canvas, s: CbzBookSession, viewportWidth: Int, viewportHeight: Int) {
-    val half = viewportWidth / 2
-    val rightStart = half // 홀수 width 1px은 우측 슬롯이 흡수
     val leading = pageIndex
     val secondary = pageIndex + 1
+    // 단독 슬롯 — 표지 한 장 단독(coverAlone && 0쪽) 또는 secondary가 범위 밖(홀수 마지막 한 장).
+    // 일관성을 위해 둘 다 전체 폭 중앙 정렬로 크게 그린다(절반-슬롯 + 빈 여백 대신). ViewModel도 이 경우 전체 해상도로 디코드.
+    val loneCover = coverAlone && leading == 0
+    val hasSecondary = !loneCover && secondary in 0 until pageCount
+    if (!hasSecondary) {
+      if (leading in 0 until pageCount) {
+        drawSingle(canvas, s, leading, viewportX = 0, viewportWidth = viewportWidth, viewportHeight = viewportHeight)
+      }
+      return
+    }
+
+    val half = viewportWidth / 2
+    val rightStart = half // 홀수 width 1px은 우측 슬롯이 흡수
     val (leftPage, rightPage) = when (direction) {
       ReadingDirection.Rtl -> secondary to leading
       else -> leading to secondary

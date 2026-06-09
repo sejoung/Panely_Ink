@@ -56,6 +56,7 @@ fun ReaderSettingsScreen(
   onContrastChange: (Float) -> Unit,
   onInvertEnabledChange: (Boolean) -> Unit,
   onSpreadModeChange: (Boolean) -> Unit,
+  onCoverAloneChange: (Boolean) -> Unit,
   onOrientationChange: (ReaderOrientation) -> Unit,
   onTriggerFullRefresh: () -> Unit,
   onBack: () -> Unit,
@@ -133,6 +134,18 @@ fun ReaderSettingsScreen(
         enabled = state.spreadMode,
         onSelect = onSpreadModeChange,
       )
+
+      // 표지 한 장 단독 — 두쪽 보기를 켰을 때만 노출(단쪽에선 의미 없음).
+      // 0쪽을 단독으로 보여주고 이후를 (1,2)(3,4)…로 짝지어 인쇄본 펼침면에 맞춤.
+      if (state.spreadMode) {
+        Spacer(Modifier.height(spacing.space2))
+        SectionLabel(stringResource(R.string.reader_cover_alone))
+        Spacer(Modifier.height(spacing.space1))
+        CoverAloneSegments(
+          enabled = state.coverAlone,
+          onSelect = onCoverAloneChange,
+        )
+      }
 
       Spacer(Modifier.height(spacing.space2))
 

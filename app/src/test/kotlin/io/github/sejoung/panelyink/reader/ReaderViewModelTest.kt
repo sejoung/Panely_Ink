@@ -549,6 +549,173 @@ class ReaderViewModelTest {
     }
 
     @Test
+    fun coverAloneShowsCoverThenPairsForward() {
+        // coverAlone: 0 단독 → (1,2) → (3,4) → (5,6) …
+        val vm = ReaderViewModel(
+            "b", 10, FakePageDecoder(),
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true, coverAlone = true),
+        )
+        assertEquals(0, vm.state.value.currentPage) // 표지 단독
+        vm.goNext()
+        assertEquals(1, vm.state.value.currentPage) // (1,2)
+        vm.goNext()
+        assertEquals(3, vm.state.value.currentPage) // (3,4)
+        vm.goNext()
+        assertEquals(5, vm.state.value.currentPage) // (5,6)
+        vm.close()
+    }
+
+    @Test
+    fun coverAloneGoPreviousReturnsToCover() {
+        val vm = ReaderViewModel(
+            "b", 10, FakePageDecoder(),
+            initialPage = 3,
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true, coverAlone = true),
+        )
+        assertEquals(3, vm.state.value.currentPage) // (3,4)
+        vm.goPrevious()
+        assertEquals(1, vm.state.value.currentPage) // (1,2)
+        vm.goPrevious()
+        assertEquals(0, vm.state.value.currentPage) // 표지 단독
+        vm.goPrevious()
+        assertEquals(0, vm.state.value.currentPage) // no-op
+        vm.close()
+    }
+
+    @Test
+    fun coverAloneInitialPageAlignsToOddLeading() {
+        // coverAlone에서 4쪽은 (3,4) 펼침면의 trailing → leading 3으로 정렬.
+        val vm = ReaderViewModel(
+            "b", 10, FakePageDecoder(),
+            initialPage = 4,
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true, coverAlone = true),
+        )
+        assertEquals(3, vm.state.value.currentPage)
+        vm.close()
+    }
+
+    @Test
+    fun setCoverAloneRealignsCurrentPageAndRecordsOverride() {
+        // 두쪽 보기 중 (2,3) 펼침면에서 표지 단독을 켜면 페어링 parity가 바뀌어 2쪽은 (1,2)의 trailing →
+        // leading 1로 재정렬되어야 한다.
+        val vm = ReaderViewModel(
+            "b", 10, FakePageDecoder(),
+            initialPage = 2,
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true),
+        )
+        assertEquals(2, vm.state.value.currentPage)
+        vm.setCoverAlone(true)
+        assertEquals(true, vm.state.value.coverAlone)
+        assertEquals(1, vm.state.value.currentPage)
+        assertEquals(true, vm.overrides.value.coverAlone)
+        vm.close()
+    }
+
+    @Test
+    fun setCoverAloneWhileSinglePageKeepsPageButRecordsOverride() {
+        // 단쪽 보기에서 토글하면 페이지는 그대로(정렬은 두쪽 켤 때 적용)지만 override는 기록.
+        val vm = ReaderViewModel(
+            "b", 10, FakePageDecoder(),
+            initialPage = 5,
+        )
+        vm.setCoverAlone(true)
+        assertEquals(5, vm.state.value.currentPage)
+        assertEquals(true, vm.state.value.coverAlone)
+        assertEquals(true, vm.overrides.value.coverAlone)
+        vm.close()
+    }
+
+    // ── 디코드 해상도: 두쪽 페어는 절반 폭, 단독 슬롯(표지 단독·마지막 한 장)·단쪽은 전체 폭 ──
+
+    @Test
+    fun spreadPairDecodesAtHalfViewportWidth() = runTest {
+        val decoder = FakePageDecoder()
+        // 단쪽 page 0 → 페어 (0,1).
+        val vm = ReaderViewModel(
+            "b", 100, decoder,
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true),
+        )
+        vm.onViewportChanged(800, 1200)
+        runCurrent()
+        assertTrue(decoder.viewports.isNotEmpty())
+        // trigger 한 번은 단일 decodeViewport를 쓰므로 모든 디코드가 절반 폭(400).
+        assertTrue(
+            "페어는 절반 폭 디코드여야 함, 실제: ${decoder.viewports}",
+            decoder.viewports.all { it == 400 to 1200 },
+        )
+        vm.close()
+    }
+
+    @Test
+    fun coverAloneCoverDecodesAtFullViewportWidth() = runTest {
+        val decoder = FakePageDecoder()
+        val vm = ReaderViewModel(
+            "b", 100, decoder,
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true, coverAlone = true),
+        )
+        vm.onViewportChanged(800, 1200)
+        runCurrent()
+        // 표지 단독은 전체 폭 중앙으로 그려지므로 전체 해상도(800)로 디코드.
+        assertTrue(
+            "표지 단독은 전체 폭 디코드여야 함, 실제: ${decoder.viewports}",
+            decoder.viewports.isNotEmpty() && decoder.viewports.all { it == 800 to 1200 },
+        )
+        vm.close()
+    }
+
+    @Test
+    fun lastLonePageDecodesAtFullViewportWidth() = runTest {
+        val decoder = FakePageDecoder()
+        // 홀수 7쪽, 마지막 leading 6 → secondary 없음(단독 슬롯).
+        val vm = ReaderViewModel(
+            "b", 7, decoder,
+            initialPage = 6,
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true),
+        )
+        vm.onViewportChanged(800, 1200)
+        runCurrent()
+        assertTrue(
+            "마지막 단독 한 장은 전체 폭 디코드여야 함, 실제: ${decoder.viewports}",
+            decoder.viewports.isNotEmpty() && decoder.viewports.all { it == 800 to 1200 },
+        )
+        vm.close()
+    }
+
+    @Test
+    fun decodeResolutionSwitchesWhenLeavingCoverAloneCover() = runTest {
+        val decoder = FakePageDecoder()
+        val vm = ReaderViewModel(
+            "b", 100, decoder,
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true, coverAlone = true),
+        )
+        vm.onViewportChanged(800, 1200)
+        runCurrent()
+        assertTrue(decoder.viewports.all { it == 800 to 1200 }) // 표지: 전체 폭
+
+        decoder.viewports.clear()
+        vm.goNext() // 표지 → 페어 (1,2)
+        runCurrent()
+        assertTrue(
+            "페어로 넘어가면 절반 폭으로 전환되어야 함, 실제: ${decoder.viewports}",
+            decoder.viewports.isNotEmpty() && decoder.viewports.all { it == 400 to 1200 },
+        )
+        vm.close()
+    }
+
+    @Test
+    fun singlePageModeDecodesAtFullViewportWidth() = runTest {
+        val decoder = FakePageDecoder()
+        val vm = ReaderViewModel("b", 100, decoder, initialPage = 5)
+        vm.onViewportChanged(800, 1200)
+        runCurrent()
+        assertTrue(
+            "단쪽 모드는 전체 폭 디코드여야 함, 실제: ${decoder.viewports}",
+            decoder.viewports.isNotEmpty() && decoder.viewports.all { it == 800 to 1200 },
+        )
+        vm.close()
+    }
+
+    @Test
     fun orientationDefaultsPortrait() {
         val vm = ReaderViewModel("b", 10, FakePageDecoder())
         assertEquals(ReaderOrientation.Portrait, vm.state.value.orientation)

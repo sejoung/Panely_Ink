@@ -31,6 +31,12 @@ data class BookSettings(
      */
     val spreadMode: Boolean,
     /**
+     * 표지 한 장 단독. v1.1 — 두쪽 보기와 함께만 의미 있음(spreadMode=false면 무시).
+     * true면 0쪽(표지)을 단독으로 보여주고 이후를 (1,2)(3,4)…로 짝지어 인쇄본의 펼침면(facing pages)에
+     * 정렬한다. false면 (0,1)(2,3)… 기존 동작. 책별 저장 — 같은 책/시리즈 propagation에 함께 따라감.
+     */
+    val coverAlone: Boolean,
+    /**
      * 회전 잠금. v1.1 — 두쪽 보기와 한 쌍. 책별 저장. 본문 화면 진입 시 Activity에 requestedOrientation을 적용,
      * 화면을 떠나면 호스트가 원복([io.github.sejoung.panelyink.reader.ui.ReaderOrientationEffect]).
      */
@@ -48,6 +54,7 @@ data class BookSettings(
             trimEnabled = false,
             contrast = ContrastMatrix.IDENTITY,
             spreadMode = false,
+            coverAlone = false,
             orientation = ReaderOrientation.Portrait,
         )
     }
