@@ -54,8 +54,8 @@ fun BookSettingsOverrides.resolve(appPrefs: AppPreferences): BookSettings = Book
     trimEnabled = trimEnabled ?: appPrefs.defaultTrimEnabled,
     contrast = contrast ?: appPrefs.defaultContrast,
     spreadMode = spreadMode ?: appPrefs.defaultSpreadMode,
-    // coverAlone은 전역 prefs 짝이 없는 책별 전용 토글이라 하드코드 false로 합성한다.
+    // coverAlone은 전역 prefs 짝이 없는 책별 전용 토글이라 [BookSettings.DEFAULTS]에서 합성한다.
     // (두쪽 보기를 켠 책에서 사용자가 명시 ON 할 때만 non-null이 됨.)
-    coverAlone = coverAlone ?: false,
+    coverAlone = coverAlone ?: BookSettings.DEFAULTS.coverAlone,
     orientation = orientation ?: appPrefs.defaultOrientation,
 )

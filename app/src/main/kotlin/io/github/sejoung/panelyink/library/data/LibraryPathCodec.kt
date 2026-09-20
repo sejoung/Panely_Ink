@@ -6,6 +6,14 @@ import io.github.sejoung.panelyink.library.model.FolderEntry
 import org.json.JSONArray
 import org.json.JSONObject
 
+/**
+ * 마지막으로 보던 path의 JSON 직렬화.
+ *
+ * ZIP-of-CBZ 가상 폴더는 `nestedBooks` 목록 자체를 저장하지 않고 "가상 폴더" 표식
+ * ([JSON_VIRTUAL])만 남긴다 — decode 결과는 `nestedBooks = emptyList()`(표식 역할)이며,
+ * 복원하는 쪽(LibraryViewModel)이 ZIP을 다시 검사해 실제 목록으로 채우거나 실패 시 path
+ * 꼬리에서 떼어낸다. 표식이 없는 예전 포맷도 그대로 decode된다(일반 폴더로).
+ */
 internal object LibraryPathCodec {
   fun isValid(path: List<FolderEntry>, currentRoots: List<Uri>): Boolean {
     if (path.isEmpty()) return false
@@ -21,6 +29,7 @@ internal object LibraryPathCodec {
         put(JSON_DOC, f.documentUri.toString())
         put(JSON_ROOT, f.rootUri.toString())
         put(JSON_IS_ROOT, f.isRoot)
+        if (f.nestedBooks != null) put(JSON_VIRTUAL, true)
       })
     }
     return arr.toString()
@@ -38,6 +47,7 @@ internal object LibraryPathCodec {
           displayName = o.getString(JSON_NAME),
           rootUri = Uri.parse(o.getString(JSON_ROOT)),
           isRoot = o.getBoolean(JSON_IS_ROOT),
+          nestedBooks = if (o.optBoolean(JSON_VIRTUAL, false)) emptyList() else null,
         )
       }
     }.getOrElse { emptyList() }
@@ -47,4 +57,5 @@ internal object LibraryPathCodec {
   private const val JSON_DOC = "doc"
   private const val JSON_ROOT = "root"
   private const val JSON_IS_ROOT = "isRoot"
+  private const val JSON_VIRTUAL = "virtualZip"
 }

@@ -19,9 +19,24 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // 릴리스 서명 — 키스토어는 저장소에 두지 않고 환경 변수로만 받는다(.github/workflows/release.yml이
+    // GitHub Secrets에서 주입). 변수가 없으면 signingConfig 없이 기존처럼 unsigned APK가 나온다.
+    val releaseKeystorePath = System.getenv("PANELY_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
+    signingConfigs {
+        if (releaseKeystorePath != null) {
+            create("release") {
+                storeFile = file(releaseKeystorePath)
+                storePassword = System.getenv("PANELY_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("PANELY_KEY_ALIAS")
+                keyPassword = System.getenv("PANELY_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

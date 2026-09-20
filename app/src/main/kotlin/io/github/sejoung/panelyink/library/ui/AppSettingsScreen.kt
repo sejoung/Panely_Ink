@@ -3,6 +3,7 @@ package io.github.sejoung.panelyink.library.ui
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,7 +45,7 @@ import io.github.sejoung.panelyink.reader.ui.TrimSegments
 import io.github.sejoung.panelyink.ui.components.DirectionSegments
 import io.github.sejoung.panelyink.ui.components.FullRefreshIntervalSegments
 import io.github.sejoung.panelyink.ui.components.GroupHeader
-import io.github.sejoung.panelyink.ui.components.InvertSegments
+import io.github.sejoung.panelyink.ui.components.OnOffSegments
 import io.github.sejoung.panelyink.ui.components.Segments
 import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
 import io.github.sejoung.panelyink.ui.components.PanelyIconButton
@@ -95,7 +97,10 @@ fun AppSettingsScreen(
   Column(
     modifier = modifier
       .fillMaxSize()
-      .background(PanelyInkColors.Paper),
+      .background(PanelyInkColors.Paper)
+      // 전체 화면 overlay — 헤더 여백 등 빈 영역 탭이 아래 라이브러리 행으로 새지 않도록
+      // root에서 pointer 입력을 받아 둔다(ReaderMenu와 같은 패턴).
+      .pointerInput(Unit) { detectTapGestures { } },
   ) {
     Row(
       modifier = Modifier
@@ -270,7 +275,7 @@ fun AppSettingsScreen(
 
       SectionLabel(stringResource(R.string.settings_invert))
       Spacer(Modifier.height(spacing.space1))
-      InvertSegments(
+      OnOffSegments(
         enabled = current.invertEnabled,
         onSelect = { value ->
           prefs = current.copy(invertEnabled = value)

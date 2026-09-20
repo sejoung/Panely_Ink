@@ -39,10 +39,9 @@ internal fun ReaderRotationLayout(
     ReaderOrientation.Landscape -> physicalOrientation == Configuration.ORIENTATION_PORTRAIT
     ReaderOrientation.Portrait -> physicalOrientation == Configuration.ORIENTATION_LANDSCAPE
   }
-  if (!needsSwRotate) {
-    Box(modifier = Modifier.fillMaxSize()) { content() }
-    return
-  }
+  // 회전 여부와 무관하게 content()의 호출 위치는 하나로 유지한다. 분기마다 다른 call site에서 부르면
+  // needsSwRotate가 바뀔 때 Compose가 하위 트리를 통째로 버리고 새로 만들어, ReaderView 재생성·페이지 캐시
+  // 재디코드·설정 화면 스크롤 위치 초기화가 일어난다(OS가 회전을 받아주는 기기에선 토글 한 번에 두 번).
   Layout(
     modifier = Modifier.fillMaxSize(),
     // 다자식 stacking이 Box와 동일하도록 단일 Box로 래핑 — 측정/배치를 1개 placeable로 다룬다.
@@ -50,6 +49,10 @@ internal fun ReaderRotationLayout(
   ) { measurables, constraints ->
     val pw = constraints.maxWidth
     val ph = constraints.maxHeight
+    if (!needsSwRotate) {
+      val placeable = measurables.first().measure(Constraints.fixed(pw, ph))
+      return@Layout layout(pw, ph) { placeable.place(0, 0) }
+    }
     // 자식은 회전후 logical 차원으로 측정 — landscape는 (ph × pw), 즉 차원 swap.
     val placeable = measurables.first().measure(Constraints.fixed(ph, pw))
     layout(pw, ph) {

@@ -10,6 +10,7 @@ import io.github.sejoung.panelyink.core.render.ContrastMatrix
 import io.github.sejoung.panelyink.reader.model.BookSettings
 import io.github.sejoung.panelyink.reader.model.BookSettingsOverrides
 import io.github.sejoung.panelyink.reader.session.PageDecoder
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -145,10 +146,13 @@ class ReaderViewModel(
     // 풀리프레시 정책 — N페이지마다 generation++ → ReaderView가 검정 한 프레임으로
     // e-ink 컨트롤러를 풀리프레시 모드로 끌어내림(잔상 누적 방어선).
     // interval=0이면 자동 트리거 비활성(사용자 명시 선택).
-    // spread 모드에서는 한 번의 전환에 2쪽이 동시에 바뀌므로 카운터 가중 2배.
+    // spread 페어로 넘어갈 때는 2쪽이 동시에 바뀌므로 카운터 가중 2배. 단독 슬롯(표지 단독·홀수
+    // 마지막 한 장)은 한 쪽만 바뀌므로 1.
     val interval = current.fullRefreshInterval
     val triggerFull = if (interval > 0) {
-      pagesSinceFullRefresh += if (current.spreadMode) 2 else 1
+      val destinationHasSecondary =
+        spreadHasSecondary(current.spreadMode, current.coverAlone, clamped, pageCount)
+      pagesSinceFullRefresh += if (destinationHasSecondary) 2 else 1
       (pagesSinceFullRefresh >= interval).also { hit ->
         if (hit) pagesSinceFullRefresh = 0
       }
@@ -272,7 +276,8 @@ class ReaderViewModel(
       preloadWindow = if (pageChanged) preloadWindowFor(newPage) else current.preloadWindow,
     )
     _overrides.value = _overrides.value.copy(coverAlone = enabled)
-    triggerPreload()
+    // 단쪽 모드에서는 값만 저장 — 보이는 페이지도 디코드 해상도도 그대로라 프리로드를 다시 돌 이유가 없다.
+    if (current.spreadMode) triggerPreload()
   }
 
   /**
@@ -319,9 +324,7 @@ class ReaderViewModel(
     //
     // 단, 표지 단독(coverAlone && 0쪽) 또는 홀수-마지막 한 장은 secondary가 없다 — 이때는 그 한 장이
     // 전체 폭 중앙으로 그려지므로(ReaderView.drawSpread) secondary를 디코드하지 않고 전체 해상도로 디코드한다.
-    val hasSecondary = s.spreadMode &&
-      !(s.coverAlone && s.currentPage == 0) &&
-      s.currentPage + 1 <= pageCount - 1
+    val hasSecondary = s.hasSecondary(pageCount)
     val decodeCenters = if (hasSecondary) {
       intArrayOf(s.currentPage, s.currentPage + 1)
     } else {
@@ -344,7 +347,7 @@ class ReaderViewModel(
             // 새 페이지를 캐시에 넣기 직전에 visible 페이지의 LRU 위치를 갱신해 evict 보호.
             // 풀리프레시 시퀀스 중에는 onDraw가 pageBitmap을 호출하지 않아 LRU touch가 자연 발생 안 함.
             decoder.keepWarm(decodeCenters)
-            decoder.decode(idx, decodeViewportW, decodeViewportH, s.trimEnabled)
+            decodeGuarded(idx, decodeViewportW, decodeViewportH, s.trimEnabled)
           }
         }
       } // coroutineScope가 모든 자식 launch를 await — 둘 다 cache에 들어간 후에야 다음 줄로 넘어감.
@@ -358,9 +361,30 @@ class ReaderViewModel(
         if (idx in visibleSet) continue
         if (generation != preloadGeneration || !currentCoroutineContext().isActive) return@launch
         decoder.keepWarm(decodeCenters)
-        decoder.decode(idx, decodeViewportW, decodeViewportH, s.trimEnabled)
+        decodeGuarded(idx, decodeViewportW, decodeViewportH, s.trimEnabled)
         if (generation != preloadGeneration || !currentCoroutineContext().isActive) return@launch
         _decoded.emit(idx)
+      }
+    }
+  }
+
+  /**
+   * 디코드 1장을 페이지 단위 실패로 격리한다. [scope]에는 CoroutineExceptionHandler가 없어 예외가
+   * 새어 나가면 프로세스가 죽는다 — 손상/0바이트 이미지 한 장(또는 SD 분리·OOM)이 ±3 프리로드 범위에
+   * 들어오는 순간 앱이 죽고, 위치가 저장돼 있어 책을 다시 열 때마다 같은 자리에서 또 죽었다.
+   * 실패한 페이지는 [ReaderState.failedPages]에 기록해 ReaderView가 빈 화면 대신 안내를 그리게 한다.
+   */
+  private suspend fun decodeGuarded(idx: Int, viewportW: Int, viewportH: Int, trimEnabled: Boolean) {
+    try {
+      decoder.decode(idx, viewportW, viewportH, trimEnabled)
+      if (idx in _state.value.failedPages) {
+        _state.value = _state.value.copy(failedPages = _state.value.failedPages - idx)
+      }
+    } catch (cancel: CancellationException) {
+      throw cancel
+    } catch (e: Exception) {
+      if (idx !in _state.value.failedPages) {
+        _state.value = _state.value.copy(failedPages = _state.value.failedPages + idx)
       }
     }
   }
@@ -416,7 +440,27 @@ data class ReaderState(
    * 기본값 [ReaderOrientation.Portrait] = v1.0과 동일한 시각 동작.
    */
   val orientation: ReaderOrientation = ReaderOrientation.Portrait,
-)
+  /** 디코드에 실패한 페이지(손상 이미지·IO 오류). ReaderView가 빈 화면 대신 안내 문구를 그린다. */
+  val failedPages: Set<Int> = emptySet(),
+) {
+  /** 현재 슬롯에 secondary(`currentPage + 1`)가 함께 보이는지. [spreadHasSecondary] 참고. */
+  fun hasSecondary(pageCount: Int): Boolean =
+    spreadHasSecondary(spreadMode, coverAlone, currentPage, pageCount)
+
+  /** 화면에 보이는 마지막 페이지 인덱스 — 두쪽 페어면 secondary, 아니면 currentPage. */
+  fun lastVisiblePage(pageCount: Int): Int =
+    if (hasSecondary(pageCount)) currentPage + 1 else currentPage
+}
+
+/**
+ * 두쪽 보기에서 [leading] 슬롯이 페어(leading, leading+1)로 그려지는지의 단일 판정.
+ * false면 단독 슬롯 — 단쪽 모드, 표지 한 장 단독(coverAlone && 0쪽), secondary가 책 범위 밖인 홀수 마지막 한 장.
+ *
+ * 디코드 해상도([ReaderViewModel]의 프리로드)와 그리는 레이아웃(ReaderView.drawSpread),
+ * 마지막 페이지/북마크 판정이 모두 이 함수 하나를 쓴다 — 복사본이 어긋나면 해상도와 레이아웃이 따로 논다.
+ */
+fun spreadHasSecondary(spreadMode: Boolean, coverAlone: Boolean, leading: Int, pageCount: Int): Boolean =
+  spreadMode && !(coverAlone && leading == 0) && leading + 1 <= pageCount - 1
 
 /**
  * 여러 중심점 중 최단 거리 기준으로 정렬. spread 모드처럼 화면에 동시에 보이는 페이지가 2개일 때

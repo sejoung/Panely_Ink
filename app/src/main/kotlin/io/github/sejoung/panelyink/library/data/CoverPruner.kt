@@ -12,7 +12,7 @@ import java.io.File
  *
  * 두 가지 정리 모드:
  * - [CoverPruner.prune]: 자동 + 사용자 명시. orphan(메타 없는 파일) 정리 + LRU(사이즈 초과 시
- *   가장 오래된 메타+파일부터 삭제)
+ *   마지막 사용(파일 mtime)이 가장 오래된 메타+파일부터 삭제)
  * - [CoverPruner.clearAll]: 사용자 명시 "표지 캐시 비우기". 디스크 파일 + 메타(FAILED 포함) 모두
  *   삭제 → 다음 라이브러리 진입에서 모든 책 표지 재추출. FAILED 메타가 같이 삭제되니
  *   깨진 책도 재시도됨.
@@ -33,10 +33,13 @@ object CoverPruner {
   /**
    * 자동/명시 LRU 정리. orphan + 사이즈 LRU 둘 다.
    *
-   * 1. 디스크 파일 list + 메타 OK 목록 조회
+   * 1. 디스크 파일 list → 메타 OK 목록 조회 (**이 순서 고정**: 표지 저장 쪽이 "메타 OK →
+   *    파일" 순으로 쓰므로, list에 잡힌 파일의 메타는 반드시 그 뒤에 읽는 메타 목록에 있다.
+   *    순서가 바뀌면 방금 저장된 표지가 orphan으로 오판돼 삭제된다)
    * 2. orphan(파일 nameWithoutExtension이 메타 셋에 없음) 삭제
    * 3. 남은 파일 사이즈 합 ≤ maxBytes면 종료
-   * 4. 초과면 메타 LRU 순(가장 오래된 것 먼저)으로 메타+파일 삭제
+   * 4. 초과면 파일 mtime(=[CoverCache.loadBitmap]이 갱신하는 마지막 사용 시각) 오름차순으로
+   *    메타+파일 삭제 — 지금 화면에 보이는 폴더의 표지는 가장 최근에 읽혀 마지막 후보
    *
    * @return 삭제된 파일 수 (orphan + LRU 합계).
    */
@@ -76,16 +79,19 @@ object CoverPruner {
       return@withContext deleted
     }
 
-    // 3단계: LRU 순 (오래된 것 먼저) 메타+파일 삭제 — 한도 미만 될 때까지
-    for (meta in metas) {
+    // 3단계: LRU 순 (마지막 사용이 오래된 것 먼저) 메타+파일 삭제 — 한도 미만 될 때까지.
+    // extracted_at(추출 시각) 순은 FIFO라 자주 보는 오래된 책 표지가 먼저 날아간다.
+    val lruFiles = remaining
+      .map { it to it.lastModified() }
+      .sortedBy { it.second }
+    for ((file, _) in lruFiles) {
       if (total <= maxBytes) break
-      val file = File(dir, "${meta.bookId}.$EXT")
-      val size = if (file.exists()) file.length() else 0L
-      if (file.exists() && file.delete()) {
+      val size = file.length()
+      if (file.delete()) {
         deleted++
         total -= size
       }
-      coverMetaRepo.delete(meta.bookId)
+      coverMetaRepo.delete(file.nameWithoutExtension)
     }
 
     Log.d(

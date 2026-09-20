@@ -7,6 +7,7 @@ import android.util.Log
 import io.github.sejoung.panelyink.core.sort.NaturalOrderComparator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.apache.commons.compress.archivers.zip.UnicodePathExtraField
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
 import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream
 import org.apache.commons.compress.archivers.zip.ZipFile
@@ -15,8 +16,14 @@ import java.io.Closeable
 import java.io.FileInputStream
 import java.io.IOException
 import java.io.InputStream
+import java.nio.ByteBuffer
 import java.nio.channels.SeekableByteChannel
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.Charset
+import java.nio.charset.CodingErrorAction
+import java.util.Collections
 import java.util.concurrent.LinkedBlockingDeque
+import java.util.zip.CRC32
 
 /**
  * CBZ/ZIP 아카이브를 random-access로 연다.
@@ -37,9 +44,15 @@ import java.util.concurrent.LinkedBlockingDeque
  * **병렬 read (v1.1):** Commons Compress `ZipFile`은 thread-safe가 아니다 — 단일
  * [SeekableByteChannel]을 모든 entry InputStream이 공유하므로 두 InputStream에서 동시 read 시
  * 채널 position이 손상된다. 두쪽 보기에서 두 페이지를 병렬로 디코드하려면 독립된 [ZipFile] 인스턴스가
- * 필요하다. [open]의 [PARALLEL_READERS] 매개변수만큼 [ParcelFileDescriptor.dup]으로 FD를 복제해
- * 각각의 [ZipFile]을 만들어 풀에 넣어둔다. [openPage]는 풀에서 [Reader]를 빌려 [InputStream]을 반환하고,
- * 그 [InputStream]이 close 되면 풀로 돌려보낸다.
+ * 필요하다. [open]의 `parallelReaders` 매개변수만큼 Uri/File을 **다시 열어** 각각의 [ZipFile]을 만들어
+ * 풀에 넣어둔다. ([ParcelFileDescriptor.dup]은 쓰면 안 된다 — dup된 FD는 같은 open file description을
+ * 가리켜 file offset을 공유하므로, `setIgnoreLocalFileHeader(true)`에서 entry 첫 open 시 일어나는
+ * position()+read가 reader끼리 섞여 잘못된 dataOffset이 영구 저장된다.)
+ * [openPage]는 풀에서 [Reader]를 빌려 [InputStream]을 반환하고, 그 [InputStream]이 close 되면 풀로 돌려보낸다.
+ *
+ * **entry 식별:** 페이지는 이름이 아니라 central directory 순번([CbzPage.entryIndex])으로 찾는다.
+ * UTF-8 플래그 없는 zip(CP949 등)이나 중복 이름 zip에서 `getEntry(name)`은 첫 매치만 돌려줘
+ * 서로 다른 페이지가 같은 이미지로 보이기 때문. 모든 reader는 같은 central directory를 파싱하므로 순번이 같다.
  *
  * 표지 추출/라이브러리 스캔처럼 병렬이 필요 없는 경로는 `parallelReaders=1`로 기본값.
  * 본문 세션만 2를 요청해 추가 ZipFile 빌드 비용(중앙 디렉토리 1회 더 파싱, 수십~수백 KB)을 감수.
@@ -53,6 +66,12 @@ class CbzArchive private constructor(
      * 단일 권 + nested = 혼합 케이스는 1차에선 [pages] 우선(일반 reader).
      */
     val nestedArchives: List<NestedArchiveEntry>,
+    /**
+     * entry 이름 → central directory 순번. 이름으로 들어오는 조회([openNestedEntry] 등) 전용.
+     * 중복 이름은 첫 entry 우선. 디코드 보정된 이름([decodeEntryName])과 Commons Compress 원래 이름
+     * 둘 다 등록 — 이전 버전이 저장해 둔 nested entry 이름(깨진 이름)으로도 계속 열리게.
+     */
+    private val entryIndexByName: Map<String, Int>,
 ) : Closeable {
 
     private val readerPool: LinkedBlockingDeque<Reader> =
@@ -67,7 +86,9 @@ class CbzArchive private constructor(
 
     fun openPage(pageIndex: Int): InputStream {
         require(pageIndex in pages.indices) { "page $pageIndex out of bounds [${pages.size}]" }
-        return openEntryByName(pages[pageIndex].name)
+        val page = pages[pageIndex]
+        // 이름이 아니라 순번으로 — 중복/깨진 이름에서도 정확히 그 entry를 연다.
+        return if (page.entryIndex >= 0) openEntryByIndex(page.entryIndex) else openEntryByName(page.name)
     }
 
     /** ZIP-of-CBZ에서 nested entry를 OutputStream 또는 file로 추출하기 위한 InputStream. */
@@ -76,14 +97,11 @@ class CbzArchive private constructor(
     fun nestedEntrySize(entryName: String): Long {
         nestedArchives.firstOrNull { it.entryName == entryName }?.let { return it.size }
         pages.firstOrNull { it.name == entryName }?.let { return it.size }
-        // Fallback: 캐시된 메타에 없으면 ZipFile에서 직접 조회 (희귀 케이스).
-        val reader = borrowReader()
-        try {
-            return reader.zipFile.getEntry(entryName)?.size
-                ?: throw IOException("entry not found: $entryName")
-        } finally {
-            returnReader(reader)
-        }
+        // Fallback: 캐시된 메타에 없으면 entry 목록에서 직접 조회 (희귀 케이스).
+        // entry 메타는 open 이후 불변이라 reader를 빌리지 않고 읽어도 안전.
+        val index = entryIndexByName[entryName] ?: throw IOException("entry not found: $entryName")
+        return readers[0].entries.getOrNull(index)?.size
+            ?: throw IOException("entry not found: $entryName")
     }
 
     /**
@@ -100,7 +118,8 @@ class CbzArchive private constructor(
         if (closed) throw IOException("archive closed")
         val reader = borrowReader()
         try {
-            val nestedEntry = reader.zipFile.getEntry(entryName) ?: return null
+            val nestedEntry = entryIndexByName[entryName]?.let { reader.entries.getOrNull(it) }
+                ?: return null
             return reader.zipFile.getInputStream(nestedEntry).use { nestedStream ->
                 ZipArchiveInputStream(nestedStream).use { zis ->
                     var bytes: ByteArray? = null
@@ -147,10 +166,15 @@ class CbzArchive private constructor(
     }
 
     private fun openEntryByName(name: String): InputStream {
+        val index = entryIndexByName[name] ?: throw IOException("entry not found: $name")
+        return openEntryByIndex(index)
+    }
+
+    private fun openEntryByIndex(entryIndex: Int): InputStream {
         val reader = borrowReader()
         return try {
-            val entry = reader.zipFile.getEntry(name)
-                ?: throw IOException("entry not found: $name")
+            val entry = reader.entries.getOrNull(entryIndex)
+                ?: throw IOException("entry not found: #$entryIndex")
             PooledInputStream(reader.zipFile.getInputStream(entry), reader, ::returnReader)
         } catch (t: Throwable) {
             returnReader(reader)
@@ -170,12 +194,15 @@ class CbzArchive private constructor(
     }
 
     /**
-     * 풀 항목 1개 — 독립된 PFD/Channel/ZipFile 3-tuple. 각 Reader가 자기 채널만 만지므로 thread-safe.
+     * 풀 항목 1개 — 독립적으로 연 PFD/Channel/ZipFile 3-tuple. 각 Reader가 자기 채널(자기 file offset)만
+     * 만지므로 thread-safe. [entries]는 central directory 순서 그대로 — [CbzPage.entryIndex]의 기준.
      */
     private class Reader(
         val zipFile: ZipFile,
+        val entries: List<ZipArchiveEntry>,
         val channel: SeekableByteChannel,
-        val pfd: ParcelFileDescriptor,
+        /** 채널의 원본 핸들 — 실제로는 [ParcelFileDescriptor]. (JVM 테스트에서는 채널 자신.) */
+        val pfd: Closeable,
     )
 
     /**
@@ -225,13 +252,9 @@ class CbzArchive private constructor(
             parallelReaders: Int = 1,
         ): CbzArchive = withContext(Dispatchers.IO) {
             require(parallelReaders >= 1) { "parallelReaders must be >= 1, got $parallelReaders" }
-            val pfd = context.contentResolver.openFileDescriptor(uri, "r")
-                ?: throw IOException("cannot open $uri")
-            try {
-                openInternal(pfd, parallelReaders)
-            } catch (t: Throwable) {
-                runCatching { pfd.close() }
-                throw t
+            openInternal(parallelReaders) {
+                context.contentResolver.openFileDescriptor(uri, "r")
+                    ?: throw IOException("cannot open $uri")
             }
         }
 
@@ -244,99 +267,217 @@ class CbzArchive private constructor(
             parallelReaders: Int = 1,
         ): CbzArchive = withContext(Dispatchers.IO) {
             require(parallelReaders >= 1) { "parallelReaders must be >= 1, got $parallelReaders" }
-            val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+            openInternal(parallelReaders) {
+                ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+            }
+        }
+
+        /**
+         * JVM 단위 테스트용 — android PFD/Log 없이 채널에서 직접 연다. 채널 1개 = reader 1개.
+         * 채널 소유권은 반환된 [CbzArchive]로 넘어간다([close]에서 닫힘).
+         */
+        internal fun openChannels(channels: List<SeekableByteChannel>): CbzArchive {
+            require(channels.isNotEmpty()) { "channels must not be empty" }
+            val readers = mutableListOf<Reader>()
             try {
-                openInternal(pfd, parallelReaders)
+                channels.forEach { readers += newReader(it, it) }
+                return assemble(readers)
+            } catch (t: Throwable) {
+                readers.forEach { runCatching { it.zipFile.close() } }
+                channels.forEach { runCatching { it.close() } }
+                throw t
+            }
+        }
+
+        /**
+         * [openPfd]를 reader 수만큼 호출해 **서로 독립된** FD를 연다. `dup()`은 file offset을 공유하므로
+         * 쓰지 않는다(클래스 KDoc 참고).
+         */
+        private fun openInternal(
+            parallelReaders: Int,
+            openPfd: () -> ParcelFileDescriptor,
+        ): CbzArchive {
+            val t0 = System.currentTimeMillis()
+            val readers = mutableListOf<Reader>()
+            try {
+                val primary = openReader(openPfd, logSize = true)
+                readers += primary
+
+                // 추가 reader는 병렬 디코드 최적화일 뿐 — 다시 열기에 실패하거나(provider가 거부 등)
+                // 그 사이 파일이 바뀌어 central directory가 달라졌으면 버리고 있는 reader만으로 진행.
+                repeat(parallelReaders - 1) {
+                    val extra = try {
+                        openReader(openPfd, logSize = false)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "extra reader open failed, continuing with ${readers.size}", e)
+                        null
+                    }
+                    if (extra != null) {
+                        if (extra.entries.size == primary.entries.size) {
+                            readers += extra
+                        } else {
+                            Log.w(
+                                TAG,
+                                "extra reader entry count mismatch " +
+                                    "(${extra.entries.size} != ${primary.entries.size}), dropped",
+                            )
+                            closeReader(extra)
+                        }
+                    }
+                }
+
+                val archive = assemble(readers)
+                Log.d(
+                    TAG,
+                    "open total: ${archive.pages.size} pages, ${archive.nestedArchives.size} nested, " +
+                        "readers=${readers.size}/$parallelReaders in ${System.currentTimeMillis() - t0}ms",
+                )
+                return archive
+            } catch (t: Throwable) {
+                readers.forEach { closeReader(it) }
+                throw t
+            }
+        }
+
+        private fun openReader(openPfd: () -> ParcelFileDescriptor, logSize: Boolean): Reader {
+            val pfd = openPfd()
+            try {
+                val channel = FileInputStream(pfd.fileDescriptor).channel
+                if (logSize) {
+                    Log.d(TAG, "channel size=${runCatching { channel.size() }.getOrDefault(-1L)} bytes, statSize=${pfd.statSize}")
+                }
+                return newReader(channel, pfd)
             } catch (t: Throwable) {
                 runCatching { pfd.close() }
                 throw t
             }
         }
 
-        private fun openInternal(primaryPfd: ParcelFileDescriptor, parallelReaders: Int): CbzArchive {
-            val t0 = System.currentTimeMillis()
-            val pfds = mutableListOf<ParcelFileDescriptor>(primaryPfd)
-            val channels = mutableListOf<SeekableByteChannel>()
-            val zipFiles = mutableListOf<ZipFile>()
-            try {
-                val firstChannel = FileInputStream(primaryPfd.fileDescriptor).channel
-                channels += firstChannel
-                Log.d(TAG, "channel size=${runCatching { firstChannel.size() }.getOrDefault(-1L)} bytes, statSize=${primaryPfd.statSize}")
-                zipFiles += buildZipFile(firstChannel)
+        private fun newReader(channel: SeekableByteChannel, handle: Closeable): Reader {
+            val zipFile = buildZipFile(channel)
+            return Reader(zipFile, Collections.list(zipFile.entries), channel, handle)
+        }
 
-                // Primary 1개 + dup된 (parallelReaders - 1)개. 각 dup은 독립 FD라 read position이 분리됨.
-                repeat(parallelReaders - 1) {
-                    val dup = primaryPfd.dup()
-                    pfds += dup
-                    val ch = FileInputStream(dup.fileDescriptor).channel
-                    channels += ch
-                    zipFiles += buildZipFile(ch)
-                }
+        private fun closeReader(reader: Reader) {
+            runCatching { reader.zipFile.close() }
+            runCatching { reader.channel.close() }
+            runCatching { reader.pfd.close() }
+        }
 
-                val (pages, nestedArchives) = enumerateEntries(zipFiles[0])
-                val readers = zipFiles.mapIndexed { i, zf -> Reader(zf, channels[i], pfds[i]) }
-                Log.d(
-                    TAG,
-                    "open total: ${pages.size} pages, ${nestedArchives.size} nested, " +
-                        "readers=$parallelReaders in ${System.currentTimeMillis() - t0}ms",
-                )
-                return CbzArchive(readers, pages, nestedArchives)
-            } catch (t: Throwable) {
-                zipFiles.forEach { runCatching { it.close() } }
-                channels.forEach { runCatching { it.close() } }
-                pfds.forEach { runCatching { it.close() } }
-                throw t
-            }
+        private fun assemble(readers: List<Reader>): CbzArchive {
+            val enumerated = enumerateEntries(readers[0].entries)
+            return CbzArchive(
+                readers.toList(),
+                enumerated.pages,
+                enumerated.nestedArchives,
+                enumerated.entryIndexByName,
+            )
         }
 
         /**
-         * 1차: LFH 검증 스킵으로 빠르게. 표준 CBZ는 이걸로 충분. 실패 시 채널 position을 0으로 되돌리고
-         * LFH 검증 켜고 재시도 (손상 zip 케이스).
+         * LFH 검증 스킵으로 빠르게 연다(central directory만 파싱). 표준 CBZ는 이걸로 충분.
+         *
+         * 실패 시 재시도하지 않는다 — 채널을 넘겨준 경우 Builder가 생성자 실패 시 그 채널을 닫아버려
+         * 같은 채널로의 재시도는 항상 [java.nio.channels.ClosedChannelException]이 되고, 사용자에게
+         * 보여줄 진짜 원인만 가린다. (LFH 검증을 켠다고 더 관대해지지도 않는다 — central directory
+         * 파싱은 동일.) 원래 예외를 그대로 전파.
          */
-        private fun buildZipFile(channel: SeekableByteChannel): ZipFile {
-            return try {
-                ZipFile.builder()
-                    .setSeekableByteChannel(channel)
-                    .setIgnoreLocalFileHeader(true)
-                    .get()
-            } catch (firstAttempt: Throwable) {
-                Log.w(TAG, "fast open failed, retrying with LFH validation", firstAttempt)
-                runCatching { channel.position(0) }
-                ZipFile.builder()
-                    .setSeekableByteChannel(channel)
-                    .setIgnoreLocalFileHeader(false)
-                    .get()
-            }
-        }
+        private fun buildZipFile(channel: SeekableByteChannel): ZipFile =
+            ZipFile.builder()
+                .setSeekableByteChannel(channel)
+                .setIgnoreLocalFileHeader(true)
+                .get()
 
-        private fun enumerateEntries(zipFile: ZipFile): Pair<List<CbzPage>, List<NestedArchiveEntry>> {
+        private class Enumerated(
+            val pages: List<CbzPage>,
+            val nestedArchives: List<NestedArchiveEntry>,
+            val entryIndexByName: Map<String, Int>,
+        )
+
+        private fun enumerateEntries(entries: List<ZipArchiveEntry>): Enumerated {
             val pageList = mutableListOf<CbzPage>()
             val nestedList = mutableListOf<NestedArchiveEntry>()
-            val entries = zipFile.entries
-            while (entries.hasMoreElements()) {
-                val entry = entries.nextElement()
-                if (entry.isDirectory) continue
+            val indexByName = HashMap<String, Int>(entries.size * 2)
+            val legacyNames = ArrayList<Pair<String, Int>>()
+            entries.forEachIndexed { index, entry ->
+                val name = decodeEntryName(entry)
+                indexByName.putIfAbsent(name, index)
+                if (name != entry.name) legacyNames += entry.name to index
+                if (entry.isDirectory) return@forEachIndexed
                 when {
-                    entry.name.isImageEntry() -> {
+                    name.isImageEntry() -> {
                         pageList += CbzPage(
-                            name = entry.name,
+                            name = name,
                             size = entry.size.coerceAtLeast(0),
+                            entryIndex = index,
                         )
                     }
-                    entry.name.isNestedArchiveEntry() -> {
+                    name.isNestedArchiveEntry() -> {
                         nestedList += NestedArchiveEntry(
+                            // entryName은 bookId(`uri#entryName`)의 일부 — 진행 위치/북마크/표지 키가 여기에 걸려 있다.
+                            // 보정된 이름으로 바꾸면 구형 인코딩 ZIP의 기존 기록이 전부 고아가 되므로 식별자는
+                            // Commons Compress 원래 이름을 유지하고, 보정된 이름은 표시/정렬에만 쓴다.
                             entryName = entry.name,
-                            displayName = entry.name.substringAfterLast('/'),
+                            displayName = name.substringAfterLast('/'),
                             size = entry.size.coerceAtLeast(0),
                         )
                     }
                 }
             }
+            // 이전 버전이 저장한 깨진 이름도 계속 조회되게 — 보정된 이름을 가리지 않도록 나중에 등록.
+            legacyNames.forEach { (legacy, index) -> indexByName.putIfAbsent(legacy, index) }
             val sortedPages = pageList.sortedWith(compareBy(NaturalOrderComparator) { it.name })
             val sortedNested = nestedList.sortedWith(
                 compareBy(NaturalOrderComparator) { it.displayName },
             )
-            return sortedPages to sortedNested
+            return Enumerated(sortedPages, sortedNested, indexByName)
+        }
+
+        /**
+         * entry 이름 디코드 보정. UTF-8 플래그(EFS)가 없는 entry를 Commons Compress는 UTF-8로
+         * (깨진 바이트는 `?`로 치환) 디코드해, CP949 zip의 `상/001.jpg`·`하/001.jpg`가 둘 다
+         * `??/001.jpg`가 되고 자연 정렬도 무너진다. raw 바이트로 다시 디코드한다:
+         * Info-ZIP Unicode Path extra → strict UTF-8 → legacy charset(CP949 → Shift_JIS) 순.
+         * 전부 실패하면 Commons Compress 이름 그대로.
+         */
+        internal fun decodeEntryName(entry: ZipArchiveEntry): String {
+            if (entry.generalPurposeBit.usesUTF8ForNames()) return entry.name
+            val raw = entry.rawName ?: return entry.name
+            // `setIgnoreLocalFileHeader(true)`에서는 Commons Compress가 Unicode extra를 적용하지 않는다.
+            (entry.getExtraField(UnicodePathExtraField.UPATH_ID) as? UnicodePathExtraField)?.let { extra ->
+                val unicodeName = extra.unicodeName
+                if (unicodeName != null && extra.nameCRC32 == CRC32().apply { update(raw) }.value) {
+                    return String(unicodeName, Charsets.UTF_8)
+                }
+            }
+            decodeStrict(raw, Charsets.UTF_8)?.let { return it }
+            for (charset in LEGACY_NAME_CHARSETS) {
+                decodeStrict(raw, charset)?.let { return it }
+            }
+            return entry.name
+        }
+
+        private fun decodeStrict(bytes: ByteArray, charset: Charset): String? = try {
+            charset.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(bytes))
+                .toString()
+        } catch (e: CharacterCodingException) {
+            null
+        }
+
+        /**
+         * UTF-8이 아닌 이름의 fallback 후보 — 한국어(CP949) 우선, 다음 일본어(Shift_JIS).
+         * 기기(ICU)에 따라 charset 별칭이 달라 후보 중 지원되는 첫 번째를 쓴다.
+         */
+        private val LEGACY_NAME_CHARSETS: List<Charset> by lazy {
+            listOf(
+                listOf("x-windows-949", "MS949", "windows-949", "EUC-KR"),
+                listOf("windows-31j", "Shift_JIS"),
+            ).mapNotNull { aliases ->
+                aliases.firstNotNullOfOrNull { runCatching { Charset.forName(it) }.getOrNull() }
+            }
         }
 
         private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "bmp", "gif")

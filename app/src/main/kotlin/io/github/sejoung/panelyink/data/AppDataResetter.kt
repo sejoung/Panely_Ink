@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import androidx.core.content.edit
+import io.github.sejoung.panelyink.core.archive.NestedZipExtractor
 import io.github.sejoung.panelyink.data.db.PanelyDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -22,7 +23,8 @@ import java.io.File
  *    삭제했지만, 외부 백업 복원 등으로 잔존할 가능성 대비해 defensive하게 같이 삭제.
  * 3. Room DB — `clearAllTables()`로 position/book_settings/bookmark/cover_meta/book_index 모든 행 삭제.
  *    스키마는 보존(테이블 자체는 유지).
- * 4. 디스크 캐시 — `filesDir/covers` 디렉토리 재귀 삭제.
+ * 4. 디스크 캐시 — `filesDir/covers` 디렉토리 재귀 삭제 + `cacheDir/nested`
+ *    (ZIP-of-CBZ 임시 추출 파일, [NestedZipExtractor.clearAll]).
  *
  * 호출 후 호출자(LibraryViewModel)는 state를 [io.github.sejoung.panelyink.library.LibraryState]
  * 기본값으로 갱신해야 — 이 클래스는 state 자체를 건드리지 않음.
@@ -76,6 +78,11 @@ object AppDataResetter {
         runCatching {
             File(app.filesDir, COVERS_DIR).deleteRecursively()
         }.onFailure { Log.w(TAG, "covers cleanup failed", it) }
+        // ZIP-of-CBZ 추출 캐시 — 수백 MB까지 커질 수 있고, 남겨두면 "전체 초기화" 후에도
+        // 이전 책 내용이 디스크에 남는다.
+        runCatching {
+            NestedZipExtractor.clearAll(app)
+        }.onFailure { Log.w(TAG, "nested cache cleanup failed", it) }
 
         Log.d(TAG, "resetAll done")
     }

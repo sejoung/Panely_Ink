@@ -78,6 +78,20 @@ class BookIndexRepositoryTest {
     assertEquals(emptyList<IndexedBookRef>(), repo.loadByIds(setOf(removed.bookId.value)))
   }
 
+  @Test
+  fun replaceKnownBooksWithEmptyListKeepsExistingRows() = runBlocking {
+    // 빈 목록 = 스캔 실패(SD 언마운트 등)일 수 있어 인덱스를 통째로 지우면 안 된다.
+    val root = Uri.parse("content://root")
+    val kept = book(root = root, uri = "content://root/kept.cbz", name = "kept.cbz")
+    repo.upsertAll(
+      listOf(IndexedBookRef(book = kept, siblings = listOf(kept), groupKey = "content://root")),
+    )
+
+    repo.replaceKnownBooks(emptyList())
+
+    assertEquals(1, repo.loadByIds(setOf(kept.bookId.value)).size)
+  }
+
   private fun book(root: Uri, uri: String, name: String): BookRef =
     BookRef(
       documentUri = Uri.parse(uri),

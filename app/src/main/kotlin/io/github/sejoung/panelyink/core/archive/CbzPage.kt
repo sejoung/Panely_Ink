@@ -4,4 +4,9 @@ package io.github.sejoung.panelyink.core.archive
 data class CbzPage(
     val name: String,
     val size: Long,
+    /**
+     * central directory 안 entry 순번 — [CbzArchive.openPage]가 이름 대신 이걸로 entry를 찾는다.
+     * 이름이 중복되거나(깨진 인코딩 포함) 해도 정확히 이 페이지의 entry가 열린다. -1이면 이름으로 조회.
+     */
+    val entryIndex: Int = -1,
 )

@@ -112,7 +112,13 @@ internal fun ReaderOverlayLayer(
       onSpreadModeChange = viewModel::setSpreadMode,
       onCoverAloneChange = viewModel::setCoverAlone,
       onOrientationChange = viewModel::setOrientation,
-      onTriggerFullRefresh = viewModel::triggerFullRefresh,
+      // 설정 화면은 본문을 불투명하게 덮는다 — 열어 둔 채 깜빡이면 시퀀스가 화면 뒤에서 재생되어
+      // 패널에 큰 픽셀 변화가 도달하지 않는다. 본문으로 돌아간 뒤 트리거.
+      onTriggerFullRefresh = {
+        onCloseSettings()
+        onCloseMenu()
+        viewModel.triggerFullRefresh()
+      },
       onBack = {
         onCloseSettings()
         onCloseMenu()

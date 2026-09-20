@@ -28,14 +28,26 @@ object CoverCache {
     return File(dir, "$bookId.$EXT")
   }
 
-  /** 디스크에 표지가 있으면 디코드해서 반환, 없거나 깨졌으면 null. */
+  /**
+   * 디스크에 표지가 있으면 디코드해서 반환, 없거나 깨졌으면 null.
+   *
+   * hit 시 파일 mtime을 현재 시각으로 갱신 — [CoverPruner]가 mtime을 "마지막 사용 시각"으로
+   * 보고 LRU 정리한다(메타의 extracted_at은 추출 시각이라 FIFO가 됨).
+   */
   fun loadBitmap(file: File): Bitmap? {
     if (!file.exists() || file.length() == 0L) return null
     return runCatching {
       BitmapFactory.decodeFile(file.absolutePath)
     }.onFailure {
       Log.w(TAG, "load failed: ${file.name}", it)
-    }.getOrNull()
+    }.getOrNull()?.let { bitmap ->
+      runCatching { file.setLastModified(System.currentTimeMillis()) }
+      // 예전 버전이 저장한 표지는 긴 변이 ~800px까지 될 수 있다 — 메모리에 올릴 때는 현재
+      // 목표 크기로 맞춘다(디스크 파일은 그대로, "표지 캐시 비우기"로 재생성 가능).
+      runCatching {
+        with(CoverExtractor) { bitmap.scaledToMax(CoverExtractor.DEFAULT_TARGET_MAX_PX) }
+      }.getOrDefault(bitmap)
+    }
   }
 
   /** JPEG로 저장. 라이브러리 썸네일은 무손실보다 저장 시간/용량이 더 중요하다. */

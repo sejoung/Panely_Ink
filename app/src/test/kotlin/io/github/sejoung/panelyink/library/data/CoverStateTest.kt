@@ -148,4 +148,20 @@ class CoverStateTest {
         )
         assertTrue(pruned.isEmpty())
     }
+
+    @Test
+    fun trimToMax_underLimitReturnsSameInstance() {
+        val current = mapOf("a" to 1, "b" to 2)
+
+        assertSame(current, CoverState.trimToMax(current, max = 2))
+    }
+
+    @Test
+    fun trimToMax_dropsOldestInsertedFirst() {
+        val current = CoverState.mergeCovers(mapOf("a" to 1, "b" to 2), mapOf("c" to 3, "d" to 4))
+
+        val trimmed = CoverState.trimToMax(current, max = 2)
+
+        assertEquals(listOf("c", "d"), trimmed.keys.toList())
+    }
 }

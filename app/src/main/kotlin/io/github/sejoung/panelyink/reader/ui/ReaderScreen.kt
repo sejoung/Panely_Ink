@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import io.github.sejoung.panelyink.PanelyInkApp
 import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.core.book.BookRef
 import io.github.sejoung.panelyink.core.position.PositionRepository
@@ -101,6 +102,8 @@ fun ReaderScreen(
         close = { it.close() },
       ) { session ->
         loadingStep = localContext.getString(R.string.reader_loading_restore_position)
+        // v0.x 위치 이전이 끝난 뒤에 읽는다 — 먼저 읽으면 legacy 이어읽기 위치를 0쪽으로 덮어쓴다.
+        (appContext as? PanelyInkApp)?.positionMigration?.join()
         // Room에서 마지막 페이지를 미리 로드한다. ReaderViewModel 생성 시점이 동기라
         // 여기서 비동기로 받아 Ready에 묶어서 넘긴다. 페이지 수 줄어든 책은 clamp.
         val resumed = initialPageOverride?.coerceIn(0, session.pageCount - 1)
@@ -122,6 +125,7 @@ fun ReaderScreen(
         session.decode(resumed, trimEnabled = bookSettings.trimEnabled)
         Log.d(TAG, "ReaderScreen ready (resume page=$resumed)")
         SessionState.Ready(
+          bookIdSource = entry.bookIdSource,
           session = session,
           resumedPage = resumed,
           bookSettings = bookSettings,
@@ -145,7 +149,14 @@ fun ReaderScreen(
       .fillMaxSize()
       .background(PanelyInkColors.Paper),
   ) {
-    when (val s = sessionState) {
+    // produceState는 키가 바뀌어도 새 값이 나올 때까지 이전 값(Ready(이전 권))을 그대로 들고 있다.
+    // 그 사이 이전 권의 ReaderContent가 새 context(nextBook=그다음 권)로 계속 살아 있으면, e-ink 화면이
+    // 안 바뀐 걸 보고 키를 한 번 더 누르는 순간 권을 건너뛴다. 다른 책의 Ready는 Loading으로 취급해
+    // 이전 리더를 즉시 내리고(위치 저장·세션 close) 로딩 화면을 보여준다.
+    val current = sessionState.let { s ->
+      if (s is SessionState.Ready && s.bookIdSource != entry.bookIdSource) SessionState.Loading else s
+    }
+    when (val s = current) {
       SessionState.Loading -> ReaderLoading(loadingStep)
       is SessionState.Failed -> ReaderError(message = s.message)
       is SessionState.Ready -> ReaderContent(
@@ -263,6 +274,11 @@ private fun ReaderContent(
     onNavigate = onNavigate,
   )
 
+  // 북마크는 화면에 보이는 페이지 기준 — 두쪽 페어면 leading과 secondary 둘 다. leading만 보면
+  // "표지 한 장 단독"을 바꿔 페어링 parity가 뒤집혔을 때 예전 북마크(이제 secondary)가 인식되지 않아
+  // 메뉴에서 지울 수 없고, 토글하면 leading에 중복 북마크가 쌓인다.
+  val visiblePages = (state.currentPage..state.lastVisiblePage(viewModel.pageCount)).toList()
+
   // 본문 트리 전체를 회전 — 물리 viewport와 state.orientation이 mismatch일 때만 90° CW 적용.
   // ReaderView의 페이지 그림과 ReaderOverlayLayer의 메뉴/탭 영역이 한 덩어리로 회전되어
   // Compose hit-test가 pointer 좌표를 자동 재맵핑한다.
@@ -283,7 +299,7 @@ private fun ReaderContent(
       menuOpen = menuOpen,
       settingsOpen = settingsOpen,
       bookmarksOpen = bookmarksOpen,
-      currentPageBookmarked = state.currentPage in bookmarkedPages,
+      currentPageBookmarked = visiblePages.any { it in bookmarkedPages },
       bookmarkedPages = bookmarkedPages,
       onOpenMenu = { menuOpen = true },
       onCloseMenu = { menuOpen = false },
@@ -298,10 +314,11 @@ private fun ReaderContent(
       },
       onToggleBookmark = {
         val page = state.currentPage
+        val bookmarkedVisible = visiblePages.filter { it in bookmarkedPages }
         uiScope.launch {
-          if (page in bookmarkedPages) {
-            bookmarkRepo.remove(session.bookId, page)
-            bookmarkedPages = bookmarkedPages - page
+          if (bookmarkedVisible.isNotEmpty()) {
+            bookmarkedVisible.forEach { bookmarkRepo.remove(session.bookId, it) }
+            bookmarkedPages = bookmarkedPages - bookmarkedVisible.toSet()
           } else {
             bookmarkRepo.add(session.bookId, page)
             bookmarkedPages = bookmarkedPages + page
@@ -359,6 +376,7 @@ private fun ReaderError(message: String) {
 private sealed interface SessionState {
   data object Loading : SessionState
   data class Ready(
+    val bookIdSource: String,
     val session: CbzBookSession,
     val resumedPage: Int,
     val bookSettings: BookSettings,

@@ -3,6 +3,7 @@ package io.github.sejoung.panelyink.library.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,7 +51,10 @@ internal fun GlobalBookmarksScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(PanelyInkColors.Paper),
+            .background(PanelyInkColors.Paper)
+            // 전체 화면 overlay — 빈 영역(헤더 여백, 로딩/빈 상태 본문) 탭이 아래 라이브러리
+            // 행으로 새지 않도록 root에서 pointer 입력을 받아 둔다(ReaderMenu와 같은 패턴).
+            .pointerInput(Unit) { detectTapGestures { } },
     ) {
         Row(
             modifier = Modifier

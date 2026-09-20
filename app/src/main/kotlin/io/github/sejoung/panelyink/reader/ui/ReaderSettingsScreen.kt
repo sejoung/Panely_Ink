@@ -27,7 +27,7 @@ import io.github.sejoung.panelyink.core.render.ContrastMatrix
 import io.github.sejoung.panelyink.reader.ReaderState
 import io.github.sejoung.panelyink.ui.components.DirectionSegments
 import io.github.sejoung.panelyink.ui.components.GroupHeader
-import io.github.sejoung.panelyink.ui.components.InvertSegments
+import io.github.sejoung.panelyink.ui.components.OnOffSegments
 import io.github.sejoung.panelyink.ui.components.PanelyArrowBackIcon
 import io.github.sejoung.panelyink.ui.components.PanelyIconButton
 import io.github.sejoung.panelyink.ui.components.PanelyTextButton
@@ -141,7 +141,7 @@ fun ReaderSettingsScreen(
         Spacer(Modifier.height(spacing.space2))
         SectionLabel(stringResource(R.string.reader_cover_alone))
         Spacer(Modifier.height(spacing.space1))
-        CoverAloneSegments(
+        OnOffSegments(
           enabled = state.coverAlone,
           onSelect = onCoverAloneChange,
         )
@@ -185,7 +185,7 @@ fun ReaderSettingsScreen(
 
       SectionLabel(stringResource(R.string.settings_invert))
       Spacer(Modifier.height(spacing.space1))
-      InvertSegments(
+      OnOffSegments(
         enabled = state.invertEnabled,
         onSelect = onInvertEnabledChange,
       )

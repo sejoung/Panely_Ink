@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -114,23 +115,6 @@ internal fun SpreadSegments(
 }
 
 @Composable
-internal fun CoverAloneSegments(
-  enabled: Boolean,
-  onSelect: (Boolean) -> Unit,
-) {
-  val options = listOf(
-    false to stringResource(R.string.common_off),
-    true to stringResource(R.string.common_on),
-  )
-  Segments(
-    options = options,
-    isSelected = { it == enabled },
-    labelOf = { options.first { p -> p.first == it }.second },
-    onSelect = onSelect,
-  )
-}
-
-@Composable
 internal fun OrientationSegments(
   selected: ReaderOrientation,
   onSelect: (ReaderOrientation) -> Unit,
@@ -167,20 +151,28 @@ internal fun ContrastSlider(
   val totalDp = 48.dp
 
   var widthPx by remember { mutableStateOf(0) }
-  var dragX by remember(contrast) { mutableStateOf<Float?>(null) }
+  var dragX by remember { mutableStateOf<Float?>(null) }
+  // pointerInput(Unit)의 gesture loop는 재시작되지 않아 처음 캡처한 값을 계속 본다. 커밋 후에도
+  // 설정 화면이 열려 있으므로, 두 번째 드래그가 stale contrast와 비교해 커밋을 건너뛰지 않도록
+  // 최신 값을 State로 읽는다. (dragX를 contrast로 key하면 커밋 때 State 객체가 교체되어 loop가
+  // 버려진 객체에 쓰게 된다 — 그래서 key 없음.)
+  val currentContrast by rememberUpdatedState(contrast)
+  val currentOnCommit by rememberUpdatedState(onCommit)
 
   val maxThumbPx = (widthPx - handlePx).coerceAtLeast(0f)
   val range = ContrastMatrix.MAX - ContrastMatrix.MIN
   val baseRatio = ((contrast - ContrastMatrix.MIN) / range).coerceIn(0f, 1f)
   val baseThumbPx = baseRatio * maxThumbPx
 
+  // 아래 두 함수는 gesture loop에서도 불리므로 캡처된 val이 아니라 widthPx State에서 매번 계산.
   fun pointerToThumbPx(pointerX: Float): Float =
-    (pointerX - handlePx / 2f).coerceIn(0f, maxThumbPx)
+    (pointerX - handlePx / 2f).coerceIn(0f, (widthPx - handlePx).coerceAtLeast(0f))
 
   fun pointerToContrast(pointerX: Float): Float {
-    if (maxThumbPx <= 0f) return ContrastMatrix.IDENTITY
+    val maxPx = (widthPx - handlePx).coerceAtLeast(0f)
+    if (maxPx <= 0f) return ContrastMatrix.IDENTITY
     val anchor = pointerToThumbPx(pointerX)
-    val raw = ContrastMatrix.MIN + (anchor / maxThumbPx) * range
+    val raw = ContrastMatrix.MIN + (anchor / maxPx) * range
     return (Math.round(raw * 20f) / 20f).coerceIn(ContrastMatrix.MIN, ContrastMatrix.MAX)
   }
 
@@ -212,7 +204,7 @@ internal fun ContrastSlider(
             dragX = null
             if (finalX != null) {
               val v = pointerToContrast(finalX)
-              if (v != contrast) onCommit(v)
+              if (v != currentContrast) currentOnCommit(v)
             }
           }
         },

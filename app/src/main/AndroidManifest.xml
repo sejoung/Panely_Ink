@@ -10,10 +10,12 @@
         android:allowBackup="false"
         android:theme="@style/Theme.PanelyInk">
 
+        <!-- keyboard|navigation: 블루투스 페이지 리모컨/키보드가 (재)연결될 때 Activity가 재생성되어
+             읽던 책에서 라이브러리로 튕기는 것을 막는다. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|keyboardHidden|screenSize|screenLayout|smallestScreenSize|uiMode"
+            android:configChanges="orientation|keyboard|keyboardHidden|navigation|screenSize|screenLayout|smallestScreenSize|uiMode"
             android:theme="@style/Theme.PanelyInk">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

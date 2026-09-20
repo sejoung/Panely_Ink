@@ -18,7 +18,10 @@ import io.github.sejoung.panelyink.library.model.bookId
  * 만약 `state.covers`가 LRU cache snapshot으로 reassign되어 evict가 키를 떨어뜨리면
  * 시각 항목의 cover가 null로 토글되며 무한 reload 루프가 발생한다.
  *
- * 메모리 bound는 LRU가 아니라 [pruneCoversToVisible]이 폴더 이동 시점에 처리.
+ * 메모리 bound는 [pruneCoversToVisible]이 폴더 이동 시점에 처리하고, 한 폴더에 책이 수백~
+ * 수천 권인 경우는 [trimToMax]가 **삽입 순서 기준 가장 오래된 것부터** 잘라 상한을 둔다.
+ * row effect 키에 `cover == null`이 없으므로 trim이 재요청 루프를 만들지 않는다 — 잘린
+ * 항목은 그 행이 다시 composition에 들어올 때 `requestCover`가 memory/disk 캐시에서 복원.
  */
 internal object CoverState {
 
@@ -31,6 +34,22 @@ internal object CoverState {
         current: Map<String, T>,
         incoming: Map<String, T>,
     ): Map<String, T> = if (incoming.isEmpty()) current else current + incoming
+
+    /**
+     * covers가 [max]개를 넘으면 삽입 순서상 앞(가장 오래 전에 추가된 것)부터 버린다.
+     * `Map.plus`/`filterKeys` 결과는 LinkedHashMap이라 삽입 순서가 유지된다. [max]는 한 화면에
+     * 보이는 행 수보다 충분히 커야 한다 — 방금 추가된(=화면에 보이는) 항목은 항상 남는다.
+     */
+    fun <T> trimToMax(current: Map<String, T>, max: Int): Map<String, T> {
+        if (current.size <= max) return current
+        val drop = current.size - max
+        val trimmed = LinkedHashMap<String, T>(max)
+        var index = 0
+        for ((key, value) in current) {
+            if (index++ >= drop) trimmed[key] = value
+        }
+        return trimmed
+    }
 
     /** [mergeCovers]와 동일 정책의 status 변형. */
     fun mergeCoverStatuses(

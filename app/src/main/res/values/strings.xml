@@ -74,6 +74,7 @@
     <string name="reader_loading_decode_first_page">Decoding first page… (%1$d pages)</string>
     <string name="reader_error_no_message">(no message)</string>
     <string name="reader_error_no_images">No image entries found: %1$s</string>
+    <string name="reader_page_decode_failed">This page could not be displayed</string>
     <string name="reader_next_book">Next volume</string>
     <string name="reader_previous_book">Previous volume</string>
     <string name="reader_page_jump">Jump to page</string>

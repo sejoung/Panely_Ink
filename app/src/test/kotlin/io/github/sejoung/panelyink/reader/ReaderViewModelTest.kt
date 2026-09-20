@@ -874,6 +874,89 @@ class ReaderViewModelTest {
         vm.close()
     }
 
+    @Test
+    fun fullRefreshCounterCountsLoneSlotAsOnePage() {
+        val vm = ReaderViewModel(
+            "b", 100, FakePageDecoder(),
+            initialPage = 1,
+            initialBookSettings = BookSettings.DEFAULTS.copy(spreadMode = true, coverAlone = true),
+        )
+        vm.setFullRefreshInterval(3)
+        // (1,2) → 표지 단독(0): 한 쪽만 바뀌므로 +1. 예전에는 +2라 다음 전환(+2)에서 3을 넘겨 일찍 터졌다.
+        vm.goPrevious()
+        assertEquals(0, vm.state.value.fullRefreshGeneration)
+        // 표지 → (1,2): +2 → 누적 3, 여기서 트리거.
+        vm.goNext()
+        assertEquals(1, vm.state.value.fullRefreshGeneration)
+        vm.close()
+    }
+
+    @Test
+    fun setCoverAloneInSinglePageModeDoesNotRestartPreload() = runTest {
+        val decoder = FakePageDecoder()
+        val vm = ReaderViewModel("b", 100, decoder, initialPage = 10)
+        vm.onViewportChanged(1000, 1500)
+        runCurrent()
+        val callsBefore = decoder.calls.size
+
+        vm.setCoverAlone(true)
+        runCurrent()
+
+        assertEquals(callsBefore, decoder.calls.size)
+        assertEquals(true, vm.overrides.value.coverAlone)
+        vm.close()
+    }
+
+    @Test
+    fun decodeFailureIsRecordedPerPageAndPreloadContinues() = runTest {
+        val decoder = FakePageDecoder(failOn = setOf(11))
+        val vm = ReaderViewModel("b", 100, decoder, initialPage = 10)
+
+        // 예외가 scope 밖으로 새면 테스트가 실패한다(프로덕션에서는 프로세스 크래시).
+        vm.onViewportChanged(1000, 1500)
+        runCurrent()
+
+        assertEquals(setOf(11), vm.state.value.failedPages)
+        // 실패한 11쪽 뒤의 이웃도 계속 프리로드된다.
+        assertTrue(decoder.calls.containsAll(listOf(7, 8, 9, 10, 11, 12, 13)))
+        vm.close()
+    }
+
+    @Test
+    fun failedPageIsClearedWhenLaterDecodeSucceeds() = runTest {
+        val decoder = FakePageDecoder(failOn = setOf(10))
+        val vm = ReaderViewModel("b", 100, decoder, initialPage = 10)
+        vm.onViewportChanged(1000, 1500)
+        runCurrent()
+        assertEquals(setOf(10), vm.state.value.failedPages)
+
+        decoder.failOn = emptySet()
+        vm.goNext()
+        runCurrent()
+
+        assertEquals(emptySet<Int>(), vm.state.value.failedPages)
+        vm.close()
+    }
+
+    @Test
+    fun lastVisiblePageIsSecondaryOfLastSpread() {
+        // 표지 단독 + 홀수 쪽수(201): 마지막 spread는 (199,200), leading=199.
+        val state = ReaderState(
+            currentPage = 199,
+            direction = ReadingDirection.Ltr,
+            fitMode = FitMode.FitScreen,
+            preloadWindow = 196..200,
+            spreadMode = true,
+            coverAlone = true,
+        )
+        assertEquals(200, state.lastVisiblePage(pageCount = 201))
+        // 표지 단독 슬롯과 단쪽 모드는 currentPage 그대로.
+        assertEquals(0, state.copy(currentPage = 0).lastVisiblePage(pageCount = 201))
+        assertEquals(199, state.copy(spreadMode = false).lastVisiblePage(pageCount = 201))
+        // secondary가 범위 밖인 홀수 마지막 한 장.
+        assertEquals(200, state.copy(currentPage = 200, coverAlone = false).lastVisiblePage(pageCount = 201))
+    }
+
 }
 
 /**
@@ -883,6 +966,7 @@ class ReaderViewModelTest {
 private class FakePageDecoder(
     private val suspendOn: Set<Int> = emptySet(),
     private val gate: CompletableDeferred<Unit>? = null,
+    var failOn: Set<Int> = emptySet(),
 ) : PageDecoder {
     val calls = mutableListOf<Int>()
     val viewports = mutableListOf<Pair<Int, Int>>()
@@ -899,6 +983,7 @@ private class FakePageDecoder(
         viewports += viewportWidth to viewportHeight
         trimFlags += trimEnabled
         if (pageIndex in suspendOn && gate != null) gate.await()
+        if (pageIndex in failOn) throw java.io.IOException("decode failed: #$pageIndex")
         return DecodedPage(pageIndex, viewportWidth, viewportHeight, Any())
     }
 

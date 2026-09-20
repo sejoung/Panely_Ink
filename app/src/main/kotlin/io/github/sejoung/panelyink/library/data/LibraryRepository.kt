@@ -12,8 +12,12 @@ import io.github.sejoung.panelyink.library.model.FolderEntry
 import io.github.sejoung.panelyink.library.model.LibraryEntry
 import io.github.sejoung.panelyink.library.model.bookId
 import io.github.sejoung.panelyink.library.model.toBookRef
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import java.util.zip.ZipException
+import kotlin.coroutines.coroutineContext
 
 /**
  * SAF 트리 URI 위에서 폴더 1단계만 열거한다 — 사용자가 한 화면씩 탐색하는
@@ -54,18 +58,37 @@ class LibraryRepository(private val context: Context) {
   private val childrenCache = mutableMapOf<Uri, List<LibraryEntry>>()
 
   /**
-   * zip의 `documentUri` → ZIP-of-CBZ 가상 폴더 변환 결과 캐시. 시리즈가 아닌 zip은 null로
-   * 명시 캐시(`containsKey`로 hit/miss 구분). 한 번 ZIP을 열어 검사하면 프로세스 살아있는
-   * 동안 재검사 없이 즉시 응답 → 라이브러리 폴더 위/아래 이동에서 매번 ZIP을 다시 안 연다.
+   * zip의 `documentUri` → ZIP-of-CBZ 가상 폴더 변환 결과 캐시. 시리즈가 아닌 zip은
+   * `result=null`로 명시 캐시. 한 번 ZIP을 열어 검사하면 프로세스 살아있는 동안 재검사 없이
+   * 즉시 응답 → 라이브러리 폴더 위/아래 이동에서 매번 ZIP을 다시 안 연다.
+   *
+   * 새로고침([invalidateCache])으로도 비우지 않는다 — 대신 검사 시점의 [ZipSignature]
+   * (이름/크기/수정시각)를 같이 저장해 두고, 재열거 결과와 다르면 miss로 취급해 그 zip만
+   * 다시 연다. 이전엔 새로고침마다 라이브러리의 모든 .zip을 다시 열었다(외장 SD에서 권당
+   * 100~500ms).
    */
-  private val seriesCache = mutableMapOf<Uri, FolderEntry?>()
+  private val seriesCache = mutableMapOf<Uri, CachedSeries>()
+
+  /** [listChildren]이 마지막으로 본 zip의 수정시각. provider가 안 주면 키 없음. */
+  private val lastModifiedByUri = mutableMapOf<Uri, Long>()
   private val cacheLock = Any()
 
-  /** 사용자 명시 새로고침 시 캐시 비우기. */
+  /**
+   * 사용자 명시 새로고침 시 폴더 열거 캐시 비우기. 시리즈 검사 결과는 signature로 자체
+   * 검증하므로 유지.
+   */
   fun invalidateCache() {
     synchronized(cacheLock) {
       childrenCache.clear()
+    }
+  }
+
+  /** 전체 초기화용 — 시리즈 검사 결과까지 모두 비움. */
+  fun invalidateAll() {
+    synchronized(cacheLock) {
+      childrenCache.clear()
       seriesCache.clear()
+      lastModifiedByUri.clear()
     }
   }
 
@@ -81,13 +104,20 @@ class LibraryRepository(private val context: Context) {
   fun seriesCacheLookup(book: BookEntry): SeriesLookup {
     if (book.nestedEntryName != null) return SeriesLookup.NotApplicable
     return synchronized(cacheLock) {
-      if (seriesCache.containsKey(book.documentUri)) {
-        SeriesLookup.Hit(seriesCache[book.documentUri])
-      } else {
-        SeriesLookup.Miss
-      }
+      val cached = validSeriesCacheLocked(book)
+      if (cached != null) SeriesLookup.Hit(cached.result) else SeriesLookup.Miss
     }
   }
+
+  /** [cacheLock] 안에서만 호출. signature가 달라졌으면(zip 교체/수정) miss. */
+  private fun validSeriesCacheLocked(book: BookEntry): CachedSeries? =
+    seriesCache[book.documentUri]?.takeIf { it.signature == signatureLocked(book) }
+
+  private fun signatureLocked(book: BookEntry): ZipSignature = ZipSignature(
+    displayName = book.displayName,
+    sizeBytes = book.sizeBytes,
+    lastModified = lastModifiedByUri[book.documentUri] ?: 0L,
+  )
 
   /** 사용자가 추가한 SAF 트리 [Uri]들을 첫 화면용 root 폴더 행으로 변환. */
   suspend fun listRoots(rootUris: List<Uri>): List<FolderEntry> = withContext(Dispatchers.IO) {
@@ -108,8 +138,23 @@ class LibraryRepository(private val context: Context) {
    *
    * 1번의 [ContentResolver.query]로 모든 자식의 메타(name/mime/size)를 한 번에 받아
    * `DocumentFile.listFiles + length()` 패턴의 N+1 IPC를 제거.
+   *
+   * 열거 실패는 빈 목록으로 뭉갠다 — 실패와 "빈 폴더"를 구분해야 하는 호출자는
+   * [listChildrenOrNull] 사용.
    */
   suspend fun listChildren(parent: FolderEntry): List<LibraryEntry> =
+    listChildrenOrNull(parent).orEmpty()
+
+  /**
+   * [listChildren]과 같지만 **열거 실패 시 null**. 실패 = provider가 null cursor를 돌려주거나
+   * (SD 언마운트) 예외를 던진 경우(폴더 삭제/이름변경 → IllegalArgumentException, 권한 회수 →
+   * SecurityException 등). 실패 결과는 캐시하지 않는다 — 다음 호출에서 다시 시도.
+   *
+   * provider 예외는 여기(repository 경계)에서 모두 잡는다. 호출자는 plain
+   * `viewModelScope.launch`라 새어 나가면 앱이 죽고, 영속된 마지막 path 때문에 재실행마다
+   * 같은 폴더를 다시 열어 crash loop가 된다.
+   */
+  suspend fun listChildrenOrNull(parent: FolderEntry): List<LibraryEntry>? =
     withContext(Dispatchers.IO) {
       // 가상 폴더(ZIP-of-CBZ) — SAF query 없이 인스턴스가 들고 있는 nested 목록
       // 그대로. 정렬은 inspectZipForSeries가 이미 자연순으로 만들어놨다.
@@ -118,45 +163,15 @@ class LibraryRepository(private val context: Context) {
       synchronized(cacheLock) {
         childrenCache[parent.documentUri]
       }?.let { return@withContext it }
-      val parentDocId = parent.documentIdForChildren()
-      val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
-        parent.rootUri, parentDocId,
-      )
-      val results = mutableListOf<LibraryEntry>()
-      resolver.query(childrenUri, CHILD_PROJECTION, null, null, null)?.use { cursor ->
-        val idCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
-        val nameCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
-        val mimeCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
-        val sizeCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_SIZE)
-        while (cursor.moveToNext()) {
-          val name = cursor.getString(nameCol) ?: continue
-          // macOS AppleDouble (._book.cbz) / 닷파일(.DS_Store) 제외 — FAT/exFAT/SMB로
-          // 옮길 때 Finder가 짝으로 만들어 두는 메타데이터.
-          if (name.startsWith(".")) continue
-          val docId = cursor.getString(idCol)
-          val mime = cursor.getString(mimeCol)
-          val childUri = DocumentsContract.buildDocumentUriUsingTree(
-            parent.rootUri, docId,
-          )
-          if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
-            results += FolderEntry(
-              documentUri = childUri,
-              displayName = name,
-              rootUri = parent.rootUri,
-              isRoot = false,
-            )
-          } else if (isCbzOrZipName(name)) {
-            val size = if (cursor.isNull(sizeCol)) 0L else cursor.getLong(sizeCol)
-            results += BookEntry(
-              documentUri = childUri,
-              displayName = name,
-              sizeBytes = size,
-              mimeType = mime,
-              rootUri = parent.rootUri,
-            )
-          }
-        }
+      val results = try {
+        queryChildren(parent)
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        Log.w(TAG, "listChildren failed: ${parent.documentUri}", e)
+        null
       }
+      if (results == null) return@withContext null
       val folders = results.filterIsInstance<FolderEntry>()
         .sortedWith(compareBy(NaturalOrderComparator) { it.displayName })
       val books = results.filterIsInstance<BookEntry>()
@@ -168,6 +183,61 @@ class LibraryRepository(private val context: Context) {
       sorted
     }
 
+  /** SAF children query 1회. null cursor(=provider 실패)면 null. provider 예외는 그대로 던짐. */
+  private fun queryChildren(parent: FolderEntry): List<LibraryEntry>? {
+    val parentDocId = parent.documentIdForChildren()
+    val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
+      parent.rootUri, parentDocId,
+    )
+    val results = mutableListOf<LibraryEntry>()
+    val modified = mutableMapOf<Uri, Long>()
+    val cursor = resolver.query(childrenUri, CHILD_PROJECTION, null, null, null)
+      ?: return null
+    cursor.use {
+      val idCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+      val nameCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+      val mimeCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
+      val sizeCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_SIZE)
+      // 수정시각은 optional 컬럼 — 없는 provider도 있어 OrThrow 아님.
+      val modifiedCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+      while (cursor.moveToNext()) {
+        val name = cursor.getString(nameCol) ?: continue
+        // macOS AppleDouble (._book.cbz) / 닷파일(.DS_Store) 제외 — FAT/exFAT/SMB로
+        // 옮길 때 Finder가 짝으로 만들어 두는 메타데이터.
+        if (name.startsWith(".")) continue
+        val docId = cursor.getString(idCol)
+        val mime = cursor.getString(mimeCol)
+        val childUri = DocumentsContract.buildDocumentUriUsingTree(
+          parent.rootUri, docId,
+        )
+        if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
+          results += FolderEntry(
+            documentUri = childUri,
+            displayName = name,
+            rootUri = parent.rootUri,
+            isRoot = false,
+          )
+        } else if (isCbzOrZipName(name)) {
+          val size = if (cursor.isNull(sizeCol)) 0L else cursor.getLong(sizeCol)
+          if (modifiedCol >= 0 && !cursor.isNull(modifiedCol)) {
+            modified[childUri] = cursor.getLong(modifiedCol)
+          }
+          results += BookEntry(
+            documentUri = childUri,
+            displayName = name,
+            sizeBytes = size,
+            mimeType = mime,
+            rootUri = parent.rootUri,
+          )
+        }
+      }
+    }
+    if (modified.isNotEmpty()) {
+      synchronized(cacheLock) { lastModifiedByUri.putAll(modified) }
+    }
+    return results
+  }
+
   /**
    * [folder] 안 첫 책(자연 정렬) — 시리즈 그룹핑(폴더=시리즈)에서 폴더 행에 첫 권의
    * 표지를 보여주기 위해 사용. depth 1만 본다. 폴더가 비었거나 폴더만 있으면 null.
@@ -176,31 +246,48 @@ class LibraryRepository(private val context: Context) {
     listChildren(folder).firstOrNull { it is BookEntry } as? BookEntry
   }
 
-  suspend fun listAllBooks(rootUris: List<Uri>, maxDepth: Int = 16): List<IndexedBookRef> {
+  /**
+   * 모든 root를 재귀로 훑어 책 목록을 만든다. [LibraryScanResult.complete]=false면 어딘가
+   * (root/하위 폴더 열거, 시리즈 ZIP 검사, depth 초과)에서 실패해 목록이 **불완전**하다는 뜻 —
+   * 호출자는 이 결과를 근거로 북마크/인덱스를 삭제하면 안 된다.
+   */
+  suspend fun listAllBooks(rootUris: List<Uri>, maxDepth: Int = 16): LibraryScanResult {
     val roots = listRoots(rootUris)
-    return roots.flatMap { root -> listAllBooksIn(root, depth = 0, maxDepth = maxDepth) }
+    val books = mutableListOf<IndexedBookRef>()
+    var complete = true
+    for (root in roots) {
+      coroutineContext.ensureActive()
+      if (!listAllBooksIn(root, depth = 0, maxDepth = maxDepth, out = books)) complete = false
+    }
+    return LibraryScanResult(books = books, complete = complete)
   }
 
+  /**
+   * [bookIds]에 해당하는 책을 찾을 때까지만 훑는다. 전부 찾으면 조기 종료.
+   * [LibraryScanResult.complete]=false면 못 찾은 id가 "없는 책"이 아니라 "못 본 책"일 수 있다.
+   */
   suspend fun findBooksByIds(
     rootUris: List<Uri>,
     bookIds: Set<String>,
     maxDepth: Int = 16,
-  ): List<IndexedBookRef> {
-    if (bookIds.isEmpty()) return emptyList()
+  ): LibraryScanResult {
+    if (bookIds.isEmpty()) return LibraryScanResult(emptyList(), complete = true)
     val remaining = bookIds.toMutableSet()
     val found = mutableListOf<IndexedBookRef>()
     val roots = listRoots(rootUris)
+    var complete = true
     for (root in roots) {
       if (remaining.isEmpty()) break
-      findBooksByIdsIn(
+      val ok = findBooksByIdsIn(
         folder = root,
         remaining = remaining,
         found = found,
         depth = 0,
         maxDepth = maxDepth,
       )
+      if (!ok) complete = false
     }
-    return found
+    return LibraryScanResult(books = found, complete = complete)
   }
 
   /**
@@ -212,20 +299,37 @@ class LibraryRepository(private val context: Context) {
    * 비용: 부모 ZIP 한 번 열기(Commons Compress + setIgnoreLocalFileHeader). 외장 SD에서
    * 보통 100~500ms. 결과는 호출자가 캐싱.
    */
-  suspend fun inspectZipForSeries(book: BookEntry): FolderEntry? = withContext(Dispatchers.IO) {
+  suspend fun inspectZipForSeries(book: BookEntry): FolderEntry? =
+    (inspectZip(book) as? ZipInspection.Done)?.series
+
+  /**
+   * [inspectZipForSeries] 본체 — "시리즈 아님"([ZipInspection.Done] + null)과 "검사 실패"
+   * ([ZipInspection.Failed])를 구분한다. 전체 스캔이 실패한 ZIP의 nested 책 북마크를 orphan으로
+   * 오판해 지우지 않도록.
+   *
+   * - 손상된 ZIP([ZipException])은 결정적 실패 → "시리즈 아님"으로 캐시(매번 재오픈 방지)
+   * - 그 외(IO 오류, 권한, OOM)는 일시적일 수 있어 캐시하지 않고 [ZipInspection.Failed]
+   */
+  private suspend fun inspectZip(book: BookEntry): ZipInspection = withContext(Dispatchers.IO) {
     // 이미 nested entry인 책은 ZIP-of-CBZ 자식이라 다시 검사 안 함.
-    if (book.nestedEntryName != null) return@withContext null
-    synchronized(cacheLock) {
-      if (seriesCache.containsKey(book.documentUri)) {
-        return@withContext seriesCache[book.documentUri]
-      }
+    if (book.nestedEntryName != null) return@withContext ZipInspection.Done(null)
+    val signature = synchronized(cacheLock) {
+      validSeriesCacheLocked(book)?.let { return@withContext ZipInspection.Done(it.result) }
+      signatureLocked(book)
     }
-    val archive = runCatching { CbzArchive.open(context, book.documentUri) }.getOrElse {
-      Log.w("PanelyInk.Library", "inspect open failed: ${book.documentUri}", it)
+    val archive = try {
+      CbzArchive.open(context, book.documentUri)
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: ZipException) {
+      Log.w(TAG, "inspect: broken zip: ${book.documentUri}", e)
       synchronized(cacheLock) {
-        seriesCache[book.documentUri] = null
+        seriesCache[book.documentUri] = CachedSeries(signature, null)
       }
-      return@withContext null
+      return@withContext ZipInspection.Done(null)
+    } catch (t: Throwable) {
+      Log.w(TAG, "inspect open failed: ${book.documentUri}", t)
+      return@withContext ZipInspection.Failed
     }
     val result = try {
       if (!archive.isSeriesArchive) {
@@ -253,23 +357,27 @@ class LibraryRepository(private val context: Context) {
       archive.close()
     }
     synchronized(cacheLock) {
-      seriesCache[book.documentUri] = result
+      seriesCache[book.documentUri] = CachedSeries(signature, result)
     }
-    result
+    ZipInspection.Done(result)
   }
 
+  /** @return 이 폴더 이하를 빠짐없이 봤으면 true. 하나라도 실패/생략했으면 false. */
   private suspend fun listAllBooksIn(
     folder: FolderEntry,
     depth: Int,
     maxDepth: Int,
-  ): List<IndexedBookRef> {
-    if (depth > maxDepth) return emptyList()
-    val children = listChildren(folder)
+    out: MutableList<IndexedBookRef>,
+  ): Boolean {
+    if (depth > maxDepth) return false
+    val children = listChildrenOrNull(folder) ?: return false
+    var complete = true
     val directBooks = mutableListOf<BookEntry>()
     val childFolders = mutableListOf<FolderEntry>()
-    val indexed = mutableListOf<IndexedBookRef>()
 
     for (entry in children) {
+      // 큰 라이브러리에서 새로고침 연타/화면 이탈 시 즉시 멈추도록 entry 단위 취소 확인.
+      coroutineContext.ensureActive()
       when (entry) {
         is FolderEntry -> childFolders += entry
         is BookEntry -> {
@@ -277,13 +385,20 @@ class LibraryRepository(private val context: Context) {
             entry.nestedEntryName == null &&
             entry.displayName.endsWith(".zip", ignoreCase = true)
           ) {
-            inspectZipForSeries(entry)
+            when (val inspection = inspectZip(entry)) {
+              is ZipInspection.Done -> inspection.series
+              // 검사 실패 — 시리즈였다면 nested 책들을 못 본 것이므로 스캔 불완전.
+              ZipInspection.Failed -> {
+                complete = false
+                null
+              }
+            }
           } else {
             null
           }
           if (seriesFolder != null) {
             val nestedBooks = seriesFolder.nestedBooks.orEmpty()
-            indexed += nestedBooks.map {
+            out += nestedBooks.map {
               IndexedBookRef(
                 book = it.toBookRef(),
                 siblings = nestedBooks.map { nested -> nested.toBookRef() },
@@ -297,7 +412,7 @@ class LibraryRepository(private val context: Context) {
       }
     }
 
-    indexed += directBooks.map {
+    out += directBooks.map {
       IndexedBookRef(
         book = it.toBookRef(),
         siblings = directBooks.map { book -> book.toBookRef() },
@@ -305,9 +420,11 @@ class LibraryRepository(private val context: Context) {
       )
     }
     for (child in childFolders) {
-      indexed += listAllBooksIn(child, depth = depth + 1, maxDepth = maxDepth)
+      if (!listAllBooksIn(child, depth = depth + 1, maxDepth = maxDepth, out = out)) {
+        complete = false
+      }
     }
-    return indexed
+    return complete
   }
 
   private suspend fun findBooksByIdsIn(
@@ -316,14 +433,17 @@ class LibraryRepository(private val context: Context) {
     found: MutableList<IndexedBookRef>,
     depth: Int,
     maxDepth: Int,
-  ) {
-    if (remaining.isEmpty() || depth > maxDepth) return
-    val children = listChildren(folder)
+  ): Boolean {
+    if (remaining.isEmpty()) return true
+    if (depth > maxDepth) return false
+    val children = listChildrenOrNull(folder) ?: return false
+    var complete = true
     val directBooks = mutableListOf<BookEntry>()
     val childFolders = mutableListOf<FolderEntry>()
 
     for (entry in children) {
       if (remaining.isEmpty()) break
+      coroutineContext.ensureActive()
       when (entry) {
         is FolderEntry -> childFolders += entry
         is BookEntry -> {
@@ -331,7 +451,13 @@ class LibraryRepository(private val context: Context) {
             entry.nestedEntryName == null &&
             entry.displayName.endsWith(".zip", ignoreCase = true)
           ) {
-            inspectZipForSeries(entry)
+            when (val inspection = inspectZip(entry)) {
+              is ZipInspection.Done -> inspection.series
+              ZipInspection.Failed -> {
+                complete = false
+                null
+              }
+            }
           } else {
             null
           }
@@ -363,19 +489,21 @@ class LibraryRepository(private val context: Context) {
           siblings = directBooks.map { it.toBookRef() },
           groupKey = folder.documentUri.toString(),
         )
-        if (remaining.isEmpty()) return
+        if (remaining.isEmpty()) return true
       }
     }
     for (child in childFolders) {
-      if (remaining.isEmpty()) return
-      findBooksByIdsIn(
+      if (remaining.isEmpty()) return true
+      val ok = findBooksByIdsIn(
         folder = child,
         remaining = remaining,
         found = found,
         depth = depth + 1,
         maxDepth = maxDepth,
       )
+      if (!ok) complete = false
     }
+    return complete
   }
 
   /**
@@ -384,22 +512,24 @@ class LibraryRepository(private val context: Context) {
    *
    * [listChildren] 결과를 활용 → in-memory 캐시 hit 시 SAF query 0번. 폴더 트리
    * 위/아래 이동에서 큰 효과(외장 SD card).
+   *
+   * @return 열거가 하나라도 실패하면 null — 호출자가 틀린 "0권"을 캐시하지 않도록.
    */
-  suspend fun countBooks(folder: FolderEntry, maxDepth: Int = 3): Int =
+  suspend fun countBooks(folder: FolderEntry, maxDepth: Int = 3): Int? =
     withContext(Dispatchers.IO) { countBooksRec(folder, depth = 0, maxDepth) }
 
   private suspend fun countBooksRec(
     folder: FolderEntry,
     depth: Int,
     maxDepth: Int,
-  ): Int {
+  ): Int? {
     if (depth > maxDepth) return 0
-    val children = listChildren(folder)
+    val children = listChildrenOrNull(folder) ?: return null
     val bookCount = children.count { it is BookEntry }
     var subCount = 0
     for (child in children) {
       if (child is FolderEntry) {
-        subCount += countBooksRec(child, depth + 1, maxDepth)
+        subCount += countBooksRec(child, depth + 1, maxDepth) ?: return null
       }
     }
     return bookCount + subCount
@@ -413,16 +543,20 @@ class LibraryRepository(private val context: Context) {
       DocumentsContract.getDocumentId(documentUri)
     }
 
-  private fun queryRootName(treeUri: Uri): String? {
+  /** root 표시 이름. provider 예외(권한 회수/SD 언마운트)는 null로 — 호출자가 URI로 폴백. */
+  private fun queryRootName(treeUri: Uri): String? = try {
     val docId = DocumentsContract.getTreeDocumentId(treeUri)
     val docUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
-    return resolver.query(
+    resolver.query(
       docUri,
       arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME),
       null, null, null,
     )?.use { cursor ->
       if (cursor.moveToFirst()) cursor.getString(0) else null
     }
+  } catch (e: Exception) {
+    Log.w(TAG, "queryRootName failed: $treeUri", e)
+    null
   }
 
   private fun isCbzOrZipName(name: String): Boolean {
@@ -430,15 +564,45 @@ class LibraryRepository(private val context: Context) {
     return ext == "cbz" || ext == "zip"
   }
 
+  /** 시리즈 검사 시점의 zip 식별 정보 — 재열거 결과와 다르면 캐시 무효. */
+  private data class ZipSignature(
+    val displayName: String,
+    val sizeBytes: Long,
+    val lastModified: Long,
+  )
+
+  /** [result]=null은 "검사했고 시리즈 아님". */
+  private data class CachedSeries(val signature: ZipSignature, val result: FolderEntry?)
+
+  private sealed interface ZipInspection {
+    /** 검사 완료. [series]=null이면 일반 책. */
+    data class Done(val series: FolderEntry?) : ZipInspection
+
+    /** ZIP을 열지 못함(일시적일 수 있음) — 시리즈 여부 모름. */
+    data object Failed : ZipInspection
+  }
+
   companion object {
+    private const val TAG = "PanelyInk.Library"
+
     private val CHILD_PROJECTION = arrayOf(
       DocumentsContract.Document.COLUMN_DOCUMENT_ID,
       DocumentsContract.Document.COLUMN_DISPLAY_NAME,
       DocumentsContract.Document.COLUMN_MIME_TYPE,
       DocumentsContract.Document.COLUMN_SIZE,
+      DocumentsContract.Document.COLUMN_LAST_MODIFIED,
     )
   }
 }
+
+/**
+ * 라이브러리 전체 스캔 결과. [complete]=false면 [books]는 부분 목록 — "없는 책" 판정
+ * (북마크/인덱스 orphan 삭제)에 쓰면 안 된다.
+ */
+data class LibraryScanResult(
+  val books: List<IndexedBookRef>,
+  val complete: Boolean,
+)
 
 /** [LibraryRepository.seriesCacheLookup] 결과. */
 sealed interface SeriesLookup {

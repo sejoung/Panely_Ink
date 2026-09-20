@@ -38,6 +38,18 @@ class ReaderNavigationTest {
     }
 
     @Test
+    fun lastSpreadWithCoverAloneAndOddPageCountReachesNextBook() {
+        val context = seriesContext(current = 1)
+        // 201쪽 + 표지 단독: 마지막 spread는 (199,200), leading=199. 보이는 마지막 페이지로 판정해야 한다.
+        val lastSpread = state(currentPage = 199).copy(spreadMode = true, coverAlone = true)
+
+        assertEquals(context.nextBook, nextBookForBoundary(lastSpread, pageCount = 201, context))
+        assertNull(
+            nextBookForBoundary(lastSpread.copy(currentPage = 197), pageCount = 201, context),
+        )
+    }
+
+    @Test
     fun standaloneHasNoAdjacentBooks() {
         val book = book(0)
         val context = SeriesContext.standalone(book)

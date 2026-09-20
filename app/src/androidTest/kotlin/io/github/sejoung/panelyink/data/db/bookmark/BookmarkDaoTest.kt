@@ -95,12 +95,14 @@ class BookmarkDaoTest {
     }
 
     @Test
-    fun removeOrphansWithNoExistingBooksClearsAll() = runBlocking {
+    fun removeOrphansWithNoExistingBooksKeepsAll() = runBlocking {
+        // 빈 keep set = 스캔 실패(SD 언마운트 등)일 수 있어 전체 삭제하면 안 된다.
         repo.add("a", 1)
         repo.add("b", 2)
 
         repo.removeOrphans(emptySet())
 
-        assertEquals(emptyList<BookBookmark>(), repo.loadAll())
+        assertEquals(listOf(1), repo.loadPages("a"))
+        assertEquals(listOf(2), repo.loadPages("b"))
     }
 }

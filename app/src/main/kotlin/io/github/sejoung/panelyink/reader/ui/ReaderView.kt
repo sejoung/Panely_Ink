@@ -8,9 +8,11 @@ import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.Rect
+import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import android.graphics.Bitmap
+import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.core.fit.FitCalculator
 import io.github.sejoung.panelyink.core.fit.FitMode
 import io.github.sejoung.panelyink.core.preferences.ReadingDirection
@@ -18,6 +20,7 @@ import io.github.sejoung.panelyink.core.render.ContrastMatrix
 import io.github.sejoung.panelyink.core.render.InvertMatrix
 import io.github.sejoung.panelyink.reader.ReaderViewModel
 import io.github.sejoung.panelyink.reader.session.CbzBookSession
+import io.github.sejoung.panelyink.reader.spreadHasSecondary
 
 /**
  * 본문 페이지 1장을 그리는 커스텀 View. PRD §8 — 뷰어 핫패스는 Compose가 아닌
@@ -42,6 +45,8 @@ private const val TAG = "PanelyInk.ReaderView"
  */
 private const val FULL_REFRESH_FRAME_HOLD_MS = 80L
 
+private const val FAILED_PAGE_TEXT_SP = 16f
+
 class ReaderView(context: Context) : View(context) {
 
   private var session: CbzBookSession? = null
@@ -65,6 +70,24 @@ class ReaderView(context: Context) : View(context) {
    * 두 번 반전되면 풀리프레시 waveform이 발화할 가능성이 훨씬 높다.
    */
   private val refreshSequence = ArrayDeque<Int>()
+
+  /** 지금 화면에 머무는 시퀀스 프레임 색. null이면 시퀀스 비활성 또는 아직 첫 프레임 전. */
+  private var refreshFrameColor: Int? = null
+
+  /** [refreshFrameColor]를 다음 프레임으로 넘겨도 되는 시각([SystemClock.uptimeMillis]). */
+  private var refreshFrameUntil: Long = 0L
+
+  private val refreshTick = Runnable { invalidate() }
+
+  private var failedPages: Set<Int> = emptySet()
+  private val failedPageMessage: String = context.getString(R.string.reader_page_decode_failed)
+
+  private val messagePaint = Paint().apply {
+    isAntiAlias = true
+    color = Color.BLACK
+    textAlign = Paint.Align.CENTER
+    textSize = FAILED_PAGE_TEXT_SP * context.resources.displayMetrics.scaledDensity
+  }
 
   private val paint = Paint().apply {
     // e-ink + dithering 별도 단계(v1.5)에서 다룸. View 단계에선 fastest.
@@ -109,10 +132,37 @@ class ReaderView(context: Context) : View(context) {
     this.pageIndex = index
     // 사용자가 페이지를 넘겼는데 진행 중인 풀리프레시 시퀀스(검정/흰색 240ms)가 남아 있으면
     // 새 콘텐츠가 그만큼 늦게 화면에 도달한다. 시퀀스를 즉시 abort해 입력 응답성을 우선.
-    if (refreshSequence.isNotEmpty()) {
-      refreshSequence.clear()
-    }
+    abortFullRefresh()
     invalidate()
+  }
+
+  /**
+   * [index] 페이지 디코드가 끝났다는 통지. 화면에 보이는 페이지일 때만 다시 그린다 —
+   * 프리로드(±3)가 끝날 때마다 무조건 invalidate하면 안 바뀐 화면을 e-ink에 최대 6번 더 그리게 된다.
+   */
+  fun onPageDecoded(index: Int) {
+    if (index == pageIndex || (index == pageIndex + 1 && hasSecondary())) invalidate()
+  }
+
+  fun setFailedPages(pages: Set<Int>) {
+    if (this.failedPages == pages) return
+    this.failedPages = pages
+    invalidate()
+  }
+
+  private fun hasSecondary(): Boolean =
+    spreadHasSecondary(spreadMode, coverAlone, pageIndex, pageCount)
+
+  private fun abortFullRefresh() {
+    refreshSequence.clear()
+    refreshFrameColor = null
+    removeCallbacks(refreshTick)
+  }
+
+  /** 시퀀스 진행용 invalidate는 항상 1개만 대기 — 끼어든 onDraw가 예약을 중복으로 쌓지 않게. */
+  private fun scheduleRefreshTick(delayMs: Long) {
+    removeCallbacks(refreshTick)
+    postDelayed(refreshTick, delayMs)
   }
 
   fun setFitMode(mode: FitMode) {
@@ -190,7 +240,7 @@ class ReaderView(context: Context) : View(context) {
    * e-ink 컨트롤러가 큰 픽셀 변화를 감지해 풀리프레시 waveform 발화 가능성 ↑.
    */
   fun requestFullRefresh() {
-    refreshSequence.clear()
+    abortFullRefresh()
     refreshSequence.add(Color.BLACK)
     refreshSequence.add(Color.WHITE)
     refreshSequence.add(Color.BLACK)
@@ -206,17 +256,31 @@ class ReaderView(context: Context) : View(context) {
     // 풀리프레시 트릭: 한 프레임은 검정으로 칠하고, 다음 vsync에 정상 콘텐츠로
     // 다시 그린다. 표준 안드로이드 API에는 풀리프레시 강제가 없어, 큰 색차로
     // 컨트롤러를 끌어내리는 게 SDK 의존 없는 1차 방어선.
+    //
+    // 시퀀스는 onDraw 호출 횟수가 아니라 시각으로 진행한다. 프리로드 완료 같은 다른 invalidate가
+    // 끼어들면 호출마다 한 프레임씩 넘어가 프레임당 ~16ms만 머물렀고(의도는 80ms), e-ink 응답 시간보다
+    // 짧아 잔상 제거가 불안정했다. 유지 시간이 남은 동안의 onDraw는 같은 색을 다시 칠하기만 한다.
+    val now = SystemClock.uptimeMillis()
+    val holding = refreshFrameColor
+    if (holding != null && now < refreshFrameUntil) {
+      canvas.drawColor(holding)
+      scheduleRefreshTick(refreshFrameUntil - now)
+      return
+    }
     if (refreshSequence.isNotEmpty()) {
       val color = refreshSequence.removeFirst()
       Log.d(
         TAG,
         "full refresh frame color=${"%08X".format(color)} remaining=${refreshSequence.size}",
       )
+      refreshFrameColor = color
+      refreshFrameUntil = now + FULL_REFRESH_FRAME_HOLD_MS
       canvas.drawColor(color)
-      // 다음 프레임 색상으로 또 invalidate. 시퀀스가 비면 정상 onDraw 진입.
-      postInvalidateDelayed(FULL_REFRESH_FRAME_HOLD_MS)
+      // 유지 시간이 끝나면 다음 프레임 색상(또는 시퀀스가 비었으면 정상 콘텐츠)으로 진행.
+      scheduleRefreshTick(FULL_REFRESH_FRAME_HOLD_MS)
       return
     }
+    refreshFrameColor = null
     canvas.drawColor(Color.WHITE)
     val s = session ?: return
     if (width <= 0 || height <= 0) return
@@ -249,9 +313,8 @@ class ReaderView(context: Context) : View(context) {
     val secondary = pageIndex + 1
     // 단독 슬롯 — 표지 한 장 단독(coverAlone && 0쪽) 또는 secondary가 범위 밖(홀수 마지막 한 장).
     // 일관성을 위해 둘 다 전체 폭 중앙 정렬로 크게 그린다(절반-슬롯 + 빈 여백 대신). ViewModel도 이 경우 전체 해상도로 디코드.
-    val loneCover = coverAlone && leading == 0
-    val hasSecondary = !loneCover && secondary in 0 until pageCount
-    if (!hasSecondary) {
+    // 판정은 [spreadHasSecondary] 하나로 ViewModel과 공유.
+    if (!hasSecondary()) {
       if (leading in 0 until pageCount) {
         drawSingle(canvas, s, leading, viewportX = 0, viewportWidth = viewportWidth, viewportHeight = viewportHeight)
       }
@@ -301,8 +364,20 @@ class ReaderView(context: Context) : View(context) {
     align: HorizontalAlign = HorizontalAlign.Center,
   ) {
     if (viewportWidth <= 0 || viewportHeight <= 0) return
-    val bitmap: Bitmap = s.pageBitmap(index) ?: return
-    val trim = if (trimEnabled) s.pageTrim(index) else null
+    val bitmap: Bitmap? = s.pageBitmap(index)
+    if (bitmap == null) {
+      // 디코드 실패 페이지는 빈 화면 대신 안내 — 아직 디코드 중인 페이지는 기존대로 Paper.
+      if (index in failedPages) {
+        canvas.drawText(
+          failedPageMessage,
+          viewportX + viewportWidth / 2f,
+          viewportHeight / 2f,
+          messagePaint,
+        )
+      }
+      return
+    }
+    val trim = if (trimEnabled) s.pageTrim(index, bitmap) else null
     val fit = FitCalculator.compute(
       pageWidth = bitmap.width,
       pageHeight = bitmap.height,

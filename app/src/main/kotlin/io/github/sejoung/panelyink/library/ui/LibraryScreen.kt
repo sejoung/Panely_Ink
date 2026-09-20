@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,6 +66,11 @@ fun LibraryScreen(
       )
     }
   }
+
+  // 리더에서 돌아오면(이 화면이 composition에 다시 들어옴) 진행률 lazy 로드 기록을 비운다.
+  // 리더 안에서 형제 권으로 넘어가 읽은 경우 처음 연 책 말고도 진행률이 바뀌었을 수 있다.
+  // 행들의 effect보다 먼저 선언돼 있어 같은 프레임의 requestProgress가 새 값을 읽는다.
+  LaunchedEffect(Unit) { viewModel.invalidateProgress() }
 
   val pickFolder = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.OpenDocumentTree(),
@@ -170,6 +176,7 @@ fun LibraryScreen(
             onRequestCover = viewModel::requestCover,
             onRequestFolderCover = viewModel::requestFolderCover,
             onRequestProgress = viewModel::requestProgress,
+            requestGeneration = state.requestGeneration,
           )
 
           ViewMode.Grid -> LibraryGrid(
@@ -184,6 +191,7 @@ fun LibraryScreen(
             onRequestCover = viewModel::requestCover,
             onRequestFolderCover = viewModel::requestFolderCover,
             onRequestProgress = viewModel::requestProgress,
+            requestGeneration = state.requestGeneration,
           )
         }
       }

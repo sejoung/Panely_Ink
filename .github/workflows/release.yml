@@ -46,8 +46,27 @@ jobs:
       - name: Run release checks
         run: ./gradlew testDebugUnitTest lintDebug compileDebugAndroidTestKotlin
 
+      # Secrets가 설정돼 있으면 서명된 APK를, 없으면 기존처럼 unsigned APK를 만든다.
+      # 필요한 Secrets: RELEASE_KEYSTORE_BASE64, RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD
+      - name: Decode release keystore
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${RELEASE_KEYSTORE_BASE64:-}" ]; then
+            echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+            echo "PANELY_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::RELEASE_KEYSTORE_BASE64 is not set - the release APK will be unsigned and cannot be installed."
+          fi
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+
       - name: Build release APK
         run: ./gradlew assembleRelease
+        env:
+          PANELY_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          PANELY_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          PANELY_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
 
       - name: Prepare release files
         shell: bash

@@ -4,6 +4,7 @@ import android.content.Context
 import android.app.ActivityManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.util.Log
 import io.github.sejoung.panelyink.R
 import io.github.sejoung.panelyink.core.archive.CbzArchive
@@ -16,6 +17,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.lang.ref.WeakReference
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -49,25 +51,35 @@ class CbzBookSession private constructor(
   @Volatile
   private var hintHeight: Int = 0
 
-  /**
-   * 디코드 해상도 세대(epoch). [setViewportHint]가 viewport 차원을 실제로 바꿀 때마다 증가한다.
-   *
-   * 캐시 키는 pageIndex뿐이라 해상도(inSampleSize)가 바뀌는 변경 — 두쪽↔단쪽 토글(viewport ½),
-   * 화면 회전, fit 모드에 따른 목표 해상도 변화 — 후에도 이전 해상도로 디코드된 비트맵이 그대로
-   * 반환되어 흐릿하게 보이는 문제가 있었다. epoch가 바뀌면 캐시/트림을 비워 현재 해상도로 재디코드하게
-   * 하고, 디코드 도중 epoch가 변하면 그 결과(stale 해상도)는 캐시에 넣지 않는다.
-   */
-  @Volatile
-  private var resolutionEpoch: Int = 0
-
-  /** [hintWidth]/[hintHeight]/[resolutionEpoch]의 일관된 스냅샷/갱신을 위한 락. */
+  /** [hintWidth]/[hintHeight]의 일관된 스냅샷/갱신을 위한 락. */
   private val resolutionLock = Any()
 
   /**
-   * 페이지별 자동 트리밍 결과. 디코드 시 1회 계산해서 보관 — viewport나 fit이
-   * 바뀌어도 같은 비트맵에 대한 본문 좌표는 변하지 않으므로 재계산 불필요.
+   * 페이지별 디코드 메타 — 원본 크기, 디코드에 쓴 inSampleSize, 자동 트리밍 결과.
+   *
+   * 캐시 키는 pageIndex뿐이라 해상도가 바뀌는 변경(두쪽↔단쪽 토글, 단독 슬롯↔페어, 회전) 후에도
+   * 이전 해상도 비트맵이 그대로 반환될 수 있다. 예전에는 viewport hint가 바뀔 때마다 캐시를 통째로
+   * 비웠는데, 두쪽 보기에서 단독 슬롯(전체 폭)과 페어(절반 폭)를 오갈 때마다 프리로드가 전부 버려지고
+   * 빈 화면이 한 번 그려지는 문제가 있었다. 지금은 캐시를 비우지 않고, [decode]가 hit 시점에
+   * "현재 hint에 필요한 sample보다 거칠게 디코드된 비트맵인가"만 판정해 그 페이지만 재디코드한다.
+   * 더 곱게 디코드된 비트맵은 그대로 재사용(메모리만 조금 더 쓰고 화질 손해 없음).
+   *
+   * 메타는 [PageMeta.bitmap]의 identity로 비트맵에 묶인다 — 트림 좌표는 비트맵 해상도에 종속되므로
+   * 다른 해상도의 비트맵에 stale 트림이 짝지어지면 안 된다. WeakReference라 LRU eviction을 막지 않는다.
    */
-  private val trimCache = ConcurrentHashMap<Int, TrimRect>()
+  private class PageMeta(
+    val bitmap: WeakReference<Bitmap>,
+    val srcWidth: Int,
+    val srcHeight: Int,
+    val sample: Int,
+    val bytesPerPixel: Int,
+    @Volatile var trim: TrimRect? = null,
+  )
+
+  private val pageMeta = ConcurrentHashMap<Int, PageMeta>()
+
+  /** 같은 페이지의 동시 put(취소된 디코드의 뒤늦은 결과 vs 새 디코드)을 직렬화. */
+  private val putLock = Any()
 
   /**
    * 세션이 닫혔는지 표시. close 직후 in-flight 디코드가 archive를 사용 중이다가
@@ -80,56 +92,53 @@ class CbzBookSession private constructor(
   /**
    * ReaderView가 onSizeChanged에서, 그리고 디코드 직전 [asDecoder]가 갱신. 0/음수면 무시.
    *
-   * 차원이 실제로 바뀌면 [resolutionEpoch]를 증가시키고 캐시/트림을 비운다 — 이전 해상도로
-   * 디코드된 비트맵이 새 viewport에 흐릿하게 그려지는 것을 막는다(두쪽 토글·회전 등).
-   * 차원이 동일하면(정상 페이지 넘김의 반복 호출) no-op이라 캐시가 유지된다.
+   * 캐시는 비우지 않는다 — 해상도가 부족한 페이지는 [decode]가 [PageMeta.sample]로 판정해 개별 재디코드.
    */
   fun setViewportHint(width: Int, height: Int) {
     if (width <= 0 || height <= 0) return
-    val changed = synchronized(resolutionLock) {
-      if (width == hintWidth && height == hintHeight) {
-        false
-      } else {
-        hintWidth = width
-        hintHeight = height
-        resolutionEpoch++
-        true
-      }
-    }
-    if (changed) {
-      cache.clear()
-      trimCache.clear()
+    synchronized(resolutionLock) {
+      hintWidth = width
+      hintHeight = height
     }
   }
 
   /**
-   * 캐시에 [pageIndex] 비트맵을 넣는다. 이미 있으면 재사용.
+   * 캐시에 [pageIndex] 비트맵을 넣는다. 현재 viewport hint에 충분한 해상도로 이미 있으면 재사용.
    *
-   * **병렬 호출 가능 (v1.1):** [CbzArchive]가 dup PFD로 N개 독립 ZipFile reader pool을 유지하므로
+   * **병렬 호출 가능 (v1.1):** [CbzArchive]가 N개 ZipFile reader pool을 유지하므로
    * 두 디코드가 서로 다른 reader를 빌려 동시에 IO/디코드 가능. 같은 page index에 대한 중복 호출은
-   * 둘 다 cache miss → 둘 다 디코드 → 둘 다 put (idempotent, 마지막이 살아남음). ReaderViewModel은
-   * 각 디코드 호출 인덱스가 다르도록 구성하므로 실제 중복은 없음.
+   * 둘 다 cache miss → 둘 다 디코드 → [putLock] 아래에서 더 고운 쪽이 살아남는다. ReaderViewModel은
+   * 각 디코드 호출 인덱스가 다르도록 구성하므로 실제 중복은 취소된 디코드의 뒤늦은 결과뿐.
    *
    * 세션이 close 되는 중 archive read가 IOException을 던지면 [CancellationException]으로 변환해
-   * preloadJob의 정상 cancel 경로로 합류시킨다.
+   * preloadJob의 정상 cancel 경로로 합류시킨다. 그 외 디코드 실패(손상 이미지, IO 오류, OOM)는
+   * [IOException]으로 던진다 — 호출자가 페이지 단위 실패로 처리.
    */
-  suspend fun decode(pageIndex: Int, trimEnabled: Boolean = true): Bitmap = withContext(Dispatchers.IO) {
+  suspend fun decode(pageIndex: Int, trimEnabled: Boolean = true): Bitmap {
+    val (w, h) = synchronized(resolutionLock) { hintWidth to hintHeight }
+    return decodeAt(pageIndex, trimEnabled, w, h)
+  }
+
+  private suspend fun decodeAt(
+    pageIndex: Int,
+    trimEnabled: Boolean,
+    viewportWidth: Int,
+    viewportHeight: Int,
+  ): Bitmap = withContext(Dispatchers.IO) {
     if (sessionClosed) throw CancellationException("session closed")
-    cache.get(pageIndex)?.let { bitmap ->
-      if (trimEnabled && !trimCache.containsKey(pageIndex)) {
-        trimCache[pageIndex] = computeTrim(bitmap)
+    cachedPage(pageIndex)?.let { (bitmap, meta) ->
+      val needed = targetSample(
+        meta.srcWidth, meta.srcHeight, viewportWidth, viewportHeight, meta.bytesPerPixel,
+      )
+      if (meta.sample <= needed) {
+        if (trimEnabled && meta.trim == null) meta.trim = computeTrim(bitmap)
+        return@withContext bitmap
       }
-      return@withContext bitmap
+      // 더 거칠게 디코드된 비트맵(예: 두쪽 페어용 ½ 해상도) — 아래에서 현재 해상도로 재디코드해 교체.
     }
     require(pageIndex in pages.indices) { "page $pageIndex out of range [$pageCount]" }
     val name = pages[pageIndex].name
     val t0 = System.currentTimeMillis()
-
-    // 디코드에 사용할 해상도/epoch를 일관된 스냅샷으로 캡처. 디코드 도중 해상도가 바뀌면
-    // (epoch 변동) 아래 put 단계에서 stale 결과를 캐시에 넣지 않는다.
-    val (snapW, snapH, snapEpoch) = synchronized(resolutionLock) {
-      Triple(hintWidth, hintHeight, resolutionEpoch)
-    }
 
     try {
       // 1. 헤더만 읽어 원본 크기 파악
@@ -143,9 +152,11 @@ class CbzBookSession private constructor(
       }
 
       // 2. viewport에 맞춰 inSampleSize 계산
-      val targetW = if (snapW > 0) snapW else bounds.outWidth
-      val targetH = if (snapH > 0) snapH else bounds.outHeight
-      val sample = computeInSampleSize(bounds.outWidth, bounds.outHeight, targetW, targetH)
+      // JPEG는 알파가 없어 RGB_565(2byte)가 항상 적용된다. 그 외(PNG/WebP)는 ARGB_8888 폴백을 가정.
+      val bytesPerPixel = if (bounds.outMimeType == "image/jpeg") 2 else 4
+      val sample = targetSample(
+        bounds.outWidth, bounds.outHeight, viewportWidth, viewportHeight, bytesPerPixel,
+      )
 
       // 3. 본 디코드 — RGB_565로 메모리 절반(ARGB_8888 4byte → RGB_565 2byte/픽셀).
       //
@@ -162,8 +173,14 @@ class CbzBookSession private constructor(
         inSampleSize = sample
         inPreferredConfig = Bitmap.Config.RGB_565
       }
-      val bitmap = archive.openPage(pageIndex).use { input ->
-        BitmapFactory.decodeStream(input, null, opts)
+      val bitmap = try {
+        archive.openPage(pageIndex).use { input ->
+          BitmapFactory.decodeStream(input, null, opts)
+        }
+      } catch (oom: OutOfMemoryError) {
+        // 캐시를 비워 회복 여지를 만들고 페이지 단위 실패로 보고 — 프로세스를 죽이지 않는다.
+        cache.clear()
+        throw IOException("out of memory decoding $name", oom)
       } ?: throw IOException("decode failed: $name")
       val tDecode = System.currentTimeMillis()
       Log.d(
@@ -172,16 +189,18 @@ class CbzBookSession private constructor(
           "src=${bounds.outWidth}x${bounds.outHeight} sample=$sample → ${bitmap.width}x${bitmap.height}",
       )
 
-      // 디코드 도중 해상도가 바뀌었으면(두쪽 토글·회전 등으로 setViewportHint가 epoch 증가)
-      // 이 비트맵은 stale 해상도라 캐시에 넣지 않는다 — 캐시 오염을 막고 현재 trigger가
-      // 새 해상도로 재디코드하게 둔다. 호출자에게는 그대로 반환(emit→invalidate는 무해).
-      if (resolutionEpoch == snapEpoch) {
-        cache.put(pageIndex, bitmap)
-        // 자동 여백 트리밍은 사용자가 켠 경우에만 계산한다. 꺼진 상태에서는 행 버퍼 IntArray
-        // 할당과 픽셀 스캔을 생략해 페이지 전환 비용을 줄인다. 트림 좌표는 비트맵 해상도에
-        // 종속되므로 stale epoch에서는 계산/저장하지 않는다.
-        if (trimEnabled && !trimCache.containsKey(pageIndex)) {
-          trimCache[pageIndex] = computeTrim(bitmap)
+      val meta = PageMeta(
+        WeakReference(bitmap), bounds.outWidth, bounds.outHeight, sample, bytesPerPixel,
+      )
+      // 자동 여백 트리밍은 사용자가 켠 경우에만 계산한다. 꺼진 상태에서는 행 버퍼 IntArray
+      // 할당과 픽셀 스캔을 생략해 페이지 전환 비용을 줄인다.
+      if (trimEnabled) meta.trim = computeTrim(bitmap)
+      synchronized(putLock) {
+        // 취소된 이전 디코드(더 거친 해상도)가 뒤늦게 끝나 더 고운 비트맵을 덮어쓰지 않게 한다.
+        val existing = cachedPage(pageIndex)
+        if (existing == null || existing.second.sample > sample) {
+          cache.put(pageIndex, bitmap)
+          pageMeta[pageIndex] = meta
         }
       }
       bitmap
@@ -192,11 +211,44 @@ class CbzBookSession private constructor(
     }
   }
 
+  /**
+   * viewport에 맞춘 inSampleSize에, 비트맵 1장이 페이지 캐시의 절반을 넘지 않도록 하는 상한을 더한다.
+   * 세로로 긴 웹툰 스트립(예: 1200×21000)은 [computeInSampleSize]가 두 변 모두 viewport 이상일 때만
+   * 줄이므로 sample=1로 남는데, 그대로 디코드하면 캐시 상한을 넘어 put 즉시 evict되어 영영 빈 페이지가 된다.
+   */
+  private fun targetSample(
+    srcW: Int,
+    srcH: Int,
+    viewportWidth: Int,
+    viewportHeight: Int,
+    bytesPerPixel: Int,
+  ): Int {
+    val targetW = if (viewportWidth > 0) viewportWidth else srcW
+    val targetH = if (viewportHeight > 0) viewportHeight else srcH
+    var sample = computeInSampleSize(srcW, srcH, targetW, targetH)
+    val budget = cache.maxBytes / 2
+    while ((srcW.toLong() / sample) * (srcH.toLong() / sample) * bytesPerPixel > budget && sample < MAX_SAMPLE) {
+      sample *= 2
+    }
+    return sample
+  }
+
+  /** 캐시에 살아 있는 비트맵과 그 비트맵에 묶인 메타. 메타가 다른 비트맵의 것이면 null. */
+  private fun cachedPage(pageIndex: Int): Pair<Bitmap, PageMeta>? {
+    val bitmap = cache.get(pageIndex) ?: return null
+    val meta = pageMeta[pageIndex]?.takeIf { it.bitmap.get() === bitmap } ?: return null
+    return bitmap to meta
+  }
+
   /** 동기적으로 캐시 hit만 조회. View.onDraw 같은 메인스레드 핫패스용. */
   fun pageBitmap(pageIndex: Int): Bitmap? = cache.get(pageIndex)
 
-  /** 자동 트리밍 결과(없으면 null). 디코드가 끝난 페이지에 대해 즉시 hit. */
-  fun pageTrim(pageIndex: Int): TrimRect? = trimCache[pageIndex]
+  /**
+   * [bitmap]에 대한 자동 트리밍 결과(없으면 null). [pageBitmap]으로 받은 비트맵을 그대로 넘긴다 —
+   * 그 사이 같은 페이지가 다른 해상도로 교체됐으면 좌표계가 달라 null을 돌려준다.
+   */
+  fun pageTrim(pageIndex: Int, bitmap: Bitmap): TrimRect? =
+    pageMeta[pageIndex]?.takeIf { it.bitmap.get() === bitmap }?.trim
 
   private fun computeTrim(bitmap: Bitmap): TrimRect {
     val w = bitmap.width
@@ -222,7 +274,7 @@ class CbzBookSession private constructor(
       trimEnabled: Boolean,
     ): DecodedPage {
       setViewportHint(viewportWidth, viewportHeight)
-      val bitmap = this@CbzBookSession.decode(pageIndex, trimEnabled)
+      val bitmap = decodeAt(pageIndex, trimEnabled, viewportWidth, viewportHeight)
       return DecodedPage(
         pageIndex = pageIndex,
         width = bitmap.width,
@@ -244,45 +296,83 @@ class CbzBookSession private constructor(
     // preloadJob은 viewModel.scope.cancel()로 이미 cancel 시그널을 받은 상태.
     sessionClosed = true
     cache.clear()
-    trimCache.clear()
+    pageMeta.clear()
     archive.close()
   }
 
   companion object {
     private const val TAG = "PanelyInk.Session"
 
-    suspend fun open(context: Context, entry: BookRef): CbzBookSession =
-      withContext(Dispatchers.IO) {
-        val ctx = context.applicationContext
-        Log.d(
-          TAG,
-          "open ${entry.displayName} (${entry.sizeBytes / 1024} KB) " +
-            "uri=${entry.documentUri} nested=${entry.nestedEntryName ?: "-"}",
-        )
-        val archive = if (entry.nestedEntryName != null) {
-          // ZIP-of-CBZ 자식 — 부모 ZIP에서 추출 후 단일 cbz로 open
-          val tempFile = NestedZipExtractor.extract(
-            ctx, entry.documentUri, entry.nestedEntryName,
-          )
-          // 두쪽 보기 병렬 디코드를 위해 reader 2개. spread 미사용 시도 60-100ms 초과 비용일 뿐.
-          CbzArchive.open(tempFile, parallelReaders = CbzArchive.PARALLEL_READERS_FOR_SPREAD)
-        } else {
-          CbzArchive.open(ctx, entry.documentUri, parallelReaders = CbzArchive.PARALLEL_READERS_FOR_SPREAD)
-        }
-        if (archive.pages.isEmpty()) {
-          archive.close()
-          throw IOException(ctx.getString(R.string.reader_error_no_images, entry.displayName))
-        }
-        val session = CbzBookSession(
-          bookId = entry.bookId.value,
-          archive = archive,
-          cache = BitmapPageCache(maxBytes = pageCacheMaxBytes(ctx)),
-        )
-        // 첫 디코드는 viewport가 아직 잡히기 전에 일어날 수 있다 — displayMetrics를 fallback으로.
-        val dm = ctx.resources.displayMetrics
-        session.setViewportHint(dm.widthPixels, dm.heightPixels)
-        session
+    suspend fun open(context: Context, entry: BookRef): CbzBookSession {
+      // withContext(IO) 블록은 blocking IO라 취소돼도 끝까지 돌아 세션을 만든다. 그 뒤 withContext가
+      // 결과 대신 CancellationException을 던지면 호출자는 세션을 받지 못해 닫을 수 없다(PFD/ZipFile 누수).
+      // 블록이 만든 세션을 여기서 잡아 두었다가 취소 시 직접 닫는다.
+      var opened: CbzBookSession? = null
+      try {
+        return withContext(Dispatchers.IO) { openOnIo(context, entry).also { opened = it } }
+      } catch (cancel: CancellationException) {
+        opened?.close()
+        throw cancel
       }
+    }
+
+    /** 추출본을 열어 페이지가 있는 archive를 돌려준다. 열기 실패/빈 archive면 null([rethrow]면 그대로 던짐). */
+    private suspend fun openNested(
+      ctx: Context,
+      parentUri: Uri,
+      entryName: String,
+      rethrow: Boolean = false,
+    ): CbzArchive? {
+      val tempFile = NestedZipExtractor.extract(ctx, parentUri, entryName)
+      return try {
+        // 두쪽 보기 병렬 디코드를 위해 reader 2개. spread 미사용 시도 60-100ms 초과 비용일 뿐.
+        val archive = CbzArchive.open(tempFile, parallelReaders = CbzArchive.PARALLEL_READERS_FOR_SPREAD)
+        if (archive.pages.isEmpty() && !rethrow) {
+          archive.close()
+          null
+        } else {
+          archive
+        }
+      } catch (io: IOException) {
+        if (rethrow) throw io
+        null
+      }
+    }
+
+    private suspend fun openOnIo(context: Context, entry: BookRef): CbzBookSession {
+      val ctx = context.applicationContext
+      Log.d(
+        TAG,
+        "open ${entry.displayName} (${entry.sizeBytes / 1024} KB) " +
+          "uri=${entry.documentUri} nested=${entry.nestedEntryName ?: "-"}",
+      )
+      val archive = if (entry.nestedEntryName != null) {
+        // ZIP-of-CBZ 자식 — 부모 ZIP에서 추출 후 단일 cbz로 open.
+        // 캐시된 추출본이 손상돼 열리지 않으면(구버전이 남긴 잘린 파일 등) 지우고 1회만 재추출한다 —
+        // 그대로 두면 전체 초기화 전까지 그 권을 영영 열 수 없다.
+        openNested(ctx, entry.documentUri, entry.nestedEntryName)
+          ?: run {
+            Log.w(TAG, "cached nested extraction unreadable, re-extracting: ${entry.nestedEntryName}")
+            NestedZipExtractor.invalidate(ctx, entry.documentUri, entry.nestedEntryName)
+            openNested(ctx, entry.documentUri, entry.nestedEntryName, rethrow = true)!!
+          }
+      } else {
+        CbzArchive.open(ctx, entry.documentUri, parallelReaders = CbzArchive.PARALLEL_READERS_FOR_SPREAD)
+      }
+      if (archive.pages.isEmpty()) {
+        archive.close()
+        throw IOException(ctx.getString(R.string.reader_error_no_images, entry.displayName))
+      }
+      val session = CbzBookSession(
+        bookId = entry.bookId.value,
+        archive = archive,
+        cache = BitmapPageCache(maxBytes = pageCacheMaxBytes(ctx)),
+      )
+      // 첫 디코드는 viewport가 아직 잡히기 전에 일어날 수 있다 — displayMetrics를 fallback으로.
+      val dm = ctx.resources.displayMetrics
+      session.setViewportHint(dm.widthPixels, dm.heightPixels)
+      return session
+    }
   }
 }
 
@@ -298,6 +388,9 @@ private const val DEFAULT_MEMORY_CLASS_MB = 256
 private const val MIN_PAGE_CACHE_MB = 32
 private const val LOW_RAM_PAGE_CACHE_MB = 48
 private const val MAX_PAGE_CACHE_MB = 100
+
+/** 캐시 상한 보호용 다운샘플의 안전 상한. */
+private const val MAX_SAMPLE = 64
 
 /**
  * Android Bitmap loading best practice — viewport보다 작아지지 않을 때까지 2의 거듭제곱으로

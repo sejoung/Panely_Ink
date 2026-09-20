@@ -13,6 +13,9 @@ class BitmapPageCache(maxBytes: Long) {
 
     private val maxBytesInt: Int = maxBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
 
+    /** 캐시 상한(byte). 디코드 단계에서 비트맵 1장의 크기 상한을 정할 때 참조. */
+    val maxBytes: Long get() = maxBytesInt.toLong()
+
     private val cache = object : LruCache<Int, Bitmap>(maxBytesInt) {
         override fun sizeOf(key: Int, value: Bitmap): Int = value.byteCount
     }

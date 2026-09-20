@@ -64,7 +64,7 @@ abstract class PanelyDatabase : RoomDatabase() {
     private const val DB_NAME = "panely_ink.db"
 
     /** v1 → v2: book_settings 테이블 신규. 기존 position 데이터는 그대로 유지. */
-    private val MIGRATION_1_2 = object : Migration(1, 2) {
+    internal val MIGRATION_1_2 = object : Migration(1, 2) {
       override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(
           """
@@ -88,7 +88,7 @@ abstract class PanelyDatabase : RoomDatabase() {
      * v2 → v3: position에 page_count 컬럼 추가. 기존 행은 0(unknown)으로
      * 시작하고, 사용자가 책을 열면 ReaderScreen이 자동으로 채운다.
      */
-    private val MIGRATION_2_3 = object : Migration(2, 3) {
+    internal val MIGRATION_2_3 = object : Migration(2, 3) {
       override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(
           "ALTER TABLE `position` ADD COLUMN `page_count` INTEGER NOT NULL DEFAULT 0",
@@ -100,7 +100,7 @@ abstract class PanelyDatabase : RoomDatabase() {
      * v3 → v4: cover_meta 테이블 신규. 기존 표지 디스크 캐시는 그대로 — 첫 진입에
      * 메타가 없으니 재추출되지만 정상 책은 디스크 hit이라 1회 비용만.
      */
-    private val MIGRATION_3_4 = object : Migration(3, 4) {
+    internal val MIGRATION_3_4 = object : Migration(3, 4) {
       override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(
           """
@@ -117,7 +117,7 @@ abstract class PanelyDatabase : RoomDatabase() {
     }
 
     /** v4 → v5: 페이지 북마크 테이블 신규. */
-    private val MIGRATION_4_5 = object : Migration(4, 5) {
+    internal val MIGRATION_4_5 = object : Migration(4, 5) {
       override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(
           """
@@ -350,6 +350,24 @@ abstract class PanelyDatabase : RoomDatabase() {
       }
     }
 
+    /**
+     * 등록된 전체 마이그레이션 — production builder와 마이그레이션 테스트가 같은 목록을 공유한다.
+     * 새 MIGRATION_X_Y는 여기에 추가. companion 초기화는 선언 순서대로라 모든 MIGRATION_* 뒤에 둔다.
+     */
+    internal val ALL_MIGRATIONS: Array<Migration> = arrayOf(
+      MIGRATION_1_2,
+      MIGRATION_2_3,
+      MIGRATION_3_4,
+      MIGRATION_4_5,
+      MIGRATION_5_6,
+      MIGRATION_6_7,
+      MIGRATION_7_8,
+      MIGRATION_8_9,
+      MIGRATION_9_10,
+      MIGRATION_10_11,
+      MIGRATION_11_12,
+    )
+
     @Volatile
     private var instance: PanelyDatabase? = null
 
@@ -360,19 +378,7 @@ abstract class PanelyDatabase : RoomDatabase() {
           PanelyDatabase::class.java,
           DB_NAME,
         )
-          .addMigrations(
-            MIGRATION_1_2,
-            MIGRATION_2_3,
-            MIGRATION_3_4,
-            MIGRATION_4_5,
-            MIGRATION_5_6,
-            MIGRATION_6_7,
-            MIGRATION_7_8,
-            MIGRATION_8_9,
-            MIGRATION_9_10,
-            MIGRATION_10_11,
-            MIGRATION_11_12,
-          )
+          .addMigrations(*ALL_MIGRATIONS)
           .build()
           .also { instance = it }
       }

@@ -133,6 +133,7 @@ internal fun ReaderViewEffects(
     state.spreadMode,
     state.coverAlone,
     state.direction,
+    state.failedPages,
     view,
   ) {
     view?.setPageIndex(state.currentPage)
@@ -143,10 +144,11 @@ internal fun ReaderViewEffects(
     view?.setSpreadMode(state.spreadMode)
     view?.setCoverAlone(state.coverAlone)
     view?.setDirection(state.direction)
+    view?.setFailedPages(state.failedPages)
   }
 
   LaunchedEffect(viewModel, view) {
-    viewModel.decoded.collect { view?.invalidate() }
+    viewModel.decoded.collect { index -> view?.onPageDecoded(index) }
   }
 
   LaunchedEffect(state.fullRefreshGeneration, view) {
@@ -277,7 +279,8 @@ internal fun ReaderHardwareKeyHandler(
   // currentPage 자체를 key로 두면 매 페이지 전환마다 클로저를 재할당해 GC 압박이 누적된다.
   // overrides는 형제 권으로 propagate되므로 변경 시에는 dispatcher도 재구성.
   val atFirstPage = state.currentPage == 0
-  val atLastPage = state.currentPage == viewModel.pageCount - 1
+  // 두쪽 페어의 마지막 spread는 currentPage가 pageCount - 2 — 보이는 마지막 페이지로 판정.
+  val atLastPage = state.lastVisiblePage(viewModel.pageCount) == viewModel.pageCount - 1
   val propagatedOverrides by viewModel.overrides.collectAsState()
   DisposableEffect(
     activity,
@@ -320,7 +323,12 @@ internal fun ReaderHardwareKeyHandler(
         else -> ReaderInput.dispatch(
           event = event,
           onPrev = {
-            val previousBook = previousBookForBoundary(state, context)
+            // 길게 눌러 생기는 key repeat으로는 권을 넘기지 않는다 — 경계에서 한 번 더 눌러야 이동.
+            val previousBook = if (event.repeatCount == 0) {
+              previousBookForBoundary(state, context)
+            } else {
+              null
+            }
             if (previousBook != null) {
               onNavigate(previousBook, propagatedOverrides)
             } else {
@@ -328,7 +336,11 @@ internal fun ReaderHardwareKeyHandler(
             }
           },
           onNext = {
-            val nextBook = nextBookForBoundary(state, viewModel.pageCount, context)
+            val nextBook = if (event.repeatCount == 0) {
+              nextBookForBoundary(state, viewModel.pageCount, context)
+            } else {
+              null
+            }
             if (nextBook != null) {
               onNavigate(nextBook, propagatedOverrides)
             } else {

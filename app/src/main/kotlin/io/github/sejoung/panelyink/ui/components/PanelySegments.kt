@@ -50,8 +50,9 @@ internal fun DirectionSegments(
   )
 }
 
+/** 끔/켬 2분할. 흑백 반전, 표지 한 장 단독처럼 Boolean 토글 전반에 사용. */
 @Composable
-internal fun InvertSegments(
+internal fun OnOffSegments(
   enabled: Boolean,
   onSelect: (Boolean) -> Unit,
 ) {

@@ -74,6 +74,7 @@
     <string name="reader_loading_decode_first_page">첫 페이지 디코드 중… (%1$d쪽)</string>
     <string name="reader_error_no_message">(메시지 없음)</string>
     <string name="reader_error_no_images">이미지 엔트리가 없습니다: %1$s</string>
+    <string name="reader_page_decode_failed">이 페이지를 표시할 수 없습니다</string>
     <string name="reader_next_book">다음 권</string>
     <string name="reader_previous_book">이전 권</string>
     <string name="reader_page_jump">페이지 점프</string>

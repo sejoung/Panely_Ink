@@ -60,6 +60,12 @@ internal fun LibraryList(
   onRequestCover: (BookEntry) -> Unit,
   onRequestFolderCover: (FolderEntry) -> Unit,
   onRequestProgress: (BookEntry) -> Unit,
+  /**
+   * 행의 lazy 요청 effect 추가 키. "새로고침"/"표지 캐시 비우기"로 ViewModel 캐시가 무효화되면
+   * 값이 올라가 화면에 떠 있는 행들이 권수/표지를 다시 요청한다(키가 documentUri뿐이면
+   * 이미 composition에 있는 행은 effect가 재발화하지 않아 빈 채로 남음).
+   */
+  requestGeneration: Int = 0,
 ) {
   val siblings = remember(entries) { entries.filterIsInstance<BookEntry>() }
   LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -70,6 +76,7 @@ internal fun LibraryList(
           count = folderCounts[entry.documentUri],
           cover = folderCovers[entry.documentUri],
           showCover = viewMode == ViewMode.Cover,
+          requestGeneration = requestGeneration,
           onClick = { onEnterFolder(entry) },
           onRequestCount = onRequestCount,
           onRequestCover = onRequestFolderCover,
@@ -84,6 +91,7 @@ internal fun LibraryList(
               entry = entry,
               cover = covers[bookId],
               progress = bookProgress[bookId],
+              requestGeneration = requestGeneration,
               onClick = { onOpenBook(entry, siblings) },
               onRequestCover = onRequestCover,
               onRequestProgress = onRequestProgress,
@@ -118,6 +126,12 @@ internal fun LibraryGrid(
   onRequestCover: (BookEntry) -> Unit,
   onRequestFolderCover: (FolderEntry) -> Unit,
   onRequestProgress: (BookEntry) -> Unit,
+  /**
+   * 행의 lazy 요청 effect 추가 키. "새로고침"/"표지 캐시 비우기"로 ViewModel 캐시가 무효화되면
+   * 값이 올라가 화면에 떠 있는 행들이 권수/표지를 다시 요청한다(키가 documentUri뿐이면
+   * 이미 composition에 있는 행은 effect가 재발화하지 않아 빈 채로 남음).
+   */
+  requestGeneration: Int = 0,
 ) {
   val spacing = LocalPanelyInkSpacing.current
   val siblings = remember(entries) { entries.filterIsInstance<BookEntry>() }
@@ -135,6 +149,7 @@ internal fun LibraryGrid(
           entry = entry,
           count = folderCounts[entry.documentUri],
           cover = folderCovers[entry.documentUri],
+          requestGeneration = requestGeneration,
           onClick = { onEnterFolder(entry) },
           onRequestCount = onRequestCount,
           onRequestCover = onRequestFolderCover,
@@ -148,6 +163,7 @@ internal fun LibraryGrid(
             entry = entry,
             cover = covers[bookId],
             progress = bookProgress[bookId],
+            requestGeneration = requestGeneration,
             onClick = { onOpenBook(entry, siblings) },
             onRequestCover = onRequestCover,
             onRequestProgress = onRequestProgress,
@@ -196,6 +212,7 @@ private fun BookGridCell(
   entry: BookEntry,
   cover: ImageBitmap?,
   progress: BookProgress?,
+  requestGeneration: Int,
   onClick: () -> Unit,
   onRequestCover: (BookEntry) -> Unit,
   onRequestProgress: (BookEntry) -> Unit,
@@ -204,8 +221,8 @@ private fun BookGridCell(
   // documentUri만 키로 — `cover == null`은 키에서 제외. ViewModel의 LRU가 evict해서
   // cover가 null로 바뀌면 effect 재발화 → 재요청 → cache 채움 → 다른 항목 evict → ...
   // 무한 thrash 루프의 트리거가 됐다. requestCover 자체가 idempotent해서 한 번 호출이면
-  // 충분.
-  LaunchedEffect(entry.documentUri) {
+  // 충분. requestGeneration은 캐시 무효화(새로고침/표지 캐시 비우기) 시에만 바뀌는 키.
+  LaunchedEffect(entry.documentUri, requestGeneration) {
     onRequestCover(entry)
     onRequestProgress(entry)
   }
@@ -233,13 +250,14 @@ private fun FolderGridCell(
   entry: FolderEntry,
   count: Int?,
   cover: ImageBitmap?,
+  requestGeneration: Int,
   onClick: () -> Unit,
   onRequestCount: (FolderEntry) -> Unit,
   onRequestCover: (FolderEntry) -> Unit,
 ) {
   val typography = LocalPanelyInkTypography.current
   // BookGridCell과 동일 이유 — `cover == null` 트리거 제거로 thrash 방어.
-  LaunchedEffect(entry.documentUri) {
+  LaunchedEffect(entry.documentUri, requestGeneration) {
     onRequestCount(entry)
     onRequestCover(entry)
   }
@@ -268,6 +286,7 @@ private fun FolderRow(
   count: Int?,
   cover: ImageBitmap?,
   showCover: Boolean,
+  requestGeneration: Int,
   onClick: () -> Unit,
   onRequestCount: (FolderEntry) -> Unit,
   onRequestCover: (FolderEntry) -> Unit,
@@ -277,7 +296,7 @@ private fun FolderRow(
 
   // `cover == null` 키 제거 — LRU evict로 cover가 null로 바뀌면 effect 재발화 → 재요청
   // → 다른 항목 evict → ... thrash 루프. requestCover는 idempotent.
-  LaunchedEffect(entry.documentUri, showCover) {
+  LaunchedEffect(entry.documentUri, showCover, requestGeneration) {
     onRequestCount(entry)
     if (showCover) onRequestCover(entry)
   }
@@ -313,6 +332,7 @@ private fun BookRow(
   entry: BookEntry,
   cover: ImageBitmap?,
   progress: BookProgress?,
+  requestGeneration: Int,
   onClick: () -> Unit,
   onRequestCover: (BookEntry) -> Unit,
   onRequestProgress: (BookEntry) -> Unit,
@@ -321,7 +341,7 @@ private fun BookRow(
   val spacing = LocalPanelyInkSpacing.current
 
   // BookGridCell과 동일 — `cover == null` 트리거 제거.
-  LaunchedEffect(entry.documentUri) {
+  LaunchedEffect(entry.documentUri, requestGeneration) {
     onRequestCover(entry)
     onRequestProgress(entry)
   }

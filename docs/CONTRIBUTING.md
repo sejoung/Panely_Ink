@@ -65,8 +65,13 @@ Run connected tests for Room migrations, Android framework behavior, or SAF/URI 
 - `.github/workflows/pages.yml` deploys `docs/` to GitHub Pages. The root page is
   `docs/index.html`, which resolves the latest APK from GitHub Releases.
 
-Release APK signing is not configured yet. Add a signing config and GitHub Secrets before treating
-release artifacts as install-ready production builds.
+Release APK signing reads the keystore from environment variables (`PANELY_KEYSTORE_FILE`,
+`PANELY_KEYSTORE_PASSWORD`, `PANELY_KEY_ALIAS`, `PANELY_KEY_PASSWORD`). The release workflow fills
+them from the GitHub Secrets `RELEASE_KEYSTORE_BASE64` (base64 of the `.jks`),
+`RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD`. Without them the build
+still succeeds but produces an unsigned APK that cannot be installed. Keep the keystore out of the
+repository and never change it after the first signed release — Android refuses to update an app
+signed with a different key.
 
 For local release preparation:
 
