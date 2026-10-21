@@ -17,8 +17,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
-import java.lang.ref.WeakReference
-import java.util.concurrent.ConcurrentHashMap
+import java.util.Collections
+import java.util.WeakHashMap
 
 /**
  * 한 권의 책에 대한 자원 모음. ReaderScreen 라이프사이클과 1:1로 묶여 관리된다.
@@ -64,11 +64,11 @@ class CbzBookSession private constructor(
    * "현재 hint에 필요한 sample보다 거칠게 디코드된 비트맵인가"만 판정해 그 페이지만 재디코드한다.
    * 더 곱게 디코드된 비트맵은 그대로 재사용(메모리만 조금 더 쓰고 화질 손해 없음).
    *
-   * 메타는 [PageMeta.bitmap]의 identity로 비트맵에 묶인다 — 트림 좌표는 비트맵 해상도에 종속되므로
-   * 다른 해상도의 비트맵에 stale 트림이 짝지어지면 안 된다. WeakReference라 LRU eviction을 막지 않는다.
+   * 메타는 비트맵 자체(identity)를 키로 묶는다 — 트림 좌표는 비트맵 해상도에 종속되므로
+   * 다른 해상도의 비트맵에 stale 트림이 짝지어지면 안 된다. 페이지 번호로 묶으면 cache.put과 메타 갱신
+   * 사이에 그려진 프레임이 짝 안 맞는 메타를 보게 된다. WeakHashMap이라 LRU eviction을 막지 않는다.
    */
   private class PageMeta(
-    val bitmap: WeakReference<Bitmap>,
     val srcWidth: Int,
     val srcHeight: Int,
     val sample: Int,
@@ -76,7 +76,8 @@ class CbzBookSession private constructor(
     @Volatile var trim: TrimRect? = null,
   )
 
-  private val pageMeta = ConcurrentHashMap<Int, PageMeta>()
+  private val metaByBitmap: MutableMap<Bitmap, PageMeta> =
+    Collections.synchronizedMap(WeakHashMap())
 
   /** 같은 페이지의 동시 put(취소된 디코드의 뒤늦은 결과 vs 새 디코드)을 직렬화. */
   private val putLock = Any()
@@ -178,8 +179,9 @@ class CbzBookSession private constructor(
           BitmapFactory.decodeStream(input, null, opts)
         }
       } catch (oom: OutOfMemoryError) {
-        // 캐시를 비워 회복 여지를 만들고 페이지 단위 실패로 보고 — 프로세스를 죽이지 않는다.
-        cache.clear()
+        // 캐시 절반을 LRU로 비워 회복 여지를 만들고 페이지 단위 실패로 보고 — 프로세스를 죽이지 않는다.
+        // 통째로 비우면 화면에 떠 있는 페이지까지 사라져 다음 invalidate가 빈 화면을 그린다.
+        cache.trimToHalf()
         throw IOException("out of memory decoding $name", oom)
       } ?: throw IOException("decode failed: $name")
       val tDecode = System.currentTimeMillis()
@@ -189,9 +191,7 @@ class CbzBookSession private constructor(
           "src=${bounds.outWidth}x${bounds.outHeight} sample=$sample → ${bitmap.width}x${bitmap.height}",
       )
 
-      val meta = PageMeta(
-        WeakReference(bitmap), bounds.outWidth, bounds.outHeight, sample, bytesPerPixel,
-      )
+      val meta = PageMeta(bounds.outWidth, bounds.outHeight, sample, bytesPerPixel)
       // 자동 여백 트리밍은 사용자가 켠 경우에만 계산한다. 꺼진 상태에서는 행 버퍼 IntArray
       // 할당과 픽셀 스캔을 생략해 페이지 전환 비용을 줄인다.
       if (trimEnabled) meta.trim = computeTrim(bitmap)
@@ -199,8 +199,9 @@ class CbzBookSession private constructor(
         // 취소된 이전 디코드(더 거친 해상도)가 뒤늦게 끝나 더 고운 비트맵을 덮어쓰지 않게 한다.
         val existing = cachedPage(pageIndex)
         if (existing == null || existing.second.sample > sample) {
+          // 메타 먼저 — put 직후 그려지는 프레임도 이 비트맵의 트림을 찾을 수 있게.
+          metaByBitmap[bitmap] = meta
           cache.put(pageIndex, bitmap)
-          pageMeta[pageIndex] = meta
         }
       }
       bitmap
@@ -233,10 +234,10 @@ class CbzBookSession private constructor(
     return sample
   }
 
-  /** 캐시에 살아 있는 비트맵과 그 비트맵에 묶인 메타. 메타가 다른 비트맵의 것이면 null. */
+  /** 캐시에 살아 있는 비트맵과 그 비트맵에 묶인 메타. 메타가 없으면 null. */
   private fun cachedPage(pageIndex: Int): Pair<Bitmap, PageMeta>? {
     val bitmap = cache.get(pageIndex) ?: return null
-    val meta = pageMeta[pageIndex]?.takeIf { it.bitmap.get() === bitmap } ?: return null
+    val meta = metaByBitmap[bitmap] ?: return null
     return bitmap to meta
   }
 
@@ -245,10 +246,10 @@ class CbzBookSession private constructor(
 
   /**
    * [bitmap]에 대한 자동 트리밍 결과(없으면 null). [pageBitmap]으로 받은 비트맵을 그대로 넘긴다 —
-   * 그 사이 같은 페이지가 다른 해상도로 교체됐으면 좌표계가 달라 null을 돌려준다.
+   * 트림은 비트맵 identity로 찾으므로 그 사이 같은 페이지가 다른 해상도로 교체돼도 [bitmap]의 좌표계 그대로다.
    */
-  fun pageTrim(pageIndex: Int, bitmap: Bitmap): TrimRect? =
-    pageMeta[pageIndex]?.takeIf { it.bitmap.get() === bitmap }?.trim
+  @Suppress("UNUSED_PARAMETER")
+  fun pageTrim(pageIndex: Int, bitmap: Bitmap): TrimRect? = metaByBitmap[bitmap]?.trim
 
   private fun computeTrim(bitmap: Bitmap): TrimRect {
     val w = bitmap.width
@@ -296,7 +297,7 @@ class CbzBookSession private constructor(
     // preloadJob은 viewModel.scope.cancel()로 이미 cancel 시그널을 받은 상태.
     sessionClosed = true
     cache.clear()
-    pageMeta.clear()
+    metaByBitmap.clear()
     archive.close()
   }
 
@@ -316,7 +317,10 @@ class CbzBookSession private constructor(
       }
     }
 
-    /** 추출본을 열어 페이지가 있는 archive를 돌려준다. 열기 실패/빈 archive면 null([rethrow]면 그대로 던짐). */
+    /**
+     * 추출본을 열어 archive를 돌려준다. 열기 실패(손상된 추출본)면 null([rethrow]면 그대로 던짐).
+     * 정상적으로 열렸는데 이미지가 없는 권은 손상이 아니므로 그대로 돌려준다 — 재추출해도 결과가 같다.
+     */
     private suspend fun openNested(
       ctx: Context,
       parentUri: Uri,
@@ -326,13 +330,7 @@ class CbzBookSession private constructor(
       val tempFile = NestedZipExtractor.extract(ctx, parentUri, entryName)
       return try {
         // 두쪽 보기 병렬 디코드를 위해 reader 2개. spread 미사용 시도 60-100ms 초과 비용일 뿐.
-        val archive = CbzArchive.open(tempFile, parallelReaders = CbzArchive.PARALLEL_READERS_FOR_SPREAD)
-        if (archive.pages.isEmpty() && !rethrow) {
-          archive.close()
-          null
-        } else {
-          archive
-        }
+        CbzArchive.open(tempFile, parallelReaders = CbzArchive.PARALLEL_READERS_FOR_SPREAD)
       } catch (io: IOException) {
         if (rethrow) throw io
         null

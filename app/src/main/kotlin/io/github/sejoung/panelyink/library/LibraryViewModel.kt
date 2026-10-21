@@ -200,7 +200,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
   /**
    * 영속된 마지막 path 복원. 저장 이후 폴더가 삭제/이름변경됐거나 SD가 빠졌을 수 있으므로
    * 열거에 실패하면 가장 가까운 열거 가능한 조상으로 물러나고, 그것도 없으면 root 목록으로.
-   * 물러난 path는 [setPath]로 다시 영속 — 다음 실행이 같은 실패를 반복하지 않게.
+   * 물러난 path는 화면에만 반영하고 **영속하지 않는다** — 실패가 일시적(SD 마운트 전, provider가
+   * 잠깐 null cursor)일 수 있어서, 저장해 버리면 사용자의 마지막 위치가 영영 사라진다. 사용자가
+   * 이동하면 그때 [setPath]가 새 위치를 저장한다.
    *
    * ZIP-of-CBZ 가상 폴더는 codec이 `nestedBooks` 없이 표식만 저장하므로 여기서 ZIP을 다시
    * 검사해 채운다. 표식이 없던 예전 포맷(이름이 .zip/.cbz인 꼬리)도 같은 방식으로 복구 시도.
@@ -210,10 +212,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     listJob = launchListing {
       _state.value = _state.value.copy(scanning = true)
       var path = resolveVirtualTail(savedPath)
-      if (path != savedPath) setPath(path)
+      if (path != savedPath) setPath(path, persist = false)
       while (path.isNotEmpty() && !loadChildren(path.last())) {
         path = path.dropLast(1)
-        setPath(path)
+        setPath(path, persist = false)
       }
       if (path.isEmpty()) loadRoots(autoDescend = false)
     }
@@ -227,15 +229,17 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     if (firstVirtual < 0) return path
     val head = path.take(firstVirtual)
     val tail = path[firstVirtual]
-    val rebuilt = repo.inspectZipForSeries(
-      BookEntry(
+    // 실제 크기/수정시각으로 검사해야 시리즈 캐시 signature가 부모 폴더 열거 결과와 맞는다 —
+    // 아니면 부모로 올라갔을 때 같은 ZIP을 한 번 더 연다. provider가 실패하면 이름만으로 시도.
+    val book = repo.queryBookEntry(tail.documentUri, tail.rootUri)
+      ?: BookEntry(
         documentUri = tail.documentUri,
         displayName = tail.displayName,
         sizeBytes = 0L,
         mimeType = null,
         rootUri = tail.rootUri,
-      ),
-    )
+      )
+    val rebuilt = repo.inspectZipForSeries(book)
     return when {
       rebuilt != null -> head + rebuilt
       // 표식이 없으면 이름만 .zip인 실제 폴더일 수 있다 — path 그대로 일반 폴더로 열거 시도.
@@ -697,7 +701,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     val bookId = book.bookId.value
     if (_state.value.covers.containsKey(bookId)) return
     coverMemoryCache[bookId]?.let { image ->
-      _state.value = _state.value.copy(covers = _state.value.covers + (bookId to image))
+      _state.value = _state.value.copy(covers = mergeCoversBounded(mapOf(bookId to image)))
       return
     }
     if (coverJobs.containsKey(bookId)) return
@@ -1143,7 +1147,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     removeOrphans: Boolean,
   ): List<GlobalBookmarkItem> {
     val booksById = indexedBooks.associateBy { it.book.bookId.value }
-    if (removeOrphans) bookmarkRepo.removeOrphans(booksById.keys)
+    if (removeOrphans) {
+      bookmarkRepo.removeOrphans(booksById.keys, allowEmpty = _state.value.roots.isEmpty())
+    }
     return bookmarks.mapNotNull { bookmark ->
       booksById[bookmark.bookId]?.let { indexed ->
         GlobalBookmarkItem(
@@ -1166,18 +1172,20 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val scan = repo.listAllBooks(roots)
         // 스캔 도중 root가 추가/제거됐으면 이 결과는 현재 라이브러리와 다르다 — 버림.
         if (_state.value.roots != roots) return@launch
-        if (!scan.complete || scan.books.isEmpty()) {
+        // root가 하나도 없으면 0권이 확실하다(스캔 실패일 수 없음) — 남은 북마크/인덱스를 모두 정리.
+        val libraryEmpty = roots.isEmpty()
+        if (!scan.complete || (scan.books.isEmpty() && !libraryEmpty)) {
           // 불완전한 스캔(SD 언마운트, 권한 회수, 하위 폴더/시리즈 ZIP 하나라도 실패) 또는
-          // 0권 — "없는 책" 판정에 쓸 수 없다. 찾은 책만 인덱스에 추가하고 삭제는 전부 생략.
+          // root가 있는데 0권 — "없는 책" 판정에 쓸 수 없다. 찾은 책만 인덱스에 추가하고 삭제는 전부 생략.
           // 이전엔 실패한 스캔의 빈 결과가 그대로 넘어가 모든 북마크/인덱스가 지워졌다.
           Log.w(TAG, "bookmark prune skipped: complete=${scan.complete} books=${scan.books.size}")
           bookIndexRepo.upsertAll(scan.books)
           return@launch
         }
-        bookIndexRepo.replaceKnownBooks(scan.books)
+        bookIndexRepo.replaceKnownBooks(scan.books, allowEmpty = libraryEmpty)
         val existingBookIds = scan.books
           .mapTo(mutableSetOf()) { it.book.bookId.value }
-        bookmarkRepo.removeOrphans(existingBookIds)
+        bookmarkRepo.removeOrphans(existingBookIds, allowEmpty = libraryEmpty)
         if (_state.value.globalBookmarksOpen) {
           _state.value = _state.value.copy(globalBookmarks = loadGlobalBookmarkItems())
         }
@@ -1190,14 +1198,21 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
-  /** path 변경의 단일 진입점. state 갱신 + 디스크 영속화를 한 곳에서 묶어 누락을 방지. */
-  private fun setPath(newPath: List<FolderEntry>, alsoUpdateRoots: List<Uri>? = null) {
+  /**
+   * path 변경의 단일 진입점. state 갱신 + 디스크 영속화를 한 곳에서 묶어 누락을 방지.
+   * [persist]=false는 저장된 위치를 지키면서 화면만 바꿀 때([restoreSavedPath]의 일시적 폴백).
+   */
+  private fun setPath(
+    newPath: List<FolderEntry>,
+    alsoUpdateRoots: List<Uri>? = null,
+    persist: Boolean = true,
+  ) {
     _state.value = if (alsoUpdateRoots != null) {
       _state.value.copy(roots = alsoUpdateRoots, path = newPath)
     } else {
       _state.value.copy(path = newPath)
     }
-    prefs.edit { putString(KEY_PATH, LibraryPathCodec.encode(newPath)) }
+    if (persist) prefs.edit { putString(KEY_PATH, LibraryPathCodec.encode(newPath)) }
   }
 
   private fun persistRoots(roots: List<Uri>) {

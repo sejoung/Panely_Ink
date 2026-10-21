@@ -96,6 +96,23 @@ class CbzArchiveTest {
   }
 
   @Test
+  fun nestedEntriesWithCollidingLegacyNamesGetDistinctIds() {
+    // `상.cbz`/`하.cbz`는 UTF-8로 디코드하면 같은 깨진 이름이 된다 — 그대로 식별자로 쓰면 두 권이 한 권으로 열린다.
+    val zip = buildZip(
+      encoding = "x-windows-949",
+      "하.cbz" to byteArrayOf(2),
+      "상.cbz" to byteArrayOf(1),
+    )
+
+    CbzArchive.openChannels(listOf(SeekableInMemoryByteChannel(zip))).use { archive ->
+      val ids = archive.nestedArchives.map { it.entryName }
+      assertEquals(listOf("상.cbz", "하.cbz"), ids)
+      assertArrayEquals(byteArrayOf(1), archive.openNestedEntry(ids[0]).use { it.readBytes() })
+      assertArrayEquals(byteArrayOf(2), archive.openNestedEntry(ids[1]).use { it.readBytes() })
+    }
+  }
+
+  @Test
   fun everyPooledReaderResolvesTheSameEntry() {
     val zip = buildZip(
       encoding = "UTF-8",

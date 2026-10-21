@@ -239,6 +239,42 @@ class LibraryRepository(private val context: Context) {
   }
 
   /**
+   * 문서 1개의 [BookEntry] — 저장된 path에서 가상 폴더를 복원할 때처럼 부모 폴더를 열거하지 않고
+   * zip 하나만 알고 있을 때 쓴다. [listChildren]과 같은 크기/수정시각을 채워, 이 entry로 검사한
+   * 시리즈 캐시 signature가 이후 부모 폴더 열거 결과와 일치하게 한다. provider 실패면 null.
+   */
+  suspend fun queryBookEntry(documentUri: Uri, rootUri: Uri): BookEntry? = withContext(Dispatchers.IO) {
+    try {
+      resolver.query(documentUri, CHILD_PROJECTION, null, null, null)?.use { cursor ->
+        if (!cursor.moveToFirst()) return@use null
+        val name = cursor.getString(
+          cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+        ) ?: return@use null
+        val sizeCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_SIZE)
+        val modifiedCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+        if (modifiedCol >= 0 && !cursor.isNull(modifiedCol)) {
+          val modified = cursor.getLong(modifiedCol)
+          synchronized(cacheLock) { lastModifiedByUri[documentUri] = modified }
+        }
+        BookEntry(
+          documentUri = documentUri,
+          displayName = name,
+          sizeBytes = if (cursor.isNull(sizeCol)) 0L else cursor.getLong(sizeCol),
+          mimeType = cursor.getString(
+            cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE),
+          ),
+          rootUri = rootUri,
+        )
+      }
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      Log.w(TAG, "queryBookEntry failed: $documentUri", e)
+      null
+    }
+  }
+
+  /**
    * [folder] 안 첫 책(자연 정렬) — 시리즈 그룹핑(폴더=시리즈)에서 폴더 행에 첫 권의
    * 표지를 보여주기 위해 사용. depth 1만 본다. 폴더가 비었거나 폴더만 있으면 null.
    */

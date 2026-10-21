@@ -155,15 +155,12 @@ object NestedZipExtractor {
 
   /**
    * (부모, entry)의 추출본 경로 — 표지 추출처럼 "이미 추출돼 있으면 쓰겠다"는 호출자용.
-   * 부모버전이 붙은 파일이 있으면 그중 가장 최근 것을, 없으면 버전 없는 기본 경로(존재하지 않을 수 있음)를
-   * 돌려준다. 돌려준 파일이 존재하면 항상 완성본이다(쓰는 중인 파일은 `.tmp`).
+   * 부모 ZIP의 **현재** 버전에 해당하는 경로만 돌려준다(존재하지 않을 수 있음) — 부모가 덮어써진 뒤
+   * 남아 있는 옛 버전 추출본으로 표지를 만들지 않게. 돌려준 파일이 존재하면 항상 완성본이다(쓰는 중인 파일은 `.tmp`).
+   * 부모 메타를 provider에 묻는 IPC가 있으므로 IO 스레드에서 호출.
    */
-  fun cacheFile(context: Context, parentUri: Uri, entryName: String): File {
-    val dir = File(context.cacheDir, DIR)
-    val prefix = cachePrefix(parentUri, entryName)
-    return siblings(dir, prefix).maxByOrNull { it.lastModified() }
-      ?: File(dir, "$prefix.$EXT")
-  }
+  fun cacheFile(context: Context, parentUri: Uri, entryName: String): File =
+    versionedCacheFile(context, parentUri, entryName, parentVersion(context, parentUri))
 
   private fun versionedCacheFile(
     context: Context,

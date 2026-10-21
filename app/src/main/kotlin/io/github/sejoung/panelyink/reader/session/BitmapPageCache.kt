@@ -28,6 +28,15 @@ class BitmapPageCache(maxBytes: Long) {
         cache.put(index, bitmap)
     }
 
+    /**
+     * 최근에 덜 쓰인 것부터 [maxBytes]의 절반까지 evict — OOM 회복용. 화면에 보이는 페이지는
+     * keepWarm/onDraw의 [get]으로 가장 최근에 접근되므로 마지막까지 남는다.
+     */
+    @Synchronized
+    fun trimToHalf() {
+        cache.trimToSize(maxBytesInt / 2)
+    }
+
     @Synchronized
     fun clear() {
         cache.evictAll()

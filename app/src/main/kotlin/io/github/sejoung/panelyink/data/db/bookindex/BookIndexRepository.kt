@@ -17,8 +17,9 @@ interface BookIndexRepository {
   /**
    * 인덱스를 [indexedBooks]로 교체(upsert + 목록에 없는 행 삭제). **빈 목록이면 no-op** —
    * 호출자는 "완전한 스캔" 결과만 넘겨야 하며, 부분 실패한 스캔은 [upsertAll]만 사용.
+   * 라이브러리가 확실히 비었을 때(root가 하나도 없음)만 [allowEmpty]=true로 전체 삭제를 허용한다.
    */
-  suspend fun replaceKnownBooks(indexedBooks: List<IndexedBookRef>)
+  suspend fun replaceKnownBooks(indexedBooks: List<IndexedBookRef>, allowEmpty: Boolean = false)
 }
 
 class RoomBookIndexRepository(
@@ -57,11 +58,14 @@ class RoomBookIndexRepository(
     }
   }
 
-  override suspend fun replaceKnownBooks(indexedBooks: List<IndexedBookRef>) = withContext(Dispatchers.IO) {
+  override suspend fun replaceKnownBooks(
+    indexedBooks: List<IndexedBookRef>,
+    allowEmpty: Boolean,
+  ) = withContext(Dispatchers.IO) {
     val ids = indexedBooks.mapTo(mutableSetOf()) { it.book.bookId.value }
     // 빈 목록은 "라이브러리가 비었음"보다 "스캔 실패"(SD 언마운트/권한 회수)일 가능성이 높다.
     // 전체 삭제하지 않고 no-op — 의도적인 전체 삭제는 "전체 초기화"(AppDataResetter)만 담당.
-    if (ids.isEmpty()) return@withContext
+    if (ids.isEmpty() && !allowEmpty) return@withContext
     indexedBooks.toEntities(clock()).forEachChunk { chunk -> dao.upsertAll(chunk) }
     // NOT IN 청크 분할 불가 — 저장된 ID 전체를 fetch해 차집합을 IN-chunk로 삭제.
     val stored = dao.loadAllBookIds()

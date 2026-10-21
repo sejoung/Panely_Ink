@@ -399,8 +399,15 @@ class CbzArchive private constructor(
             val nestedList = mutableListOf<NestedArchiveEntry>()
             val indexByName = HashMap<String, Int>(entries.size * 2)
             val legacyNames = ArrayList<Pair<String, Int>>()
+            // 깨진 원래 이름이 겹치는 nested entry(CP949 `상.cbz`/`하.cbz` → 같은 `?.cbz`)는 원래 이름을
+            // 식별자로 쓸 수 없다 — 이름 조회가 첫 매치만 돌려줘 두 권이 같은 책으로 열린다.
+            val decodedNames = entries.map { decodeEntryName(it) }
+            val rawNestedNameCounts = entries
+                .filterIndexed { index, entry -> !entry.isDirectory && decodedNames[index].isNestedArchiveEntry() }
+                .groupingBy { it.name }
+                .eachCount()
             entries.forEachIndexed { index, entry ->
-                val name = decodeEntryName(entry)
+                val name = decodedNames[index]
                 indexByName.putIfAbsent(name, index)
                 if (name != entry.name) legacyNames += entry.name to index
                 if (entry.isDirectory) return@forEachIndexed
@@ -417,7 +424,9 @@ class CbzArchive private constructor(
                             // entryName은 bookId(`uri#entryName`)의 일부 — 진행 위치/북마크/표지 키가 여기에 걸려 있다.
                             // 보정된 이름으로 바꾸면 구형 인코딩 ZIP의 기존 기록이 전부 고아가 되므로 식별자는
                             // Commons Compress 원래 이름을 유지하고, 보정된 이름은 표시/정렬에만 쓴다.
-                            entryName = entry.name,
+                            // 단, 원래 이름이 다른 nested entry와 겹치면 기존 기록도 이미 섞여 있었으므로
+                            // 보정된 이름(entry마다 고유)을 식별자로 쓴다.
+                            entryName = if ((rawNestedNameCounts[entry.name] ?: 0) > 1) name else entry.name,
                             displayName = name.substringAfterLast('/'),
                             size = entry.size.coerceAtLeast(0),
                         )
